@@ -1,0 +1,14 @@
+# Changelog
+
+## [0.1.0] - unreleased
+
+First version.
+
+- Presents itself to Plex as an HDHomeRun tuner and lists the channels from `channels.toml`.
+- Resolves YouTube live channels, broadcaster pages and HLS playlists when a viewer tunes in,
+  picks the best quality, and remuxes it with ffmpeg without re-encoding.
+- Reconnects on its own when a source drops or stalls.
+- Builds an XMLTV guide from XMLTV sources, with placeholder blocks for every gap.
+- Reloads `channels.toml` on change and keeps the last good list if the new one has a mistake.
+- `tellyard check` reports the resolution each channel really sends, against an optional `MIN_HEIGHT`.
+- Takes its settings from environment variables and its channels from `channels.toml`.

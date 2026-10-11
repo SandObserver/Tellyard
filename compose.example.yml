@@ -1,0 +1,28 @@
+services:
+  tellyard:
+    image: ghcr.io/sandobserver/tellyard:latest
+    container_name: tellyard
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    environment:
+      - TZ=America/New_York
+      - TUNERS=4
+      - MIN_HEIGHT=off
+    volumes:
+      - ./config:/config:ro
+      - ./data:/data
+    ports:
+      - "5004:5004"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,49 @@
+[project]
+name = "tellyard"
+version = "0.1.0"
+description = "Live channels for Plex, tuned only while someone is watching"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "yt-dlp[default]>=2026.8.19",
+]
+
+[project.scripts]
+tellyard = "tellyard.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18",
+    "pytest>=8.4",
+    "pytest-cov>=7",
+    "ruff>=0.14",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<0.13"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "SIM", "RUF", "I", "N", "PTH", "PL", "C4", "C90"]
+ignore = ["PLR2004", "PLR0911"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --cov --cov-report=term-missing:skip-covered"
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["tellyard"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 85

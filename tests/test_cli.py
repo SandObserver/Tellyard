@@ -1,0 +1,106 @@
+import json
+import threading
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+
+import pytest
+
+from tellyard import check, cli
+from tellyard.check import Result
+
+
+@pytest.fixture(autouse=True)
+def environment(monkeypatch: pytest.MonkeyPatch, channels_file: Path, tmp_path: Path) -> None:
+    monkeypatch.setenv("CHANNELS_FILE", str(channels_file))
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+
+
+def test_validate_lists_channels(capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main(["validate"]) == 0
+    out = capsys.readouterr().out
+    assert "101  News One  (YouTubeSource, guide: placeholder)" in out
+    assert out.strip().endswith("2 channels are valid")
+
+
+def test_bad_channels_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setenv("CHANNELS_FILE", str(tmp_path / "none.toml"))
+    assert cli.main(["validate"]) == 2
+    assert "cannot read" in capsys.readouterr().err
+
+
+def test_bad_settings(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setenv("LISTEN_PORT", "x")
+    assert cli.main(["validate"]) == 2
+    assert "LISTEN_PORT" in capsys.readouterr().err
+
+
+def test_guide_to_file(tmp_path: Path) -> None:
+    output = tmp_path / "guide.xml"
+    assert cli.main(["guide", "-o", str(output)]) == 0
+    assert b'<channel id="tellyard.101">' in output.read_bytes()
+
+
+def test_guide_to_stdout(capsysbinary: pytest.CaptureFixture[bytes]) -> None:
+    assert cli.main(["guide"]) == 0
+    assert capsysbinary.readouterr().out.startswith(b"<?xml")
+
+
+def test_check_command(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    def fake_check(chosen: list[object], resolver: object, measure: object, minimum: object) -> list[Result]:
+        return [Result(channel, 1080, None) for channel in chosen]  # type: ignore[arg-type]
+
+    monkeypatch.setattr(check, "check", fake_check)
+    assert cli.main(["check", "201"]) == 0
+    assert "1 of 1 channels passed" in capsys.readouterr().out
+    assert cli.main(["check", "555"]) == 2
+
+
+def test_check_command_fails_on_a_bad_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_check(chosen: list[object], resolver: object, measure: object, minimum: object) -> list[Result]:
+        return [Result(channel, 720, "below the 1080p minimum") for channel in chosen]  # type: ignore[arg-type]
+
+    monkeypatch.setattr(check, "check", fake_check)
+    assert cli.main(["check"]) == 1
+
+
+class Healthy(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        body = json.dumps({"status": "ok"}).encode()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+
+@pytest.fixture
+def health_port() -> Iterator[int]:
+    server = HTTPServer(("127.0.0.1", 0), Healthy)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield server.server_address[1]
+    server.shutdown()
+    server.server_close()
+
+
+def test_health_command(monkeypatch: pytest.MonkeyPatch, health_port: int) -> None:
+    monkeypatch.setenv("LISTEN_PORT", str(health_port))
+    assert cli.main(["health"]) == 0
+
+
+def test_health_command_when_down(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setenv("LISTEN_PORT", "1")
+    assert cli.main(["health"]) == 1
+    assert "unhealthy" in capsys.readouterr().err
+
+
+def test_old_artwork_is_removed(tmp_path: Path) -> None:
+    data = tmp_path / "data"
+    (data / "logos").mkdir(parents=True)
+    (data / "logos" / "101.png").write_bytes(b"png")
+    (data / "tmdb-cache.json").write_text("{}", encoding="utf-8")
+    (data / "guide.xml").write_text("<tv/>", encoding="utf-8")
+    cli.remove_old_artwork(data)
+    assert sorted(path.name for path in data.iterdir()) == ["guide.xml"]

@@ -1,0 +1,62 @@
+# Tellyard channel list. Copy this file to channels.toml and replace the examples with your channels.
+#
+# Each [[channel]] needs a number, a name, a logo and exactly one source:
+#   youtube = "https://www.youtube.com/@handle/live"   the channel's current live stream
+#   page    = "https://example.com/live"               a web page that embeds an .m3u8 URL
+#   hls     = "https://example.com/master.m3u8"        a direct HLS playlist
+# A page source can narrow the URL it picks with match = "part-of-the-url".
+# A youtube channel running several live streams can pick one by title with match = "part of the title".
+# hls and page sources can send extra request headers: headers = { Referer = "https://example.com/" }
+# An hls source can fetch a signed link before every tune, the way a broadcaster's own player does:
+#   token = "https://example.com/sign?url={url}"   {url} becomes the hls URL; the reply is JSON
+#   token_field = "url"                            the JSON key holding the signed URL (default "url")
+# min_height = 720 makes `tellyard check` fail this channel below 720p. It overrides MIN_HEIGHT.
+#
+# The guide uses an XMLTV source when one is set, and fills any gap with placeholder blocks:
+#   [channel.guide]
+#   xmltv = "my-guide"          a name from [guide_sources], or a URL
+#   id = "Channel.us"           the channel id inside that XMLTV file
+#   title = "..."               placeholder title (default: the channel name)
+#   description = "..."         placeholder description
+#   category = "News"           placeholder category
+#   hours = 2                   placeholder block length (must divide a day evenly)
+#
+# Logos: Plex loads the logo URL as given, so use a public https URL to the largest official
+# version you can find, ideally a wide transparent PNG.
+#
+# Edit this file while Tellyard runs: it reloads within seconds. After adding or removing
+# channels, refresh the guide in Plex (Settings > Live TV & DVR > Refresh Guide).
+
+[guide_sources]
+my-guide = "https://example.com/guide.xml.gz"
+
+[[channel]]
+number = 101
+name = "Example News"
+logo = "https://example.com/logos/example-news.png"
+youtube = "https://www.youtube.com/@example/live"
+[channel.guide]
+description = "Live news, around the clock."
+category = "News"
+
+[[channel]]
+number = 102
+name = "Example Weather"
+logo = "https://example.com/logos/example-weather.png"
+hls = "https://cdn.example.com/weather/master.m3u8"
+[channel.guide]
+xmltv = "my-guide"
+id = "ExampleWeather.us"
+category = "News"
+
+[[channel]]
+number = 201
+name = "Example Music"
+logo = "https://example.com/logos/example-music.png"
+page = "https://example.com/live"
+headers = { Referer = "https://example.com/" }
+min_height = 720
+[channel.guide]
+description = "Music videos, nonstop."
+category = "Music"
+hours = 1
