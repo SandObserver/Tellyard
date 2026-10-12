@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add a Legal section to the README.
 - Add documentation pages for channels, Plex, how it works, troubleshooting and maintenance.
 - Add a security policy, contributing guide and issue templates.
+- Publish the image for 64-bit ARM as well as Intel and AMD.
 
 ## [0.1.0-beta.1] - 2026-10-11
 

@@ -45,7 +45,13 @@ CI runs the same checks:
 uv run ruff format . && uv run ruff check . && uv run mypy && uv run pytest
 ```
 
-The tests need no internet connection and no ffmpeg. `pytest` measures coverage and fails below 85% or on any warning. CI also lints the workflows with actionlint and zizmor, builds the image, checks that it becomes healthy, and scans it with Grype; a fixable critical vulnerability fails the build.
+The tests need no internet connection and no ffmpeg. `pytest` measures coverage and fails below 85% or on any warning. CI also lints the workflows with actionlint and zizmor, builds the image, checks that it becomes healthy, plays a test stream through it, and scans it with Grype; a fixable critical vulnerability fails the build. It also builds the arm64 image under emulation and runs its tools once.
+
+`tests/e2e.sh` is the test stream check. It builds a 1080p live stream with the image's own ffmpeg, serves it on a private Docker network, and checks that `tellyard check`, the line-up, the guide and `/stream/101` work, and that ffmpeg stops when the viewer leaves. It needs Docker but not the internet:
+
+```sh
+docker build -t tellyard:ci . && tests/e2e.sh tellyard:ci
+```
 
 Shared test doubles live in `tests/fakes.py`. Replace a method in a test with `monkeypatch.setattr`, not assignment.
 
@@ -59,6 +65,6 @@ Tests and examples use `example.com` addresses only. Never add a real channel, s
 
 ## Releases
 
-Semantic versioning. Move the `Unreleased` entries in [CHANGELOG.md](CHANGELOG.md) under the new version with its date, set `version` in `pyproject.toml`, merge, and push a `vX.Y.Z` tag. The tag runs the CI checks, then pushes `ghcr.io/sandobserver/tellyard:X.Y.Z`, `:X.Y` and `:latest`, and publishes a GitHub release with the version's CHANGELOG section. The release stops if the tag, `pyproject.toml` and a dated CHANGELOG section do not agree. The image carries an SBOM and build provenance.
+Semantic versioning. Move the `Unreleased` entries in [CHANGELOG.md](CHANGELOG.md) under the new version with its date, set `version` in `pyproject.toml`, merge, and push a `vX.Y.Z` tag. The tag runs the CI checks, then pushes `ghcr.io/sandobserver/tellyard:X.Y.Z`, `:X.Y` and `:latest` for amd64 and arm64, and publishes a GitHub release with the version's CHANGELOG section. The release stops if the tag, `pyproject.toml` and a dated CHANGELOG section do not agree. The image carries an SBOM and build provenance.
 
 A beta is a tag such as `v1.2.0-beta.1`, with `version = "1.2.0b1"` in `pyproject.toml` and a CHANGELOG heading `[1.2.0-beta.1]`. It publishes the image tags `1.2.0-beta.1` and `beta`, never `latest`, and a GitHub release marked as prerelease.
