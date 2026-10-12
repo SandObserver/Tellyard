@@ -1,0 +1,11 @@
+name: Feature request
+description: An idea for Tellyard
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like
+      description: The problem first, then the change you have in mind.
+    validations:
+      required: true

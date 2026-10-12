@@ -1,23 +1,22 @@
-# Tellyard
+<h1 align="center">Tellyard</h1>
 
-Live channels for Plex, tuned only while someone is watching.
+<p align="center"><b>Live channels for Plex, tuned only while someone is watching.</b></p>
 
-Tellyard presents itself to Plex as an HDHomeRun network tuner. Channels are listed in one
-`channels.toml` file. When a viewer tunes in, Tellyard finds the channel's current stream,
-picks its best quality, and hands it to Plex through ffmpeg without re-encoding. When the
-viewer leaves, ffmpeg stops. Nothing is downloaded while nobody watches.
+<p align="center">
+  <a href="https://github.com/SandObserver/Tellyard/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SandObserver/Tellyard/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/SandObserver/Tellyard/pkgs/container/tellyard"><img alt="ghcr.io" src="https://img.shields.io/badge/ghcr.io-tellyard-2496ED?logo=github&logoColor=white"></a>
+</p>
 
-- **Sources:** YouTube live channels (through yt-dlp, resolved fresh on every tune, so expiring
-  links never break playback), broadcaster web pages that embed an HLS playlist, and direct HLS
-  playlists.
-- **Guide:** an XMLTV guide that merges real schedules from any XMLTV source with clean
-  placeholder blocks, so every channel always shows a correct name, logo and listing. Every
-  entry is filed as a TV episode with a category. Channel logos are the URLs from
-  `channels.toml`, and shows keep the pictures their source guide gives them.
-- **Reliability:** if a source drops mid-show, Tellyard reconnects on its own. A stalled source is
-  restarted after 20 seconds.
-- **Quality check:** `tellyard check` tunes each channel and reports the resolution it really
-  sends, so a channel below your minimum never slips in.
+Tellyard presents itself to Plex as an HDHomeRun network tuner. You list your channels in one file. When a viewer tunes in, Tellyard finds the channel's current stream, picks its best quality and hands it to Plex without re-encoding. When the viewer leaves, it stops. Nothing is downloaded while nobody watches, and it idles at about 30 MB of memory.
+
+## What you get
+
+- **On demand.** A stream runs only while someone watches, and up to `TUNERS` at once.
+- **YouTube, web players and HLS.** YouTube live channels through yt-dlp, broadcaster pages that embed an HLS playlist, and direct HLS playlists. The stream is found again on every tune, so expiring links never break playback.
+- **A guide that is never empty.** Real schedules from any XMLTV source, with placeholder blocks in every gap. Shows are filed as TV episodes, with a category.
+- **Tries to reconnect.** A stalled or dropped source is restarted on its own, up to three tries in a row.
+- **Quality check.** `tellyard check` tunes each channel and reports the resolution it really sends, so a channel below your minimum never slips in.
+- **One file.** Channels live in `channels.toml`, reloaded while Tellyard runs.
 
 ## Getting started
 
@@ -27,8 +26,7 @@ Watching live TV is free; recording needs Plex Pass.
 ### 1. Write your channel list
 
 Create a `config` folder and copy [`channels.example.toml`](channels.example.toml) into it as
-`channels.toml`. Replace the examples with your channels. See [Channels](#channels) and
-[Finding sources](#finding-sources).
+`channels.toml`. Replace the examples with your channels. See [Channels](docs/channels.md).
 
 ### 2. Create the compose file
 
@@ -102,10 +100,12 @@ channel that fails before adding Tellyard to Plex.
 
 ### 5. Add it to Plex
 
-In Plex: **Settings > Live TV & DVR > Set up Plex DVR**. If Plex does not find the tuner, enter
-its address by hand, for example `192.168.1.10:5004`. For the guide, choose
+In Plex: **Settings > Live TV & DVR > Set up Plex DVR**. Plex does not find Tellyard on its own, so
+enter its address by hand, for example `192.168.1.10:5004`. For the guide, choose
 **Have an XMLTV guide on your server? Click here to use it** and enter
 `http://192.168.1.10:5004/guide.xml`.
+
+On an iPhone, iPad or Apple TV, turn on **Force Direct Play** in the Plex app. See [Plex](docs/plex.md).
 
 ## Channels
 
@@ -121,29 +121,11 @@ youtube = "https://www.youtube.com/@example/live"
 category = "News"
 ```
 
-[`channels.example.toml`](channels.example.toml) lists every option, with one channel of each
-source type.
+[Channels](docs/channels.md) lists every option and how to find sources, logos and guides.
+Tellyard reloads the file within a minute of a change and keeps the previous channels if the new
+file has a mistake. After adding or removing channels, refresh the guide in Plex.
 
-Tellyard reloads the file within seconds of a change and keeps the previous channels if the new
-file has a mistake. `docker exec tellyard tellyard validate` reads the file and lists the
-channels it found.
-
-After adding or removing channels, refresh the guide in Plex so its channel list matches.
-
-## Finding sources
-
-- **YouTube:** open the channel's page and add `/live` to its address, such as
-  `https://www.youtube.com/@example/live`. If the channel runs several live streams at once, add
-  `match` with part of the stream's title.
-- **A broadcaster's own stream:** many broadcasters publish their live channel as an HLS
-  playlist (`.m3u8`). Use `hls` with the playlist URL, or `page` with the address of the page
-  that links to it. Some streams need a `Referer` header, set with `headers`.
-- **Guides:** any XMLTV file or URL works. Find your channel in the file and copy the `id` from
-  its `<channel id="...">` line. A channel without a guide gets placeholder blocks.
-- **Logos:** a public https link to a wide, transparent PNG.
-
-Only add streams you are allowed to watch. Run `tellyard check` after adding a channel to
-confirm it plays at the quality you expect.
+Only add streams you are allowed to watch.
 
 ## Commands
 
@@ -180,24 +162,17 @@ Set these as environment variables.
 | `CHANNELS_FILE` | The channel list inside the container. Keep the default. | `/config/channels.toml` |
 | `DATA_DIR` | Folder inside the container for the guide and caches. Keep the default. | `/data` |
 
-## HTTP endpoints
+## Documentation
 
-| Path | Use |
-| --- | --- |
-| `/discover.json`, `/lineup.json`, `/lineup_status.json`, `/device.xml` | The HDHomeRun API Plex reads. |
-| `/stream/<number>` | One channel as MPEG-TS. Also at `/auto/v<number>`. |
-| `/guide.xml` | The XMLTV guide. |
-| `/playlist.m3u` | An M3U playlist for players such as VLC. |
-| `/health` | Status as JSON. |
+- [Channels](docs/channels.md): every option, finding sources, guides and logos.
+- [Plex](docs/plex.md): adding Tellyard, refreshing the guide, and settings for the Plex apps.
+- [How it works](docs/how-it-works.md): tuning, reconnects, the guide and the HTTP endpoints.
+- [Troubleshooting](docs/troubleshooting.md): log messages and what to do.
+- [Upgrade, back up, uninstall](docs/maintenance.md)
 
-## Development
+## Contributing
 
-```sh
-uv sync
-uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest
-```
-
-Running the service locally needs `ffmpeg` and, for YouTube channels, `deno` on the `PATH`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and releases. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Legal
 

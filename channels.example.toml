@@ -24,7 +24,7 @@
 # Logos: Plex loads the logo URL as given, so use a public https URL to the largest official
 # version you can find, ideally a wide transparent PNG.
 #
-# Edit this file while Tellyard runs: it reloads within seconds. After adding or removing
+# Edit this file while Tellyard runs: it reloads within a minute. After adding or removing
 # channels, refresh the guide in Plex (Settings > Live TV & DVR > Refresh Guide).
 
 [guide_sources]

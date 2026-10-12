@@ -1,9 +1,17 @@
 # Changelog
 
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ## [Unreleased]
+
+### Added
 
 - License Tellyard under Apache 2.0, with a NOTICE for the name and the software in the image.
 - Add a Legal section to the README.
+- Add documentation pages for channels, Plex, how it works, troubleshooting and maintenance.
+- Add a security policy, contributing guide and issue templates.
 
 ## [0.1.0-beta.1] - 2026-10-11
 
