@@ -7,7 +7,7 @@
 # A page source can narrow the URL it picks with match = "part-of-the-url".
 # A youtube channel running several live streams can pick one by title with match = "part of the title".
 # hls and page sources can send extra request headers: headers = { Referer = "https://example.com/" }
-# An hls source can fetch a signed link before every tune, the way a broadcaster's own player does:
+# An hls source whose broadcaster issues short-lived signed links can request a fresh one before every tune:
 #   token = "https://example.com/sign?url={url}"   {url} becomes the hls URL; the reply is JSON
 #   token_field = "url"                            the JSON key holding the signed URL (default "url")
 # min_height = 720 makes `tellyard check` fail this channel below 720p. It overrides MIN_HEIGHT.

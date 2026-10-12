@@ -135,18 +135,15 @@ After adding or removing channels, refresh the guide in Plex so its channel list
 - **YouTube:** open the channel's page and add `/live` to its address, such as
   `https://www.youtube.com/@example/live`. If the channel runs several live streams at once, add
   `match` with part of the stream's title.
-- **A broadcaster's web player:** open the live page in a browser, open the developer tools,
-  and filter the **Network** tab for `m3u8`. If the playlist URL appears in the page itself, use
-  `page` with the page address. Otherwise use `hls` with the playlist URL. Some players need a
-  `Referer` header, set with `headers`.
-- **Guides:** any XMLTV file works. [i.mjh.nz](https://i.mjh.nz) publishes guides for Plex,
-  Pluto TV, Samsung TV Plus and Roku channels, and [epgshare01](https://epgshare01.online)
-  publishes guides by country. Open the file, find your channel, and copy the `id` from its
-  `<channel id="...">` line. A channel without a guide gets placeholder blocks.
-- **Logos:** a public https link to a wide, transparent PNG. Plex's own channel logos, linked
-  in the i.mjh.nz Plex guide, work well.
+- **A broadcaster's own stream:** many broadcasters publish their live channel as an HLS
+  playlist (`.m3u8`). Use `hls` with the playlist URL, or `page` with the address of the page
+  that links to it. Some streams need a `Referer` header, set with `headers`.
+- **Guides:** any XMLTV file or URL works. Find your channel in the file and copy the `id` from
+  its `<channel id="...">` line. A channel without a guide gets placeholder blocks.
+- **Logos:** a public https link to a wide, transparent PNG.
 
-Run `tellyard check` after adding a channel to confirm it plays at the quality you expect.
+Only add streams you are allowed to watch. Run `tellyard check` after adding a channel to
+confirm it plays at the quality you expect.
 
 ## Commands
 
@@ -201,3 +198,18 @@ uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pyt
 ```
 
 Running the service locally needs `ffmpeg` and, for YouTube channels, `deno` on the `PATH`.
+
+## Legal
+
+Tellyard is an independent project. It is not affiliated with or endorsed by Plex, SiliconDust
+(HDHomeRun), YouTube or any broadcaster. Their names appear only to say what Tellyard works with.
+
+Tellyard ships no channels, stream addresses or logos. It plays only the sources you list. It
+contains no code to decrypt DRM or to get around logins, paywalls or region limits. You are
+responsible for making sure you may watch each source you add and that your use follows its
+terms.
+
+## License
+
+[Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for the name and the third-party software in
+the container image.
