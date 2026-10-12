@@ -15,6 +15,18 @@ updates:
       python-major:
         update-types: [major]
 
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      site:
+        update-types: [minor, patch]
+      site-major:
+        update-types: [major]
+
   - package-ecosystem: docker
     directory: /
     schedule:
