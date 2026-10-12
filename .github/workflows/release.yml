@@ -20,8 +20,11 @@ jobs:
       - name: Check the tag matches the project version and the changelog
         run: |
           version=$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml)
-          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME does not match version $version"; exit 1; }
-          awk -v v="$version" '
+          release=${GITHUB_REF_NAME#v}
+          # pyproject.toml spells a pre-release the Python way: 1.2.0-beta.1 is 1.2.0b1.
+          python=$(echo "$release" | sed -E 's/-alpha\.?/a/; s/-beta\.?/b/; s/-rc\.?/rc/')
+          test "$python" = "$version" || { echo "tag $GITHUB_REF_NAME does not match version $version"; exit 1; }
+          awk -v v="$release" '
             $0 ~ "^## \\[" v "\\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$" { found = 1; next }
             found && /^## \[/ { exit }
             found && /^\[/ { exit }
@@ -53,10 +56,12 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/sandobserver/tellyard
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref_name, '-') }}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=raw,value=beta,enable=${{ contains(github.ref_name, '-beta') }}
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
