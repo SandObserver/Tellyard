@@ -1,13 +1,17 @@
+<p align="center"><img src="docs/logo.svg" width="96" alt=""></p>
+
 <h1 align="center">Tellyard</h1>
 
-<p align="center"><b>Live channels for Plex, tuned only while someone is watching.</b></p>
+<p align="center"><b>A live TV tuner you'll forget is running.</b></p>
 
 <p align="center">
   <a href="https://github.com/SandObserver/Tellyard/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SandObserver/Tellyard/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/SandObserver/Tellyard/pkgs/container/tellyard"><img alt="ghcr.io" src="https://img.shields.io/badge/ghcr.io-tellyard-2496ED?logo=github&logoColor=white"></a>
 </p>
 
-Tellyard presents itself to Plex as an HDHomeRun network tuner. You list your channels in one file. When a viewer tunes in, Tellyard finds the channel's current stream, picks its best quality and hands it to Plex without re-encoding. When the viewer leaves, it stops. Nothing is downloaded while nobody watches, and it idles at about 30 MB of memory.
+<p align="center"><b><a href="https://tellyard.sandobserver.com">tellyard.sandobserver.com</a></b></p>
+
+Tellyard presents itself to Plex and Jellyfin as an HDHomeRun network tuner. You list your channels in one file. When a viewer tunes in, Tellyard finds the channel's current stream, picks its best quality and hands it over without re-encoding. When the viewer leaves, it stops. Nothing is downloaded while nobody watches, and it runs as one small container with no database.
 
 ## What you get
 
@@ -20,9 +24,8 @@ Tellyard presents itself to Plex as an HDHomeRun network tuner. You list your ch
 
 ## Getting started
 
-You need [Docker](https://docs.docker.com/get-started/get-docker/) on a 64-bit Intel, AMD or ARM machine, and a
-Plex Media Server.
-Watching live TV is free; recording needs Plex Pass.
+You need [Docker](https://docs.docker.com/get-started/get-docker/) on a 64-bit Intel, AMD or ARM machine, and Plex
+or Jellyfin. Watching live TV is free; recording in Plex needs Plex Pass.
 
 ### 1. Write your channel list
 
@@ -99,14 +102,17 @@ docker exec tellyard tellyard check
 This tunes each channel once and reports the resolution it really sends. Fix or remove any
 channel that fails before adding Tellyard to Plex.
 
-### 5. Add it to Plex
+### 5. Add it to your media server
 
-In Plex: **Settings > Live TV & DVR > Set up Plex DVR**. Plex does not find Tellyard on its own, so
-enter its address by hand, for example `192.168.1.10:5004`. For the guide, choose
-**Have an XMLTV guide on your server? Click here to use it** and enter
+Tellyard does not announce itself on the network, so enter its address by hand: your server's
+address with port 5004, for example `192.168.1.10:5004`. Its guide is
 `http://192.168.1.10:5004/guide.xml`.
 
-On an iPhone, iPad or Apple TV, turn on **Force Direct Play** in the Plex app. See [Plex](docs/plex.md).
+- **Plex:** **Settings > Live TV & DVR > Set up Plex DVR**. Enter the address, then choose
+  **Have an XMLTV guide on your server? Click here to use it** and enter the guide address. On an
+  iPhone, iPad or Apple TV, turn on **Force Direct Play** in the Plex app. See [Plex](docs/plex.md).
+- **Jellyfin:** **Dashboard > Live TV**. Add a tuner device of type HDHomeRun with the address,
+  then add an XMLTV guide provider with the guide address.
 
 ## Channels
 
@@ -117,7 +123,7 @@ Each channel in `channels.toml` needs a number, a name, a logo and one source:
 number = 101
 name = "Example News"
 logo = "https://example.com/logos/example-news.png"
-youtube = "https://www.youtube.com/@example/live"
+hls = "https://example.com/live/news/master.m3u8"
 [channel.guide]
 category = "News"
 ```

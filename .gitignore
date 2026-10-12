@@ -10,3 +10,4 @@ data/
 channels.toml
 .coverage
 .DS_Store
+node_modules/

@@ -10,3 +10,5 @@ tests
 .ruff_cache
 .pytest_cache
 channels.toml
+site
+docs

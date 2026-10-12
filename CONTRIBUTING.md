@@ -57,6 +57,16 @@ Shared test doubles live in `tests/fakes.py`. Replace a method in a test with `m
 
 Tests and examples use `example.com` addresses only. Never add a real channel, stream address, logo or token to the repository.
 
+## Website
+
+`site/` builds the landing page at https://tellyard.sandobserver.com. The headline comes from the bold tagline in `README.md`, the version from `CHANGELOG.md`, and the install steps from the code blocks under "Getting started" and "Channels" in `README.md`. The build fails if one of them is missing, so the page cannot drift from the README. Cloudflare Pages rebuilds the site on every push to `main`.
+
+```sh
+cd site && npm ci && npm run build
+```
+
+The channels on the page are fictional. The page names no video platform, and the six "Why Tellyard" cards also feed the page's FAQ structured data.
+
 ## Branches and PRs
 
 - Branch: `type/short-description`, where type is `feat`, `fix`, `perf`, `security`, `refactor`, `docs`, `chore` or `release`.
