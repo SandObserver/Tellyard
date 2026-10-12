@@ -20,7 +20,8 @@ Tellyard presents itself to Plex as an HDHomeRun network tuner. You list your ch
 
 ## Getting started
 
-You need [Docker](https://docs.docker.com/get-started/get-docker/) and a Plex Media Server.
+You need [Docker](https://docs.docker.com/get-started/get-docker/) on a 64-bit Intel, AMD or ARM machine, and a
+Plex Media Server.
 Watching live TV is free; recording needs Plex Pass.
 
 ### 1. Write your channel list
