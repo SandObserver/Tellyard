@@ -1,0 +1,36 @@
+name: Bug report
+description: A channel does not play, the guide is wrong, or the service misbehaves
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, what you got, and on which Plex app. Do not post stream addresses you may not share.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Tellyard version
+      description: "`docker exec tellyard tellyard --version`"
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: source
+    attributes:
+      label: Source type
+      options:
+        - youtube
+        - page
+        - hls
+        - Not about one channel
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The lines around the problem from `docker logs tellyard`. Remove addresses and tokens first.
+      render: text
