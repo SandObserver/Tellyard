@@ -1,6 +1,6 @@
 services:
   tellyard:
-    image: ghcr.io/sandobserver/tellyard:latest
+    image: ghcr.io/sandobserver/tellyard:beta
     container_name: tellyard
     restart: unless-stopped
     init: true
