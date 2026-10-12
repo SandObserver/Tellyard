@@ -1,0 +1,26 @@
+Tellyard
+Copyright 2026 SandObserver
+
+Licensed under the Apache License, Version 2.0.
+
+"Tellyard" is a mark of the project author. The Apache License does not grant
+permission to use it (see Section 6). Forks and derivative works are welcome,
+but must use a different name and must not present themselves as the original
+project.
+
+Plex, HDHomeRun, SiliconDust and YouTube are marks of their owners. Tellyard is
+not affiliated with or endorsed by them.
+
+The container image bundles these programs, each under its own license:
+
+- FFmpeg and FFprobe, static builds from https://github.com/wader/static-ffmpeg.
+  They are built with --enable-gpl and --enable-version3 and are licensed under
+  the GNU General Public License, version 3. The build recipe, with every
+  library version and source URL, is in that repository at the tag named in this
+  repository's Dockerfile. FFmpeg source: https://ffmpeg.org/download.html
+- Deno, from https://github.com/denoland/deno, under the MIT License.
+- yt-dlp, from https://github.com/yt-dlp/yt-dlp, under the Unlicense, with the
+  Python packages it uses. uv.lock pins their versions. Each keeps its own
+  license; mutagen is under the GNU General Public License, version 2 or later.
+- Python, from https://www.python.org, under the Python Software Foundation
+  License, on the Debian base image from https://hub.docker.com/_/python.

@@ -70,7 +70,7 @@ class Resolver:
                 return self._pick(self._from_youtube(self._youtube_target(source)), ())
 
     def _signed(self, source: HlsSource) -> str:
-        """Ask the broadcaster's token service for a signed stream URL, as its own player does."""
+        """Fetch a signed stream URL from the source's token service."""
         address = source.token.replace("{url}", urllib.parse.quote(source.url, safe=""))
         try:
             _, text = self._fetch(address, source.headers)

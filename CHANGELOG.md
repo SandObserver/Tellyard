@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+- License Tellyard under Apache 2.0, with a NOTICE for the name and the software in the image.
+- Add a Legal section to the README.
+
 ## [0.1.0-beta.1] - 2026-10-11
 
 First version.
