@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Add a security policy, contributing guide and issue templates.
 - Publish the image for 64-bit ARM as well as Intel and AMD.
 - Add the Tellyard logo and a landing page at tellyard.sandobserver.com.
+- Point the install steps at the `beta` image tag until the first stable release.
 
 ## [0.1.0-beta.1] - 2026-10-11
 
