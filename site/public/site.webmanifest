@@ -1,7 +1,7 @@
 {
   "name": "Tellyard",
   "short_name": "Tellyard",
-  "description": "Live channels for Plex, tuned only while someone is watching.",
+  "description": "A small live TV tuner for Plex and Jellyfin. Watch free broadcaster streams in the guide, from one container and one file. Self-hosted in Docker.",
   "start_url": "/",
   "display": "browser",
   "background_color": "#000000",

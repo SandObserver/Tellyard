@@ -50,7 +50,7 @@
       body { margin: 0; background: var(--bg); color: var(--label); font-family: var(--font); -webkit-font-smoothing: antialiased; }
       a { color: var(--accent); text-decoration: none; }
       a:hover { color: var(--accent-strong); }
-      .hero p a, .lede a, .doc a, .steps p a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+      .hero p a, .lede a, .steps p a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
       a:focus-visible, button:focus-visible, pre:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
       .skip { position: absolute; left: -9999px; top: 0; z-index: 50; padding: 10px 16px; border-radius: 0 0 10px 0; background: var(--accent-fill); color: var(--on-accent); font-weight: 600; }
       .skip:focus { left: 0; color: var(--on-accent); }
@@ -86,7 +86,6 @@
       .screen { container-type: inline-size; position: relative; aspect-ratio: 5 / 2; overflow: hidden; border-radius: 14px 14px 0 0;
         background: radial-gradient(90% 70% at 70% 0%, #26282a 0%, #141414 55%, #0b0b0b 100%); }
       .guide { position: absolute; inset: 3.4cqw 4cqw 0; display: grid; grid-template-columns: 15cqw minmax(0, 1fr); row-gap: 0.8cqw; column-gap: 1cqw; align-content: start; }
-      .g-head { display: contents; }
       .g-title { font-size: 2.1cqw; font-weight: 700; letter-spacing: -0.02em; align-self: end; }
       .ruler { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); font-size: 1.15cqw; color: rgba(235, 235, 245, 0.6); align-self: end; padding-bottom: 0.4cqw; }
       .ch { display: flex; align-items: center; gap: 1cqw; height: 5.2cqw; }
@@ -105,7 +104,6 @@
       .focus::after { content: ""; position: absolute; inset: -0.45cqw; border: 0.22cqw solid #fff; border-radius: 1cqw; }
       .now { position: absolute; top: 0; bottom: 0; width: 0.18cqw; margin-left: -0.09cqw; background: var(--accent); pointer-events: none; }
       .now::before { content: ""; position: absolute; top: -0.5cqw; left: -0.45cqw; width: 1.08cqw; height: 1.08cqw; border-radius: 50%; background: var(--accent); }
-      .rows { display: contents; }
       .lane { position: absolute; top: 0; bottom: 0; left: calc(15cqw + 1cqw); right: 0; pointer-events: none; }
 
       @container (max-width: 640px) {
@@ -165,6 +163,7 @@
       .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
       @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
       @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
+      @media (forced-colors: active) { .pill, .copy { border: 1px solid ButtonText; } }
 
       .footer { padding: 40px 0 48px; border-top: 1px solid var(--bg-2); }
       .foot { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main credits" "legal credits"; gap: 10px 48px; align-items: start; }
@@ -322,7 +321,7 @@
             <a href="{{repo}}">GitHub</a>
             <a href="{{repo}}/tree/main/docs">Documentation</a>
             <a href="{{repo}}/blob/main/CHANGELOG.md">Changelog</a>
-            <a href="{{repo}}/issues/new/choose" target="_blank" rel="noopener noreferrer">Report an issue</a>
+            <a href="{{repo}}/issues/new/choose" target="_blank" rel="noopener noreferrer">Report an issue<span class="sr-only"> (opens in a new tab)</span></a>
           </nav>
         </div>
         <dl class="credits">
@@ -330,9 +329,6 @@
             <dt>Also by SandObserver</dt>
             <dd><a class="sibling" href="https://posteryard.sandobserver.com"><svg viewBox="282 232 478 580" width="15" height="18" aria-hidden="true" focusable="false"><line x1="352" y1="302" x2="352" y2="742" stroke="#F2F2F7" stroke-width="140" stroke-linecap="round" /><path d="M500 292V532L712 412Z" fill="#FFD60A" stroke="#FFD60A" stroke-width="96" stroke-linejoin="round" /></svg>Posteryard</a></dd>
             <dd><p class="credit-note">Clean, consistent posters for Plex, Jellyfin and Emby, Live TV guide included.</p></dd>
-          </div>
-          <div>
-            <dt>&nbsp;</dt>
             <dd><a class="sibling" href="https://stackyard.sandobserver.com"><svg viewBox="146.35 105.5 772.15 816.5" width="15" height="18" aria-hidden="true" focusable="false"><defs><clipPath id="foot-orbit"><polygon points="512,512 -3000,-1515.65 -3000,-3000 4000,-3000 4000,4000 512,4000" /></clipPath></defs><g clip-path="url(#foot-orbit)"><path fill="#00D2E0" d="M512 105.5A406.5 406.5 0 0 1 864.04 715.25A75.5 75.5 0 0 1 733.27 639.75A255.5 255.5 0 0 0 512 256.5A75.5 75.5 0 0 1 512 105.5Z" /></g><path fill="#F2F2F7" d="M551.5 443.58L264.85 278.08A79 79 0 0 0 185.85 414.92L472.5 580.42A79 79 0 0 0 551.5 443.58ZM472.5 443.58L185.85 609.08A79 79 0 0 0 264.85 745.92L551.5 580.42A79 79 0 0 0 472.5 443.58ZM433 512L433 843A79 79 0 0 0 591 843L591 512A79 79 0 0 0 433 512Z" /></svg>Stackyard</a></dd>
             <dd><p class="credit-note">A calm dashboard for the services you self-host.</p></dd>
           </div>
@@ -364,10 +360,13 @@
           const code = button.closest(".code").querySelector("code");
           try {
             await copyText(code);
+            const label = button.getAttribute("aria-label");
             button.textContent = "Copied";
-            live.textContent = `Copied ${button.getAttribute("aria-label").replace(/^Copy /, "")}`;
+            button.setAttribute("aria-label", "Copied");
+            live.textContent = `Copied ${label.replace(/^Copy /, "")}`;
             setTimeout(() => {
               button.textContent = "Copy";
+              button.setAttribute("aria-label", label);
               live.textContent = "";
             }, 1500);
           } catch {
