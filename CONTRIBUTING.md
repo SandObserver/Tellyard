@@ -77,4 +77,14 @@ The channels on the page are fictional. The page names no video platform, and th
 
 Semantic versioning. Move the `Unreleased` entries in [CHANGELOG.md](CHANGELOG.md) under the new version with its date, set `version` in `pyproject.toml`, merge, and push a `vX.Y.Z` tag. The tag runs the CI checks, then pushes `ghcr.io/sandobserver/tellyard:X.Y.Z`, `:X.Y` and `:latest` for amd64 and arm64, and publishes a GitHub release with the version's CHANGELOG section. The release stops if the tag, `pyproject.toml` and a dated CHANGELOG section do not agree. The image carries an SBOM and build provenance.
 
+### Automatic yt-dlp releases
+
+YouTube changes break older yt-dlp releases, so new yt-dlp versions ship on their own:
+
+1. Dependabot opens a pull request for each new stable `yt-dlp` or `yt-dlp-ejs` daily. `yt-dlp-automerge.yml` turns on auto-merge, and it merges once the required checks pass.
+2. When `uv.lock` on `main` changes a watched version, `release-prep.yml` runs `tools/release.py`: it bumps the version (the next beta while on betas, a minor release when Unreleased lists additions, a patch otherwise), dates the Unreleased section with an "Update yt-dlp to ..." line, and opens a release pull request with auto-merge on.
+3. When `pyproject.toml` on `main` holds a new version with a dated CHANGELOG section, `release-tag.yml` pushes the tag, which runs `release.yml`.
+
+The workflows act through a GitHub App, because pushes, merges and tags made with `GITHUB_TOKEN` start no further workflows. Its client ID and private key are stored as `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY`, both as Actions secrets and as Dependabot secrets. Run **Release prep** by hand from the Actions tab to release whatever is in Unreleased.
+
 A beta is a tag such as `v1.2.0-beta.1`, with `version = "1.2.0b1"` in `pyproject.toml` and a CHANGELOG heading `[1.2.0-beta.1]`. It publishes the image tags `1.2.0-beta.1` and `beta`, never `latest`, and a GitHub release marked as prerelease.
