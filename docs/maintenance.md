@@ -8,7 +8,7 @@
 docker compose pull && docker compose up -d
 ```
 
-Each release carries the newest yt-dlp at the time, which keeps YouTube channels working. Stay on the latest release.
+When yt-dlp publishes a new stable release, a new Tellyard release follows on its own, usually within a day. It keeps YouTube channels working. Stay on the latest release.
 
 ## Backups
 

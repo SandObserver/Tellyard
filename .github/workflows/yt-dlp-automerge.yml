@@ -1,0 +1,27 @@
+name: yt-dlp auto-merge
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+# Every write goes through the release app token: a merge made with GITHUB_TOKEN starts no workflow on main.
+permissions: {}
+
+jobs:
+  automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/uv/yt-dlp')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Mint a token for the release app
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Merge once the required checks pass
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR"
