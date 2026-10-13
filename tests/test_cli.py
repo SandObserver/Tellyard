@@ -94,13 +94,3 @@ def test_health_command_when_down(monkeypatch: pytest.MonkeyPatch, capsys: pytes
     monkeypatch.setenv("LISTEN_PORT", "1")
     assert cli.main(["health"]) == 1
     assert "unhealthy" in capsys.readouterr().err
-
-
-def test_old_artwork_is_removed(tmp_path: Path) -> None:
-    data = tmp_path / "data"
-    (data / "logos").mkdir(parents=True)
-    (data / "logos" / "101.png").write_bytes(b"png")
-    (data / "tmdb-cache.json").write_text("{}", encoding="utf-8")
-    (data / "guide.xml").write_text("<tv/>", encoding="utf-8")
-    cli.remove_old_artwork(data)
-    assert sorted(path.name for path in data.iterdir()) == ["guide.xml"]

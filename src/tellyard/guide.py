@@ -6,7 +6,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -126,8 +126,14 @@ def _fill(channel: Channel, slots: list[Slot], start: datetime, end: datetime) -
     ordered: list[Slot] = []
     cursor = start
     for slot in sorted(slots, key=lambda item: item.start):
-        if slot.stop <= cursor:
+        if slot.stop <= start:
             continue
+        if ordered and slot.start < cursor:
+            # Plex shows overlapping entries badly, so a show ends when the next one starts.
+            previous = ordered.pop()
+            if previous.start < slot.start:
+                ordered.append(replace(previous, stop=slot.start))
+            cursor = slot.start
         if slot.start > cursor:
             ordered += _placeholders(channel, cursor, slot.start)
         ordered.append(slot)
