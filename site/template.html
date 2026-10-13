@@ -20,12 +20,12 @@
     <meta property="og:image" content="{{social_card}}" />
     <meta property="og:image:width" content="1280" />
     <meta property="og:image:height" content="640" />
-    <meta property="og:image:alt" content="The Tellyard mark and a Plex Live TV guide with fictional channels" />
+    <meta property="og:image:alt" content="Tellyard, a live TV tuner, next to a Plex Live TV guide with fictional channels" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Tellyard: a live TV tuner you'll forget is running" />
     <meta name="twitter:description" content="{{description}}" />
     <meta name="twitter:image" content="{{social_card}}" />
-    <meta name="twitter:image:alt" content="The Tellyard mark and a Plex Live TV guide with fictional channels" />
+    <meta name="twitter:image:alt" content="Tellyard, a live TV tuner, next to a Plex Live TV guide with fictional channels" />
     <script type="application/ld+json">{{schema}}</script>
     <style>
       :root {
@@ -84,39 +84,46 @@
       .tv { max-width: 1160px; margin: 0 auto; padding: 0 20px; }
       .bezel { background: #141416; border: 1px solid rgba(255, 255, 255, 0.1); border-bottom: 0; border-radius: 26px 26px 0 0; padding: 12px 12px 0; box-shadow: 0 -2px 60px rgba(0, 0, 0, 0.5); }
       .screen { container-type: inline-size; position: relative; aspect-ratio: 5 / 2; overflow: hidden; border-radius: 14px 14px 0 0;
-        background: radial-gradient(90% 70% at 70% 0%, #26282a 0%, #141414 55%, #0b0b0b 100%); }
+        background: radial-gradient(90% 70% at 70% 0%, var(--glow, #26282a) 0%, #141414 55%, #0b0b0b 100%); transition: background 0.8s; }
       .guide { position: absolute; inset: 3.4cqw 4cqw 0; display: grid; grid-template-columns: 15cqw minmax(0, 1fr); row-gap: 0.8cqw; column-gap: 1cqw; align-content: start; }
-      .g-title { font-size: 2.1cqw; font-weight: 700; letter-spacing: -0.02em; align-self: end; }
-      .ruler { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); font-size: 1.15cqw; color: rgba(235, 235, 245, 0.6); align-self: end; padding-bottom: 0.4cqw; }
-      .ch { display: flex; align-items: center; gap: 1cqw; height: 5.2cqw; }
+      .g-title { font-size: 2.1cqw; font-weight: 700; letter-spacing: -0.02em; align-self: end; white-space: nowrap; }
+      .g-title small { margin-left: 0.6em; font-size: 0.62em; font-weight: 600; letter-spacing: 0; color: rgba(235, 235, 245, 0.6); }
+      .ruler { position: relative; height: 2.4cqw; font-size: 1.15cqw; color: rgba(235, 235, 245, 0.6); align-self: end; }
+      .ruler span { position: absolute; bottom: 0.4cqw; white-space: nowrap; font-variant-numeric: tabular-nums; }
+      .ch { display: grid; grid-template-columns: 3.8cqw 9.4cqw; gap: 1.2cqw; align-items: center; height: 5.2cqw; }
       .logo { width: 9.4cqw; height: 4.4cqw; border-radius: 0.7cqw; background: linear-gradient(135deg, var(--tint), color-mix(in srgb, var(--tint) 55%, #000)); display: grid; place-content: center; text-align: center; line-height: 1; }
       .logo b { font-size: 1.25cqw; font-weight: 800; letter-spacing: 0.04em; color: #fff; }
       .logo i { font-style: normal; font-size: 0.75cqw; font-weight: 600; letter-spacing: 0.18em; color: rgba(255, 255, 255, 0.75); margin-top: 0.25cqw; }
-      .num { font-size: 1.2cqw; color: rgba(235, 235, 245, 0.6); font-variant-numeric: tabular-nums; }
-      .row { position: relative; display: grid; grid-template-columns: repeat(12, 1fr); gap: 0.4cqw; height: 5.2cqw; }
-      .cell { position: relative; display: flex; align-items: center; gap: 0.8cqw; min-width: 0; padding: 0 1.2cqw; border-radius: 0.7cqw; background: rgba(255, 255, 255, 0.07); }
-      .cell.on { background: rgba(255, 255, 255, 0.14); }
+      .num { text-align: right; font-size: 1.35cqw; font-weight: 600; color: rgba(235, 235, 245, 0.78); font-variant-numeric: tabular-nums; }
+      .row { position: relative; height: 5.2cqw; }
+      .cell { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; gap: 0.8cqw; min-width: 0; padding: 0 1.2cqw; border: 0 solid transparent; border-width: 0 0.2cqw; background-clip: padding-box; border-radius: 0.9cqw; background-color: rgba(255, 255, 255, 0.07); overflow: hidden; }
+      .cell.tiny { padding: 0; }
+      .cell.tiny > * { display: none; }
+      .cell.on { background-color: rgba(255, 255, 255, 0.14); }
       .cell .t { font-size: 1.3cqw; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .cell:not(.on) .t { color: rgba(235, 235, 245, 0.72); font-weight: 500; }
       .live { flex: none; padding: 0.25cqw 0.55cqw; border-radius: 0.4cqw; background: var(--accent-fill); font-size: 0.85cqw; font-weight: 700; letter-spacing: 0.06em; }
-      .cell.focus { background: #f2f2f7; }
+      .cell.focus { background-color: #f2f2f7; overflow: visible; }
       .cell.focus .t { color: #101012; }
-      .focus::after { content: ""; position: absolute; inset: -0.45cqw; border: 0.22cqw solid #fff; border-radius: 1cqw; }
+      .focus::after { content: ""; position: absolute; inset: -0.45cqw -0.65cqw; border: 0.22cqw solid #fff; border-radius: 1.1cqw; }
       .now { position: absolute; top: 0; bottom: 0; width: 0.18cqw; margin-left: -0.09cqw; background: var(--accent); pointer-events: none; }
       .now::before { content: ""; position: absolute; top: -0.5cqw; left: -0.45cqw; width: 1.08cqw; height: 1.08cqw; border-radius: 50%; background: var(--accent); }
+      @media (prefers-reduced-motion: no-preference) { .now { transition: left 1s linear; } }
       .lane { position: absolute; top: 0; bottom: 0; left: calc(15cqw + 1cqw); right: 0; pointer-events: none; }
 
       @container (max-width: 640px) {
         .guide { inset: 5cqw 4cqw 0; grid-template-columns: 22cqw minmax(0, 1fr); row-gap: 2cqw; }
         .g-title { font-size: 4.6cqw; }
-        .ruler { font-size: 2.8cqw; grid-template-columns: repeat(2, 1fr); }
-        .ruler span:nth-child(n + 3) { display: none; }
-        .ch { height: 11cqw; }
+        .g-title small { display: none; }
+        .ruler { font-size: 2.8cqw; height: 5cqw; }
+        .ruler span:nth-child(even) { display: none; }
+        .cell:not(.focus) .live { display: none; }
+        .ch { height: 11cqw; grid-template-columns: 20cqw; }
         .logo { width: 20cqw; height: 9.5cqw; border-radius: 1.6cqw; }
         .logo b { font-size: 2.7cqw; }
         .logo i { font-size: 1.6cqw; }
         .num { display: none; }
-        .row { height: 11cqw; gap: 1cqw; }
+        .row { height: 11cqw; }
         .cell { padding: 0 2.4cqw; border-radius: 1.6cqw; }
         .cell .t { font-size: 3cqw; }
         .live { font-size: 2cqw; padding: 0.5cqw 1cqw; border-radius: 0.8cqw; }
@@ -251,10 +258,10 @@
       <div class="tv-band">
         <div class="tv">
           <div class="bezel">
-            <div class="screen" role="img" aria-label="A Plex Live TV guide with five fictional channels, the first one playing live">
+            <div class="screen" id="guide" role="img" aria-label="A Plex Live TV guide with five fictional channels, the first one playing live">
               <div class="guide" aria-hidden="true">
                 <span class="g-title">Live TV</span>
-                <div class="ruler"><span>8:00 PM</span><span>8:30 PM</span><span>9:00 PM</span><span>9:30 PM</span></div>
+                <div class="ruler">{{guide_ruler}}</div>
                 {{guide_rows}}
                 <div class="lane"><span class="now" style="left: {{now_left}}%"></span></div>
               </div>
@@ -337,6 +344,7 @@
       </div>
     </footer>
     <p class="sr-only" id="live" aria-live="polite"></p>
+    <script type="application/json" id="guide-data">{{guide_data}}</script>
     <script>
       const live = document.getElementById("live");
       async function copyText(code) {
@@ -355,6 +363,79 @@
         brand.addEventListener("pointerenter", play);
         brand.addEventListener("focus", play);
       }
+      const screen = document.getElementById("guide");
+      const lanes = screen.querySelectorAll(".row");
+      const ruler = screen.querySelector(".ruler");
+      const title = screen.querySelector(".g-title");
+      const now = screen.querySelector(".now");
+      const schedule = JSON.parse(document.getElementById("guide-data").textContent);
+      const clock = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+      const MINUTE = 60000;
+      const SPAN = 120 * MINUTE;
+      const glow = (hour) => (hour < 5 ? "#16131f" : hour < 9 ? "#2b3646" : hour < 17 ? "#2a2f33" : hour < 21 ? "#3a2b22" : "#221c2a");
+      let windowStart = 0;
+      let minute = -1;
+      let cells = [];
+      function shows(channel, from, to) {
+        const day = new Date(from);
+        const starts = [-1, 0, 1, 2].flatMap((offset) =>
+          channel.slots.map(([at, name]) => ({ name, start: new Date(day.getFullYear(), day.getMonth(), day.getDate() + offset, 0, at).getTime() })),
+        );
+        return starts.slice(0, -1).map((show, i) => ({ ...show, end: starts[i + 1].start })).filter((show) => show.end > from && show.start < to);
+      }
+      function render(time) {
+        const start = new Date(time);
+        start.setMinutes(start.getMinutes() < 30 ? 0 : 30, 0, 0);
+        windowStart = start.getTime();
+        ruler.replaceChildren(...[0, 1, 2, 3].map((i) => {
+          const label = document.createElement("span");
+          label.style.left = `${i * 25}%`;
+          label.textContent = clock.format(windowStart + i * 30 * MINUTE);
+          return label;
+        }));
+        cells = schedule.flatMap((channel, row) => {
+          const found = shows(channel, windowStart, windowStart + SPAN).map((show) => {
+            const from = Math.max(show.start, windowStart);
+            const to = Math.min(show.end, windowStart + SPAN);
+            const cell = document.createElement("div");
+            const name = document.createElement("span");
+            cell.className = (to - from) / SPAN < 0.06 ? "cell tiny" : "cell";
+            cell.style.left = `${((from - windowStart) / SPAN) * 100}%`;
+            cell.style.width = `${((to - from) / SPAN) * 100}%`;
+            name.className = "t";
+            name.textContent = show.name;
+            cell.append(name);
+            return { ...show, cell, row };
+          });
+          lanes[row].replaceChildren(...found.map((show) => show.cell));
+          return found;
+        });
+        minute = -1;
+      }
+      function tick() {
+        const time = Date.now();
+        if (time - windowStart >= 30 * MINUTE || time < windowStart) render(time);
+        now.style.left = `${((time - windowStart) / SPAN) * 100}%`;
+        if (Math.floor(time / MINUTE) === minute) return;
+        minute = Math.floor(time / MINUTE);
+        for (const show of cells) {
+          const on = show.start <= time && time < show.end;
+          show.cell.classList.toggle("on", on);
+          show.cell.classList.toggle("focus", on && show.row === 0);
+          const badge = show.cell.querySelector(".live");
+          if (on && !badge) {
+            const live = document.createElement("span");
+            live.className = "live";
+            live.textContent = "LIVE";
+            show.cell.append(live);
+          } else if (!on && badge) badge.remove();
+        }
+        const hour = new Date(time).getHours();
+        screen.style.setProperty("--glow", glow(hour));
+        title.innerHTML = hour < 5 ? "Live TV<small>Late night</small>" : "Live TV";
+      }
+      tick();
+      setInterval(tick, 1000);
       for (const button of document.querySelectorAll(".copy")) {
         button.addEventListener("click", async () => {
           const code = button.closest(".code").querySelector("code");

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Run the landing page guide on the visitor's clock, with shows that start at different times.
+
 ### Fixed
 
 - Fix screen reader labels on the landing page and send a Content Security Policy with it.

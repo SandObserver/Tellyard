@@ -104,39 +104,58 @@ function lastChange() {
   }
 }
 
-const GUIDE_MINUTES = 120;
-const NOW = 40;
+const WINDOW = 120;
+const STATIC_START = 20 * 60;
+const STATIC_NOW = STATIC_START + 40;
 const channels = [
-  { number: '101', name: 'Kestrel News', mark: 'KESTREL', sub: 'NEWS', tint: '#2f6fd6', shows: [['Evening Report', 60], ['Kestrel Tonight', 60]] },
-  { number: '102', name: 'Brightwater Weather', mark: 'BRIGHT', sub: 'WATER', tint: '#1aa0a8', shows: [['Brightwater Weather', 120]] },
-  { number: '201', name: 'Lumen Music', mark: 'lumen', sub: 'MUSIC', tint: '#b14ad6', shows: [['Live Session', 30], ['Encore', 30], ['Night Mix', 60]] },
-  { number: '202', name: 'Ridgeline Sports', mark: 'RIDGE', sub: 'SPORTS', tint: '#d6702f', shows: [['Matchday Live', 90], ['Highlights', 30]] },
-  { number: '301', name: 'Atlas Docs', mark: 'ATLAS', sub: 'DOCS', tint: '#4f9b4a', shows: [['Deep Water', 60], ['The Long Road', 60]] },
-];
+  { number: '101', name: 'Kestrel News', mark: 'KESTREL', sub: 'NEWS', tint: '#2f6fd6',
+    day: '0:00 Overnight Desk|2:00 World Desk|3:30 Overnight Desk|5:00 Early Edition|6:00 Kestrel Morning|9:00 Market Watch|10:30 Midday Desk|13:00 Kestrel Live|15:00 Afternoon Report|17:00 First at Five|18:00 Evening Report|19:30 Kestrel Tonight|21:00 The Late Brief|22:30 Night Desk' },
+  { number: '102', name: 'Brightwater Weather', mark: 'BRIGHT', sub: 'WATER', tint: '#1aa0a8',
+    day: Array.from({ length: 12 }, (_, i) => `${i * 2}:00 Brightwater Weather`).join('|') },
+  { number: '201', name: 'Lumen Music', mark: 'lumen', sub: 'MUSIC', tint: '#b14ad6',
+    day: '0:25 Night Mix|2:15 Ambient Hours|5:40 Wake-Up Set|8:20 Morning Rotation|11:05 Lumen Sessions|12:50 Deep Cuts|14:35 Live Session|15:25 Afternoon Rotation|17:45 Encore|18:30 Drive Time|20:10 Live Session|21:40 Encore|22:20 Late Set' },
+  { number: '202', name: 'Ridgeline Sports', mark: 'RIDGE', sub: 'SPORTS', tint: '#d6702f',
+    day: '1:15 Classic Matches|4:30 Overnight Replay|6:00 Morning Kickoff|8:00 Ridgeline Daily|9:15 Training Ground|10:45 Highlights|11:35 Cup Preview|12:55 Matchday Live|15:05 Post-Match|16:00 Ridgeline Daily|17:20 Highlights|18:05 Matchday Live|20:20 Post-Match|21:10 Night Game|23:40 Highlights' },
+  { number: '301', name: 'Atlas Docs', mark: 'ATLAS', sub: 'DOCS', tint: '#4f9b4a',
+    day: '0:40 Night Owl|3:40 Deep Water|4:35 The Long Road|5:50 Wild Coast|6:45 Atlas Mornings|8:25 Deep Water|9:20 The Long Road|10:35 Built to Last|11:50 Wild Coast|12:45 Northern Lines|14:10 Deep Water|15:05 The Long Road|16:20 Built to Last|17:35 Wild Coast|18:30 Northern Lines|19:55 Deep Water|20:50 The Long Road|22:05 Built to Last|23:20 Northern Lines' },
+].map(({ day, ...channel }) => {
+  const slots = day.split('|').map((entry) => {
+    const [, h, m, title] = entry.match(/^(\d{1,2}):(\d{2}) (.+)$/) ?? fail(`guide slot "${entry}" is not "H:MM Title"`);
+    return [Number(h) * 60 + Number(m), title];
+  });
+  if (slots.some(([minute], i) => i > 0 && minute <= slots[i - 1][0])) fail(`guide day of ${channel.name} is not in order`);
+  return { ...channel, slots };
+});
+
+function shows(channel, from, to) {
+  const starts = [-1, 0, 1].flatMap((day) => channel.slots.map(([minute, title]) => [day * 1440 + minute, title]));
+  return starts
+    .slice(0, -1)
+    .map(([start, title], i) => ({ title, start, end: starts[i + 1][0] }))
+    .filter(({ start, end }) => end > from && start < to);
+}
+
+function clock(minute) {
+  const h = Math.floor(minute / 60) % 24;
+  return `${h % 12 || 12}:${String(minute % 60).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
 
 function guideRows() {
-  for (const channel of channels) {
-    const total = channel.shows.reduce((sum, [, minutes]) => sum + minutes, 0);
-    if (total !== GUIDE_MINUTES) fail(`guide row ${channel.name} spans ${total} minutes, not ${GUIDE_MINUTES}`);
-  }
   return channels
     .map((channel, row) => {
-      let start = 0;
-      const cells = channel.shows
-        .map(([title, minutes]) => {
-          const live = start <= NOW && NOW < start + minutes;
-          const focus = row === 0 && live;
-          const classes = ['cell', live ? 'on' : '', focus ? 'focus' : ''].filter(Boolean).join(' ');
-          const html =
-            `<div class="${classes}" style="grid-column: span ${minutes / 10}">` +
-            `<span class="t">${escape(title)}</span>${live ? '<span class="live">LIVE</span>' : ''}</div>`;
-          start += minutes;
-          return html;
+      const cells = shows(channel, STATIC_START, STATIC_START + WINDOW)
+        .map(({ title, start, end }) => {
+          const a = Math.max(start, STATIC_START);
+          const z = Math.min(end, STATIC_START + WINDOW);
+          const live = start <= STATIC_NOW && STATIC_NOW < end;
+          const classes = ['cell', live ? 'on' : '', live && row === 0 ? 'focus' : ''].filter(Boolean).join(' ');
+          const style = `left: ${((a - STATIC_START) / WINDOW) * 100}%; width: ${((z - a) / WINDOW) * 100}%`;
+          return `<div class="${classes}" style="${style}"><span class="t">${escape(title)}</span>${live ? '<span class="live">LIVE</span>' : ''}</div>`;
         })
         .join('');
       return (
-        `<div class="ch"><span class="logo" style="--tint: ${channel.tint}"><b>${escape(channel.mark)}</b><i>${escape(channel.sub)}</i></span>` +
-        `<span class="num">${channel.number}</span></div><div class="row">${cells}</div>`
+        `<div class="ch"><span class="num">${channel.number}</span><span class="logo" style="--tint: ${channel.tint}"><b>${escape(channel.mark)}</b><i>${escape(channel.sub)}</i></span></div>` +
+        `<div class="row">${cells}</div>`
       );
     })
     .join('');
@@ -154,7 +173,9 @@ const values = {
   year: String(new Date().getFullYear()),
   schema: JSON.stringify(schema).replaceAll('<', '\\u003c'),
   guide_rows: guideRows(),
-  now_left: String((NOW / GUIDE_MINUTES) * 100),
+  guide_ruler: [0, 30, 60, 90].map((m) => `<span style="left: ${(m / WINDOW) * 100}%">${clock(STATIC_START + m)}</span>`).join(''),
+  guide_data: JSON.stringify(channels.map(({ number, slots }) => ({ number, slots }))).replaceAll('<', '\\u003c'),
+  now_left: String(((STATIC_NOW - STATIC_START) / WINDOW) * 100),
   channels_code: highlight(codeBlock('Channels', 'toml')),
   compose_code: highlight(codeBlock('2\\. Create the compose file', 'yaml')),
   start_code: highlight(codeBlock('3\\. Start it', 'sh')),
