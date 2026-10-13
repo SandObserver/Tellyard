@@ -63,10 +63,9 @@ const card = readFileSync(join(root, 'docs', 'social-card.png'));
 const socialCard = `${site}/img/social-card.png?v=${createHash('sha256').update(card).digest('hex').slice(0, 8)}`;
 
 const template = readFileSync(join(here, 'template.html'), 'utf8');
-const answers = [...template.matchAll(/<span class="saq">(.+?)<\/span> <span class="saa">(.+?)<\/span><\/h3><p>(.+?)<\/p>/g)].map(
-  ([, q, a, text]) => ({ question: plain(q), answer: `${plain(a)} ${plain(text)}` }),
+const features = [...template.matchAll(/<span class="saq">(.+?)<\/span> <span class="saa">(.+?)<\/span><\/h3><p>(.+?)<\/p>/g)].map(
+  ([, q, a, text]) => `${plain(q)} ${plain(a)} ${plain(text)}`,
 );
-const features = answers.map(({ question, answer }) => `${question} ${answer}`);
 if (features.length === 0) fail('template.html has no feature cards');
 
 const schema = {
@@ -90,14 +89,6 @@ const schema = {
       offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
       sameAs: [repo],
       author: { '@type': 'Person', name: 'SandObserver', url: 'https://github.com/SandObserver' },
-    },
-    {
-      '@type': 'FAQPage',
-      mainEntity: answers.map(({ question, answer }) => ({
-        '@type': 'Question',
-        name: question,
-        acceptedAnswer: { '@type': 'Answer', text: answer },
-      })),
     },
   ],
 };
@@ -182,7 +173,16 @@ mkdirSync(join(dist, 'img'), { recursive: true });
 cpSync(join(here, 'public'), dist, { recursive: true });
 cpSync(join(root, 'docs', 'logo.svg'), join(dist, 'logo.svg'));
 cpSync(join(root, 'docs', 'social-card.png'), join(dist, 'img', 'social-card.png'));
-writeFileSync(join(dist, 'index.html'), fill('template.html'));
+const index = fill('template.html');
+const scripts = [...index.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
+  ([, code]) => `'sha256-${createHash('sha256').update(code).digest('base64')}'`,
+);
+const csp =
+  `default-src 'none'; script-src ${scripts.join(' ') || "'none'"}; style-src 'unsafe-inline'; img-src 'self'; ` +
+  "manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+const headers = join(dist, '_headers');
+writeFileSync(headers, readFileSync(headers, 'utf8').replace(/^\/\*\n/m, `/*\n  Content-Security-Policy: ${csp}\n`));
+writeFileSync(join(dist, 'index.html'), index);
 writeFileSync(join(dist, '404.html'), fill('404.html'));
 writeFileSync(join(dist, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${site}/sitemap.xml\n`);
 writeFileSync(

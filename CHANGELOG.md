@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix screen reader labels on the landing page and send a Content Security Policy with it.
+
 ## [0.1.0-beta.2] - 2026-10-13
 
 ### Added
