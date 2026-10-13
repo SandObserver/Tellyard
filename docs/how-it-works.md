@@ -50,7 +50,7 @@ Tellyard checks `channels.toml` for changes every time Plex asks for the line-up
 | `/stream/<number>` | One channel as MPEG-TS. Also at `/auto/v<number>`. |
 | `/guide.xml` | The XMLTV guide. Also at `/epg.xml`. |
 | `/playlist.m3u` | An M3U playlist for players such as VLC. |
-| `/health` | Status as JSON. |
+| `/healthz` | Status as JSON. Answers 503 with a `reason` when the guide has stopped updating. Also at `/health`. |
 
 Tellyard does not answer HDHomeRun network discovery, so Plex never finds it on its own. Enter its address in Plex by hand.
 

@@ -39,6 +39,7 @@ class Settings:
     ffprobe: str
     log_level: LogLevel
     min_height: int | None
+    heartbeat_url: str
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -53,6 +54,9 @@ class Settings:
             level = LogLevel(env.get("LOG_LEVEL", "info").strip().lower())
         except ValueError:
             raise SettingsError("LOG_LEVEL must be debug, info, warning or error") from None
+        heartbeat_url = env.get("HEARTBEAT_URL", "").strip()
+        if heartbeat_url and not heartbeat_url.startswith(("http://", "https://")):
+            raise SettingsError("HEARTBEAT_URL must start with http:// or https://")
         try:
             ytdlp_args = tuple(shlex.split(env.get("YTDLP_ARGS", "")))
         except ValueError as error:
@@ -73,6 +77,7 @@ class Settings:
             ffprobe=env.get("FFPROBE", "ffprobe"),
             log_level=level,
             min_height=_min_height(env),
+            heartbeat_url=heartbeat_url,
         )
 
 

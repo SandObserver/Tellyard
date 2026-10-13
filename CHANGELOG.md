@@ -6,8 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Add `HEARTBEAT_URL`, called once a minute while Tellyard is healthy.
+- Add `/healthz`, which answers 503 with a reason when the guide has stopped updating. `/health` stays as an alias.
+
 ### Changed
 
+- Print a settings summary at start and write log lines as logfmt with UTC times.
 - Run the landing page guide on the visitor's clock, with shows that start at different times.
 
 ### Fixed

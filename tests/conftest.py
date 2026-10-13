@@ -1,4 +1,5 @@
-from collections.abc import Callable
+import logging
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,15 @@ logo = "https://example.com/drama.png"
 hls = "https://cdn.example.com/drama/master.m3u8"
 headers = { Referer = "https://drama.example.com/" }
 """
+
+
+@pytest.fixture(autouse=True)
+def root_logger() -> Iterator[None]:
+    root = logging.getLogger()
+    handlers, level = root.handlers[:], root.level
+    yield
+    root.handlers[:] = handlers
+    root.setLevel(level)
 
 
 @pytest.fixture

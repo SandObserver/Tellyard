@@ -148,7 +148,7 @@ docker exec tellyard tellyard check
 | `validate` | Read `channels.toml` and list the channels. |
 | `check [NUMBER...]` | Tune each channel and report the resolution it sends. Exits 1 if any fails. |
 | `guide [-o FILE]` | Build the guide once. |
-| `health` | Exit 0 when the running service answers. Used by the container health check. |
+| `health` | Exit 0 when the running service is healthy, or print why it is not. Used by the container health check. |
 
 ## Settings
 
@@ -165,6 +165,7 @@ Set these as environment variables.
 | `GUIDE_REFRESH_HOURS` | How often the guide is rebuilt. | `6` |
 | `YTDLP_ARGS` | Extra yt-dlp arguments, for example extractor options. | |
 | `LOG_LEVEL` | `debug`, `info`, `warning` or `error`. | `info` |
+| `HEARTBEAT_URL` | Address Tellyard calls once a minute while it is healthy, for a monitor such as Uptime Kuma or Healthchecks. | |
 | `LISTEN_PORT` | Port inside the container. If you change it, change the right side of `ports:` too. | `5004` |
 | `CHANNELS_FILE` | The channel list inside the container. Keep the default. | `/config/channels.toml` |
 | `DATA_DIR` | Folder inside the container for the guide and caches. Keep the default. | `/data` |

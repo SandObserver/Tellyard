@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -6,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from tellyard import check, cli
+from tellyard import channels, check, cli
 from tellyard.check import Result
+from tellyard.settings import Settings
 
 
 @pytest.fixture(autouse=True)
@@ -65,9 +67,11 @@ def test_check_command_fails_on_a_bad_channel(monkeypatch: pytest.MonkeyPatch) -
 
 
 class Healthy(BaseHTTPRequestHandler):
+    reply: tuple[int, bytes] = (200, json.dumps({"status": "ok"}).encode())
+
     def do_GET(self) -> None:
-        body = json.dumps({"status": "ok"}).encode()
-        self.send_response(200)
+        code, body = self.reply
+        self.send_response(code)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -88,6 +92,33 @@ def health_port() -> Iterator[int]:
 def test_health_command(monkeypatch: pytest.MonkeyPatch, health_port: int) -> None:
     monkeypatch.setenv("LISTEN_PORT", str(health_port))
     assert cli.main(["health"]) == 0
+
+
+@pytest.mark.parametrize(
+    ("body", "reason"),
+    [
+        (json.dumps({"status": "unhealthy", "reason": "the guide thread has stopped"}).encode(), "guide thread"),
+        (b"not json", "HTTP 503"),
+    ],
+)
+def test_health_command_prints_the_reason(
+    monkeypatch: pytest.MonkeyPatch, health_port: int, capsys: pytest.CaptureFixture[str], body: bytes, reason: str
+) -> None:
+    monkeypatch.setattr(Healthy, "reply", (503, body))
+    monkeypatch.setenv("LISTEN_PORT", str(health_port))
+    assert cli.main(["health"]) == 1
+    assert reason in capsys.readouterr().err
+
+
+def test_banner_summarises_the_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MIN_HEIGHT", "1080")
+    monkeypatch.setenv("HEARTBEAT_URL", "https://ping.example.com/abc")
+    settings = Settings.from_env(os.environ)
+    text = cli._banner(settings, channels.load(settings.channels_file))
+    assert "  Channels   2 from " in text
+    assert "  Quality    check needs 1080p\n" in text + "\n"
+    assert "  Guide      3 days, rebuilt every 6 h, 0 XMLTV sources\n" in text
+    assert "  Heartbeat  on\n" in text
 
 
 def test_health_command_when_down(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
