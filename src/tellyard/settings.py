@@ -1,5 +1,3 @@
-"""Service settings from environment variables."""
-
 import hashlib
 import re
 import shlex
@@ -79,7 +77,7 @@ class Settings:
 
 
 def _device_id(name: str) -> str:
-    # Plex remembers a tuner by its ID, so the default must survive restarts.
+    # Plex identifies the tuner by this ID. Keep the default stable across restarts.
     return hashlib.sha256(name.encode()).hexdigest()[:8].upper()
 
 

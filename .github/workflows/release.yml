@@ -21,7 +21,6 @@ jobs:
         run: |
           version=$(sed -n 's/^version = "\(.*\)"$/\1/p' pyproject.toml)
           release=${GITHUB_REF_NAME#v}
-          # pyproject.toml spells a pre-release the Python way: 1.2.0-beta.1 is 1.2.0b1.
           python=$(echo "$release" | sed -E 's/-alpha\.?/a/; s/-beta\.?/b/; s/-rc\.?/rc/')
           test "$python" = "$version" || { echo "tag $GITHUB_REF_NAME does not match version $version"; exit 1; }
           awk -v v="$release" '

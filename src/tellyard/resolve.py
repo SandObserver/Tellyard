@@ -1,5 +1,3 @@
-"""Turn a channel source into the playlist URLs ffmpeg should open, at tune time."""
-
 import html
 import json
 import logging
@@ -18,7 +16,6 @@ from tellyard.settings import Settings
 log = logging.getLogger(__name__)
 PAGE_PATTERN = re.compile(DEFAULT_PAGE_PATTERN)
 YTDLP_TIMEOUT = 60.0
-# How many recent items on a channel's streams tab to search for a live stream.
 STREAM_SCAN = 20
 FETCH_ATTEMPTS = 3
 
@@ -70,7 +67,6 @@ class Resolver:
                 return self._pick(self._from_youtube(self._youtube_target(source)), ())
 
     def _signed(self, source: HlsSource) -> str:
-        """Fetch a signed stream URL from the source's token service."""
         address = source.token.replace("{url}", urllib.parse.quote(source.url, safe=""))
         try:
             _, text = self._fetch(address, source.headers)
@@ -99,7 +95,6 @@ class Resolver:
         raise ResolveError(f"no playlist URL{hint} on the channel page")
 
     def _youtube_target(self, source: YouTubeSource) -> str:
-        """The live video whose title contains `match`, so a channel running several streams plays the right one."""
         if not source.match:
             return source.url
         channel = source.url.rstrip("/").removesuffix("/live")
@@ -153,7 +148,7 @@ class Resolver:
         return Resolved(choice.video, choice.audio, choice.height, headers)
 
     def _fetch_with_retry(self, url: str, headers: Headers) -> tuple[str, str]:
-        # Some broadcaster CDNs hang on a share of requests; a fresh connection usually answers at once.
+        # Some CDNs hang on some requests. A new connection usually answers.
         for attempt in range(1, FETCH_ATTEMPTS + 1):
             try:
                 return self._fetch(url, headers)

@@ -1,5 +1,3 @@
-"""Just enough HLS master playlist parsing to pick the best variant."""
-
 import re
 import urllib.parse
 from dataclasses import dataclass

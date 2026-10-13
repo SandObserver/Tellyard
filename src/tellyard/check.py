@@ -1,5 +1,3 @@
-"""`tellyard check`: resolve every channel and measure the picture it really sends."""
-
 import json
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
