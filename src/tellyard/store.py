@@ -24,10 +24,13 @@ class ChannelStore:
                 try:
                     self._lineup = channels.load(self._path)
                 except ChannelError as error:
-                    log.error("%s changed but has an error, keeping the previous channels: %s", self._path, error)
+                    log.error(
+                        "channel file has an error, keeping the previous channels",
+                        extra={"file": self._path, "reason": str(error)},
+                    )
                 else:
                     self.version += 1
-                    log.info("reloaded %d channels from %s", len(self._lineup.channels), self._path)
+                    log.info("channels reloaded", extra={"channels": len(self._lineup.channels), "file": self._path})
             return self._lineup
 
     def _read_stamp(self) -> tuple[int, int] | None:

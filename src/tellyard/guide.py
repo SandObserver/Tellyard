@@ -88,13 +88,13 @@ def _external(
                 downloader(url, path)
                 found = _read(path, ids, start, end)
             except (FetchError, ET.ParseError, OSError, EOFError) as error:
-                log.warning("guide source %s failed, using placeholders: %s", url, error)
+                log.warning("guide source failed, using placeholders", extra={"url": url, "reason": str(error)})
                 continue
             for number, slots in found.items():
                 schedules[number].extend(slots)
             missing = sorted(source_id for source_id, numbers in ids.items() if not any(n in found for n in numbers))
             if missing:
-                log.warning("guide source %s has no current listings for %s", url, ", ".join(missing))
+                log.warning("guide source has no current listings", extra={"url": url, "ids": ",".join(missing)})
     return schedules
 
 
@@ -207,4 +207,4 @@ class Guide:
         partial.replace(self._path)
         self._data = data
         self.built_at = moment
-        log.info("guide rebuilt for %d channels (%d KB)", len(lineup.channels), len(data) // 1024)
+        log.info("guide rebuilt", extra={"channels": len(lineup.channels), "size_kb": len(data) // 1024})

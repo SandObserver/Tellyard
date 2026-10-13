@@ -100,7 +100,7 @@ class Process:
                 if text:
                     # After close, ffmpeg reports the closed pipe. These errors are expected.
                     level = logging.DEBUG if self._closed.is_set() else logging.WARNING
-                    log.log(level, "%s: ffmpeg: %s", self._label, text)
+                    log.log(level, "ffmpeg", extra={"channel": self._label, "output": text})
 
 
 type Starter = Callable[[Sequence[str], str], Process]
@@ -122,6 +122,10 @@ class Session:
     def label(self) -> str:
         return f"{self.channel.number} {self.channel.name}"
 
+    @property
+    def fields(self) -> dict[str, str]:
+        return {"channel": self.channel.number, "title": self.channel.name}
+
     def open(self) -> None:
         self._start()
 
@@ -134,7 +138,7 @@ class Session:
             try:
                 chunk_or_end = self._process.read(STALL_TIMEOUT)
             except queue.Empty:
-                log.warning("%s: no data for %.0f s, restarting", self.label, STALL_TIMEOUT)
+                log.warning("no data, restarting", extra={**self.fields, "seconds": round(STALL_TIMEOUT)})
                 chunk_or_end = None
             if chunk_or_end:
                 yield chunk_or_end
@@ -179,13 +183,15 @@ class Session:
         while self._attempts <= MAX_ATTEMPTS:
             if self._attempts > 1:
                 sleep(BACKOFF * (self._attempts - 1))
-            log.info("%s: source ended after %.0f s, reconnecting (attempt %d)", self.label, ran, self._attempts)
+            log.info(
+                "source ended, reconnecting", extra={**self.fields, "after_s": round(ran), "attempt": self._attempts}
+            )
             try:
                 self._start()
             except StreamError as error:
-                log.warning("%s: reconnect failed: %s", self.label, error)
+                log.warning("reconnect failed", extra={**self.fields, "reason": str(error)})
                 self._attempts += 1
             else:
                 return True
-        log.error("%s: giving up after %d failed attempts", self.label, MAX_ATTEMPTS)
+        log.error("stream given up", extra={**self.fields, "attempts": MAX_ATTEMPTS})
         return False

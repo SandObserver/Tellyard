@@ -64,10 +64,10 @@ port=$(docker port "$name" 5004/tcp | head -1 | sed 's/.*://')
 base=http://127.0.0.1:$port
 
 for _ in $(seq 30); do
-  curl -sf "$base/health" >/dev/null && break
+  curl -sf "$base/healthz" >/dev/null && break
   sleep 1
 done
-curl -sf "$base/health" >/dev/null || fail "the service did not answer"
+curl -sf "$base/healthz" >/dev/null || fail "the service did not answer"
 
 echo "== check"
 docker exec "$name" tellyard check | tee "$work/check.txt" || fail "tellyard check failed"

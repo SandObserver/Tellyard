@@ -117,7 +117,7 @@ def test_failed_source_falls_back_to_placeholders(caplog: pytest.LogCaptureFixtu
 
 def test_reports_ids_missing_from_the_source(caplog: pytest.LogCaptureFixture) -> None:
     guide.build(lineup(xmltv="https://epg.example.com/tr.xml", id="Nope.tr"), NOW, 1, serving(SOURCE))
-    assert "no current listings for Nope.tr" in caplog.text
+    assert [r.__dict__.get("ids") for r in caplog.records] == ["Nope.tr"]
 
 
 def test_unparseable_source_falls_back() -> None:

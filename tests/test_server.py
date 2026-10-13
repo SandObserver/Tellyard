@@ -4,6 +4,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
@@ -98,10 +99,81 @@ def test_guide_entries_get_episode_numbers(base: str, app: App) -> None:
 
 
 def test_health(base: str) -> None:
-    data = json.loads(get(f"{base}/health")[2])
+    status, _, body = get(f"{base}/healthz")
+    data = json.loads(body)
+    assert status == 200
     assert data["status"] == "ok"
+    assert data["reason"] is None
     assert data["channels"] == 2
     assert data["streams"] == 0
+    assert json.loads(get(f"{base}/health")[2])["status"] == "ok"
+
+
+def test_health_fails_when_the_guide_is_old(base: str, app: App) -> None:
+    app.refresh_guide(datetime.now(UTC) - timedelta(hours=13))
+    status, _, body = get(f"{base}/healthz")
+    assert status == 503
+    data = json.loads(body)
+    assert (data["status"], data["reason"]) == ("unhealthy", "the guide is 13 hours old")
+    app.refresh_guide(datetime.now(UTC))
+    assert app.problem() is None
+
+
+def test_health_fails_when_the_guide_thread_stops(app: App) -> None:
+    stop = threading.Event()
+    stop.set()
+    app.start(stop)
+    deadline = datetime.now(UTC) + timedelta(seconds=5)
+    while app.problem() is None and datetime.now(UTC) < deadline:
+        threading.Event().wait(0.01)
+    assert app.problem() == "the guide thread has stopped"
+
+
+@pytest.fixture
+def pings() -> Iterator[tuple[str, list[str]]]:
+    seen: list[str] = []
+
+    class Ping(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            seen.append(self.path)
+            self.send_response(200 if self.path == "/ok" else 500)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Ping)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}", seen
+    server.shutdown()
+    server.server_close()
+
+
+def make_app(settings: Settings, channels_file: Path, tmp_path: Path) -> App:
+    guide = Guide(tmp_path / "data" / "guide.xml", 1, downloader=lambda url, path: None)
+    return App(settings, ChannelStore(channels_file), guide)
+
+
+def test_heartbeat_is_called_once_a_minute_while_healthy(
+    make_settings: Callable[..., Settings],
+    channels_file: Path,
+    tmp_path: Path,
+    pings: tuple[str, list[str]],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    url, seen = pings
+    app = make_app(make_settings(HEARTBEAT_URL=f"{url}/ok"), channels_file, tmp_path)
+    app.heartbeat()
+    app.heartbeat()
+    assert seen == ["/ok"]
+    failing = make_app(make_settings(HEARTBEAT_URL=f"{url}/fail"), channels_file, tmp_path)
+    failing.heartbeat()
+    assert "HEARTBEAT_URL call failed" in caplog.text
+    stale = make_app(make_settings(HEARTBEAT_URL=f"{url}/ok"), channels_file, tmp_path)
+    stale.refresh_guide(datetime.now(UTC) - timedelta(hours=13))
+    stale.heartbeat()
+    assert seen == ["/ok", "/fail"]
 
 
 def test_streams_a_channel_and_frees_the_tuner(base: str, app: App) -> None:

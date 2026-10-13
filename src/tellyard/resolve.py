@@ -103,7 +103,7 @@ class Resolver:
         try:
             listing = _json(self._run(args, YTDLP_TIMEOUT))
         except ResolveError as error:
-            log.warning("could not list the live streams of %s, using its live page: %s", channel, error)
+            log.warning("live stream list failed, using the live page", extra={"url": channel, "reason": str(error)})
             return source.url
         entries = listing.get("entries")
         wanted = source.match.casefold()
@@ -113,7 +113,7 @@ class Resolver:
             title, video = entry.get("title"), entry.get("id")
             if isinstance(title, str) and isinstance(video, str) and wanted in title.casefold():
                 return f"https://www.youtube.com/watch?v={video}"
-        log.info("no live stream titled %r on %s, using its live page", source.match, channel)
+        log.info("no live stream matches, using the live page", extra={"url": channel, "match": source.match})
         return source.url
 
     def _from_youtube(self, url: str) -> str:
@@ -155,7 +155,7 @@ class Resolver:
             except FetchError as error:
                 if attempt == FETCH_ATTEMPTS:
                     raise ResolveError(f"could not load the playlist: {error}") from error
-                log.info("playlist request failed, retrying: %s", error)
+                log.info("playlist request failed, retrying", extra={"attempt": attempt, "reason": str(error)})
         raise AssertionError("unreachable")
 
 

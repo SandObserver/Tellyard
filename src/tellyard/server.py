@@ -14,6 +14,7 @@ from xml.sax.saxutils import escape
 from tellyard import __version__
 from tellyard.channels import Channel
 from tellyard.guide import Guide
+from tellyard.net import FetchError, fetch_text
 from tellyard.resolve import Resolver
 from tellyard.settings import Settings
 from tellyard.store import ChannelStore
@@ -24,6 +25,7 @@ STREAM_PATH = re.compile(r"^/(?:stream/|auto/v)(\d{1,5}(?:\.\d{1,3})?)$")
 HOST = re.compile(r"^[A-Za-z0-9.\-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:.]+\](:\d{1,5})?$")
 GUIDE_CHECK = 60.0
 GUIDE_RETRY = timedelta(minutes=15)
+HEARTBEAT_SECONDS = 60.0
 SOCKET_TIMEOUT = 60.0
 
 type SessionFactory = Callable[[Channel], Session]
@@ -47,6 +49,9 @@ class App:
         self._streams = 0
         self._guide_version = 0
         self._guide_failed_at: datetime | None = None
+        self._started_at = datetime.now(UTC)
+        self._guide_thread: threading.Thread | None = None
+        self._last_heartbeat = float("-inf")
 
     @property
     def streams(self) -> int:
@@ -110,10 +115,21 @@ class App:
             f"<UDN>uuid:{self.settings.device_id}</UDN></device></root>"
         )
 
+    def problem(self, now: datetime | None = None) -> str | None:
+        if self._guide_thread is not None and not self._guide_thread.is_alive():
+            return "the guide thread has stopped"
+        age = (now or datetime.now(UTC)) - (self.guide.built_at or self._started_at)
+        limit = timedelta(hours=2 * self.settings.guide_refresh_hours)
+        if age > limit:
+            return f"the guide is {age.total_seconds() / 3600:.0f} hours old"
+        return None
+
     def health(self) -> dict[str, Any]:
         built = self.guide.built_at
+        problem = self.problem()
         return {
-            "status": "ok",
+            "status": "unhealthy" if problem else "ok",
+            "reason": problem,
             "version": __version__,
             "channels": len(self.store.current().channels),
             "streams": self.streams,
@@ -143,16 +159,32 @@ class App:
         try:
             self.guide.rebuild(lineup, moment)
         except Exception:
-            log.exception("guide rebuild failed, retrying in %d minutes", GUIDE_RETRY.seconds // 60)
+            log.exception("guide rebuild failed", extra={"retry_min": GUIDE_RETRY.seconds // 60})
             self._guide_failed_at = moment
         else:
             self._guide_failed_at = None
         self._guide_version = self.store.version
 
+    def start(self, stop: threading.Event) -> None:
+        self._guide_thread = threading.Thread(target=self.guide_loop, args=(stop,), name="guide", daemon=True)
+        self._guide_thread.start()
+
     def guide_loop(self, stop: threading.Event) -> None:
         while not stop.is_set():
             self.refresh_guide()
+            self.heartbeat()
             stop.wait(GUIDE_CHECK)
+
+    def heartbeat(self) -> None:
+        now = time.monotonic()
+        url = self.settings.heartbeat_url
+        if not url or now - self._last_heartbeat < HEARTBEAT_SECONDS or self.problem():
+            return
+        self._last_heartbeat = now
+        try:
+            fetch_text(url)
+        except FetchError as error:
+            log.warning("HEARTBEAT_URL call failed", extra={"reason": str(error)})
 
     def _guide_due(self, now: datetime) -> bool:
         if self._guide_failed_at and now - self._guide_failed_at < GUIDE_RETRY:
@@ -193,8 +225,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(HTTPStatus.OK, "audio/x-mpegurl; charset=utf-8", app.playlist(base).encode())
         elif path == "/device.xml":
             self._send(HTTPStatus.OK, "application/xml; charset=utf-8", app.device_xml(base).encode())
-        elif path == "/health":
-            self._json(app.health())
+        elif path in {"/healthz", "/health"}:
+            health = app.health()
+            status = HTTPStatus.OK if health["status"] == "ok" else HTTPStatus.SERVICE_UNAVAILABLE
+            self._send(status, "application/json", json.dumps(health).encode())
         else:
             self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"not found\n")
 
@@ -205,7 +239,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"not found\n")
 
     def log_message(self, format: str, *args: Any) -> None:
-        log.debug("%s %s", self.address_string(), format % args)
+        log.debug("request", extra={"client": self.address_string(), "line": format % args})
 
     def _guide(self) -> None:
         data = self.server.app.guide.data
@@ -221,7 +255,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"no such channel\n")
             return
         if not app.acquire_tuner():
-            log.warning("%s %s: all %d tuners are busy", channel.number, channel.name, app.settings.tuners)
+            log.warning(
+                "all tuners are busy",
+                extra={"channel": channel.number, "title": channel.name, "tuners": app.settings.tuners},
+            )
             self._send(HTTPStatus.SERVICE_UNAVAILABLE, "text/plain; charset=utf-8", b"all tuners are busy\n")
             return
         try:
@@ -235,11 +272,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             session.open()
         except StreamError as error:
-            log.warning("%s: cannot start: %s", session.label, error)
+            log.warning("stream failed to start", extra={**session.fields, "reason": str(error)})
             self._send(HTTPStatus.SERVICE_UNAVAILABLE, "text/plain; charset=utf-8", f"{error}\n".encode())
             return
-        quality = f"{session.height}p" if session.height else "unknown height"
-        log.info("%s: streaming to %s at %s", session.label, self.client_address[0], quality)
+        log.info("stream started", extra={**session.fields, "client": self.client_address[0], "height": session.height})
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "video/mp2t")
         self.send_header("Cache-Control", "no-store")
@@ -250,7 +286,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(chunk)
         except OSError:
             pass
-        log.info("%s: stopped after %.0f s", session.label, time.monotonic() - began)
+        log.info("stream stopped", extra={**session.fields, "seconds": round(time.monotonic() - began)})
 
     def _json(self, value: object) -> None:
         self._send(HTTPStatus.OK, "application/json", json.dumps(value).encode())

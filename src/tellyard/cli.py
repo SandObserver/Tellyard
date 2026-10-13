@@ -3,6 +3,7 @@ import functools
 import json
 import logging
 import os
+import platform
 import signal
 import sys
 import threading
@@ -13,8 +14,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import FrameType
 
-from tellyard import __version__, channels, check
-from tellyard.channels import ChannelError
+from tellyard import __version__, channels, check, logfmt
+from tellyard.channels import ChannelError, Lineup
 from tellyard.guide import Guide, build
 from tellyard.resolve import Resolver
 from tellyard.server import App, Server
@@ -34,7 +35,7 @@ def _parser() -> argparse.ArgumentParser:
     probe.add_argument("numbers", nargs="*", metavar="NUMBER", help="only these channel numbers")
     guide = commands.add_parser("guide", help="build the guide once and write it to a file or stdout")
     guide.add_argument("-o", "--output", type=Path, help="file to write instead of stdout")
-    commands.add_parser("health", help="exit 0 when the running service answers")
+    commands.add_parser("health", help="exit 0 when the running service is healthy")
     return parser
 
 
@@ -45,7 +46,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except SettingsError as error:
         print(f"tellyard: {error}", file=sys.stderr)
         return 2
-    logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=settings.log_level.upper())
+    logfmt.setup(settings.log_level)
     if args.command == "health":
         return _health(settings)
     try:
@@ -92,20 +93,46 @@ def _serve(settings: Settings) -> int:
 
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
-    threading.Thread(target=app.guide_loop, args=(stop,), name="guide", daemon=True).start()
-    count = len(store.current().channels)
-    log.info(
-        "tellyard %s serving %d channels on port %d with %d tuners", __version__, count, settings.port, settings.tuners
-    )
+    print(_banner(settings, store.current()), file=sys.stderr, flush=True)
+    app.start(stop)
+    log.info("service ready", extra={"version": __version__, "port": settings.port})
     with server:
         server.serve_forever()
     return 0
 
 
+def _banner(settings: Settings, lineup: Lineup) -> str:
+    own = sum(1 for channel in lineup.channels if channel.min_height is not None)
+    quality = f"check needs {settings.min_height}p" if settings.min_height else "check accepts any height"
+    if own:
+        quality += ", 1 channel sets its own" if own == 1 else f", {own} channels set their own"
+    sources = len({channel.xmltv.url for channel in lineup.channels if channel.xmltv})
+    xmltv = "1 XMLTV source" if sources == 1 else f"{sources} XMLTV sources"
+    rows = [
+        ("Channels", f"{len(lineup.channels)} from {settings.channels_file}"),
+        ("Tuners", str(settings.tuners)),
+        ("Quality", quality),
+        ("Guide", f"{settings.guide_days} days, rebuilt every {settings.guide_refresh_hours:g} h, {xmltv}"),
+        ("Address", settings.base_url or "from each request"),
+        ("Device", f"{settings.device_name}, ID {settings.device_id}"),
+        ("Heartbeat", "on" if settings.heartbeat_url else "off"),
+        ("Data", str(settings.data_dir)),
+    ]
+    return logfmt.banner(f"Tellyard {__version__} · Python {platform.python_version()}", rows)
+
+
 def _health(settings: Settings) -> int:
+    url = f"http://127.0.0.1:{settings.port}/healthz"
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{settings.port}/health", timeout=5) as response:
+        with urllib.request.urlopen(url, timeout=5) as response:
             status = json.load(response).get("status")
+    except urllib.error.HTTPError as error:
+        try:
+            reason = json.load(error).get("reason") or f"HTTP {error.code}"
+        except ValueError:
+            reason = f"HTTP {error.code}"
+        print(f"tellyard: unhealthy: {reason}", file=sys.stderr)
+        return 1
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as error:
         print(f"tellyard: unhealthy: {error}", file=sys.stderr)
         return 1

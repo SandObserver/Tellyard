@@ -52,6 +52,7 @@ def test_reads_values() -> None:
         ({"BASE_URL": "http://host:1/path"}, "no path"),
         ({"LOG_LEVEL": "loud"}, "LOG_LEVEL"),
         ({"YTDLP_ARGS": "'unclosed"}, "cannot be parsed"),
+        ({"HEARTBEAT_URL": "example.com/ping"}, "HEARTBEAT_URL"),
     ],
 )
 def test_rejects_bad_values(env: dict[str, str], message: str) -> None:

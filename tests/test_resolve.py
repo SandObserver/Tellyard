@@ -201,7 +201,7 @@ def test_youtube_match_falls_back_to_the_live_page(
     resolver = Resolver(make_settings(), runner=scripted(outputs, seen), fetcher=fetch)
     resolver.resolve(channel(youtube="https://www.youtube.com/@LiveNOWFOX/live", match="24/7"))
     assert seen[-1][-1] == "https://www.youtube.com/@LiveNOWFOX/live"
-    assert "using its live page" in caplog.text
+    assert "using the live page" in caplog.text
 
 
 TOKEN = "https://t.example.com/secure?url={url}"
