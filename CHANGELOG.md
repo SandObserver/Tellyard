@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-10-13
+
 ### Added
 
 - License Tellyard under Apache 2.0, with a NOTICE for the name and the software in the image.
@@ -19,13 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Point the install steps at the `beta` image tag until the first stable release.
 
-### Fixed
-
-- End a show when the next one starts, so overlapping listings from a guide source no longer collide.
-
 ### Removed
 
 - Remove the start-up cleanup of artwork files left by early test builds.
+
+### Fixed
+
+- End a show when the next one starts, so overlapping listings from a guide source no longer collide.
 
 ## [0.1.0-beta.1] - 2026-10-11
 

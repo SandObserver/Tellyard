@@ -1,6 +1,6 @@
 [project]
 name = "tellyard"
-version = "0.1.0b1"
+version = "0.1.0b2"
 description = "Live channels for Plex, tuned only while someone is watching"
 readme = "README.md"
 license = "Apache-2.0"

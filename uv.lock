@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.13.*"
 
 [[package]]
@@ -418,7 +418,7 @@ wheels = [
 
 [[package]]
 name = "tellyard"
-version = "0.1.0b1"
+version = "0.1.0b2"
 source = { editable = "." }
 dependencies = [
     { name = "yt-dlp", extra = ["default"] },
