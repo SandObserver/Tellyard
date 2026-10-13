@@ -1,5 +1,3 @@
-"""The live channel list, reloaded whenever `channels.toml` changes on disk."""
-
 import logging
 import threading
 from pathlib import Path

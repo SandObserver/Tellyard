@@ -113,7 +113,6 @@ function lastChange() {
   }
 }
 
-// Fictional channels. The guide spans 8:00 to 10:00 PM; lengths are minutes.
 const GUIDE_MINUTES = 120;
 const NOW = 40;
 const channels = [

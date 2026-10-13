@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths: [pyproject.toml]
 
-# The tag is pushed with the release app token: a tag pushed with GITHUB_TOKEN starts no workflow, so no image would build.
+# Use the app token. A GITHUB_TOKEN push starts no workflow.
 permissions: {}
 
 concurrency:

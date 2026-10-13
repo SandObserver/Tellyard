@@ -1,5 +1,3 @@
-"""The channel list: parsing and validation of `channels.toml`."""
-
 import re
 import tomllib
 from collections.abc import Mapping
@@ -10,7 +8,7 @@ from typing import Any
 NUMBER = re.compile(r"^\d{1,5}(\.\d{1,3})?$")
 HEADER_NAME = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 SOURCE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
-# Matches absolute playlist URLs in HTML and in JSON with escaped slashes.
+# Also matches JSON with escaped slashes.
 DEFAULT_PAGE_PATTERN = r"https?:(?:\\?/){2}[^\s\"'<>]+?\.m3u8[^\s\"'<>]*"
 CHANNEL_KEYS = frozenset(
     {
@@ -45,7 +43,6 @@ type Headers = tuple[tuple[str, str], ...]
 class HlsSource:
     url: str
     headers: Headers = ()
-    # A service that returns a signed copy of `url` as JSON, called before every tune.
     token: str = ""
     token_field: str = "url"
 

@@ -1,5 +1,3 @@
-"""Small HTTP helpers on top of urllib."""
-
 import gzip
 import io
 import urllib.error
@@ -9,7 +7,7 @@ from pathlib import Path
 
 from tellyard.channels import Headers
 
-# Several broadcasters refuse requests that do not look like a browser.
+# Some broadcasters block requests without a browser user agent.
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 )
@@ -30,7 +28,6 @@ def request(url: str, headers: Headers = ()) -> urllib.request.Request:
 
 
 def fetch_text(url: str, headers: Headers = (), timeout: float = 10.0) -> tuple[str, str]:
-    """Return the final URL after redirects and the decoded body."""
     try:
         with urllib.request.urlopen(request(url, headers), timeout=timeout) as response:
             body = response.read(TEXT_LIMIT + 1)
@@ -43,7 +40,6 @@ def fetch_text(url: str, headers: Headers = (), timeout: float = 10.0) -> tuple[
 
 
 def download(url: str, destination: Path, timeout: float = 60.0) -> None:
-    """Stream a file to disk so large guides never sit in memory."""
     partial = destination.with_name(destination.name + ".part")
     total = 0
     try:

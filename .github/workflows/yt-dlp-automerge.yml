@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, reopened, synchronize]
 
-# Every write goes through the release app token: a merge made with GITHUB_TOKEN starts no workflow on main.
+# Use the app token. A GITHUB_TOKEN merge starts no workflow.
 permissions: {}
 
 jobs:

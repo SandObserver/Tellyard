@@ -12,7 +12,7 @@ COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
 
 FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f
-# yt-dlp needs a JavaScript runtime for YouTube; both tools cache under /data so restarts stay fast.
+# yt-dlp needs deno for YouTube. Caches stay in /data.
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 MALLOC_ARENA_MAX=2 \
     CHANNELS_FILE=/config/channels.toml DATA_DIR=/data \
     XDG_CACHE_HOME=/data/cache DENO_DIR=/data/cache/deno

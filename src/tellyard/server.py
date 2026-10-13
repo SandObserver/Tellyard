@@ -1,5 +1,3 @@
-"""The HTTP side: the HDHomeRun API Plex expects, the guide, a playlist and the streams."""
-
 import json
 import logging
 import re
@@ -66,7 +64,7 @@ class App:
         return {
             "FriendlyName": self.settings.device_name,
             "Manufacturer": "Tellyard",
-            # A plain tuner model: the "TC" models make Plex offer tuner-side transcoding, which Tellyard never does.
+            # Do not use a TC model. With a TC model, Plex offers tuner transcoding.
             "ModelNumber": "HDHR5-4US",
             "FirmwareName": "hdhomerun5_atsc",
             "FirmwareVersion": __version__,

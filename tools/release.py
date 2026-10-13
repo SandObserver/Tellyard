@@ -1,5 +1,3 @@
-"""Prepare a release: bump the version in pyproject.toml and date the Unreleased changelog section."""
-
 import argparse
 import re
 import sys
@@ -39,7 +37,6 @@ def next_version(current: str, minor: bool) -> str:
 
 
 def display(version: str) -> str:
-    """The tag and changelog spelling: 1.2.0b3 is 1.2.0-beta.3."""
     return re.sub(r"b(\d+)$", r"-beta.\1", version)
 
 

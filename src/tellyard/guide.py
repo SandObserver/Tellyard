@@ -1,5 +1,3 @@
-"""The XMLTV guide: real schedules where a source exists, placeholder blocks everywhere else."""
-
 import copy
 import logging
 import tempfile
@@ -18,7 +16,7 @@ XMLTV_TIME = "%Y%m%d%H%M%S %z"
 HISTORY = timedelta(hours=2)
 
 type Downloader = Callable[[str, Path], None]
-# XMLTV's element order inside <programme>; strict readers expect it.
+# Strict XMLTV readers need this element order.
 PROGRAMME_ORDER = (
     "title", "sub-title", "desc", "credits", "date", "category", "keyword", "language", "orig-language", "length",
     "icon", "url", "country", "episode-num", "video", "audio", "previously-shown", "premiere", "last-chance", "new",
@@ -129,7 +127,7 @@ def _fill(channel: Channel, slots: list[Slot], start: datetime, end: datetime) -
         if slot.stop <= start:
             continue
         if ordered and slot.start < cursor:
-            # Plex shows overlapping entries badly, so a show ends when the next one starts.
+            # Plex shows overlaps badly. End each show when the next show starts.
             previous = ordered.pop()
             if previous.start < slot.start:
                 ordered.append(replace(previous, stop=slot.start))
@@ -170,13 +168,12 @@ def _programme(channel: Channel, slot: Slot) -> ET.Element:
 
 
 def _decorate(element: ET.Element, channel: Channel, slot: Slot) -> None:
-    """Fill what Plex needs to file an entry well: a category and episode status."""
     categories = [item.text or "" for item in element.findall("category")]
     if not categories and channel.placeholder.category:
         ET.SubElement(element, "category").text = channel.placeholder.category
         categories = [channel.placeholder.category]
     if not is_movie(categories) and element.find("episode-num") is None:
-        # Plex files an entry without an episode number under movies.
+        # Plex shows an entry with no episode number as a movie.
         stamp = slot.start.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S")
         ET.SubElement(element, "episode-num", {"system": "original-air-date"}).text = stamp
     rank = {tag: index for index, tag in enumerate(PROGRAMME_ORDER)}
@@ -187,8 +184,6 @@ def _decorate(element: ET.Element, channel: Channel, slot: Slot) -> None:
 
 
 class Guide:
-    """Keeps the latest guide in memory and on disk, rebuilt on a timer or when channels change."""
-
     def __init__(self, path: Path, days: int, downloader: Downloader = download) -> None:
         self._path = path
         self._days = days

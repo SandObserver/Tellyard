@@ -1,5 +1,3 @@
-"""One viewer's stream: ffmpeg remuxes the source to MPEG-TS and is restarted when the source drops."""
-
 import logging
 import os
 import queue
@@ -19,7 +17,6 @@ CHUNK = 188 * 348
 QUEUE_CHUNKS = 64
 FIRST_DATA_TIMEOUT = 30.0
 STALL_TIMEOUT = 20.0
-# A source that ends sooner than this after starting counts as a failed attempt.
 QUICK_DROP = 30.0
 MAX_ATTEMPTS = 3
 BACKOFF = 2.0
@@ -50,8 +47,6 @@ def input_options(resolved: Resolved) -> list[str]:
 
 
 class Process:
-    """ffmpeg with its output pumped into a bounded queue so reads can time out."""
-
     def __init__(self, args: Sequence[str], label: str) -> None:
         self._label = label
         self._closed = threading.Event()
@@ -66,7 +61,6 @@ class Process:
         threading.Thread(target=self._drain, name=f"log {label}", daemon=True).start()
 
     def read(self, timeout: float) -> bytes | None:
-        """The next chunk, or None once ffmpeg has finished. Raises queue.Empty on timeout."""
         return self._queue.get(timeout=timeout)
 
     def close(self) -> None:
@@ -104,7 +98,7 @@ class Process:
             for line in stderr:
                 text = line.decode("utf-8", errors="replace").strip()
                 if text:
-                    # Once Tellyard stops ffmpeg, its complaints about the closed pipe are expected.
+                    # After close, ffmpeg reports the closed pipe. These errors are expected.
                     level = logging.DEBUG if self._closed.is_set() else logging.WARNING
                     log.log(level, "%s: ffmpeg: %s", self._label, text)
 
@@ -129,7 +123,6 @@ class Session:
         return f"{self.channel.number} {self.channel.name}"
 
     def open(self) -> None:
-        """Resolve and start the stream, returning only once video is flowing."""
         self._start()
 
     def chunks(self) -> Iterator[bytes]:
