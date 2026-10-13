@@ -3,7 +3,6 @@ import functools
 import json
 import logging
 import os
-import shutil
 import signal
 import sys
 import threading
@@ -23,7 +22,6 @@ from tellyard.settings import Settings, SettingsError
 from tellyard.store import ChannelStore
 
 log = logging.getLogger("tellyard")
-OLD_ARTWORK = ("logos", "posters", "tmdb-cache.json")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -81,7 +79,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _serve(settings: Settings) -> int:
-    remove_old_artwork(settings.data_dir)
     store = ChannelStore(settings.channels_file)
     guide = Guide(settings.data_dir / "guide.xml", settings.guide_days)
     app = App(settings, store, guide)
@@ -103,17 +100,6 @@ def _serve(settings: Settings) -> int:
     with server:
         server.serve_forever()
     return 0
-
-
-def remove_old_artwork(data_dir: Path) -> None:
-    for name in OLD_ARTWORK:
-        path = data_dir / name
-        if path.is_dir():
-            shutil.rmtree(path)
-            log.info("removed %s", path)
-        elif path.is_file():
-            path.unlink()
-            log.info("removed %s", path)
 
 
 def _health(settings: Settings) -> int:

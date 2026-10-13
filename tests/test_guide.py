@@ -80,6 +80,23 @@ def test_merges_real_listings_and_fills_gaps(compress: bool) -> None:
         assert before.get("stop") == after.get("start")
 
 
+def test_overlapping_shows_end_when_the_next_starts() -> None:
+    source = """<tv>
+  <programme start="20261011150000 +0000" stop="20261011170000 +0000" channel="ATV.tr"><title>First</title></programme>
+  <programme start="20261011160000 +0000" stop="20261011180000 +0000" channel="ATV.tr"><title>Second</title></programme>
+  <programme start="20261011180000 +0000" stop="20261011200000 +0000" channel="ATV.tr"><title>Long</title></programme>
+  <programme start="20261011183000 +0000" stop="20261011190000 +0000" channel="ATV.tr"><title>Inside</title></programme>
+</tv>"""
+    items = programmes(guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving(source)))
+    times = {item.findtext("title"): (item.get("start"), item.get("stop")) for item in items}
+    assert times["First"] == ("20261011150000 +0000", "20261011160000 +0000")
+    assert times["Second"] == ("20261011160000 +0000", "20261011180000 +0000")
+    assert times["Long"] == ("20261011180000 +0000", "20261011183000 +0000")
+    assert times["Inside"] == ("20261011183000 +0000", "20261011190000 +0000")
+    for before, after in itertools.pairwise(items):
+        assert before.get("stop") == after.get("start")
+
+
 def test_placeholder_blocks_align_to_the_block_length() -> None:
     items = programmes(guide.build(lineup(hours=4, category="News"), NOW, 1))
     assert window(items) == ("20261011133000 +0000", "20261012153000 +0000")
