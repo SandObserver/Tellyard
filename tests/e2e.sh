@@ -97,6 +97,6 @@ for _ in $(seq 15); do
   sleep 1
 done
 docker top "$name" -o args | grep -q '[f]fmpeg' && fail "ffmpeg still runs after the viewer left"
-docker logs "$name" 2>&1 | grep -q "101 Test Pattern: stopped after" || fail "the stream did not stop"
+docker logs "$name" 2>&1 | grep -q 'msg="stream stopped" channel=101' || fail "the stream did not stop"
 
 echo "e2e passed"
