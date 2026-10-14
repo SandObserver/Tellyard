@@ -67,6 +67,9 @@ services:
 
 `./data` is where Tellyard caches the guide and the yt-dlp files between restarts.
 
+Tellyard has no login. Anyone who can reach port 5004 can start streams, so keep it on your home
+network and do not forward the port to the internet. See [Security](SECURITY.md).
+
 ### 3. Start it
 
 In the folder with `compose.yml`:
