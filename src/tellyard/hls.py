@@ -2,8 +2,10 @@ import re
 import urllib.parse
 from dataclasses import dataclass
 
-ATTRIBUTE = re.compile(r'([A-Z0-9-]+)=("[^"]*"|[^,]*)')
-RESOLUTION = re.compile(r"^(\d+)x(\d+)$")
+# Unanchored, this takes quadratic time on a long line without "=".
+ATTRIBUTE = re.compile(r'(?:^|,)([A-Z0-9-]+)=("[^"]*"|[^,]*)')
+RESOLUTION = re.compile(r"^([0-9]+)x([0-9]+)$")
+SCHEMES = ("http", "https")
 
 
 class PlaylistError(Exception):
@@ -21,7 +23,7 @@ class Variant:
 @dataclass(frozen=True)
 class Rendition:
     group: str
-    uri: str
+    uri: str | None
     default: bool
 
 
@@ -53,12 +55,11 @@ def parse_master(text: str, base: str) -> tuple[list[Variant], list[Rendition]]:
         if line.startswith("#EXT-X-STREAM-INF:"):
             pending = attributes(line.partition(":")[2])
         elif line.startswith("#EXT-X-MEDIA:"):
-            media = attributes(line.partition(":")[2])
-            if media.get("TYPE") == "AUDIO" and media.get("URI") and media.get("GROUP-ID"):
-                uri = urllib.parse.urljoin(base, media["URI"])
-                renditions.append(Rendition(media["GROUP-ID"], uri, media.get("DEFAULT") == "YES"))
+            if rendition := _rendition(attributes(line.partition(":")[2]), base):
+                renditions.append(rendition)
         elif not line.startswith("#") and pending is not None:
-            variants.append(_variant(pending, urllib.parse.urljoin(base, line)))
+            if uri := _join(base, line):
+                variants.append(_variant(pending, uri))
             pending = None
     if not variants:
         raise PlaylistError("the master playlist lists no variants")
@@ -78,5 +79,21 @@ def choose(variants: list[Variant], renditions: list[Rendition]) -> Choice:
 def _variant(info: dict[str, str], uri: str) -> Variant:
     resolution = RESOLUTION.match(info.get("RESOLUTION", ""))
     height = int(resolution.group(2)) if resolution else None
-    bandwidth = int(info["BANDWIDTH"]) if info.get("BANDWIDTH", "").isdigit() else 0
+    raw = info.get("BANDWIDTH", "")
+    bandwidth = int(raw) if raw.isascii() and raw.isdigit() else 0
     return Variant(uri, bandwidth, height, info.get("AUDIO") or None)
+
+
+def _rendition(media: dict[str, str], base: str) -> Rendition | None:
+    if media.get("TYPE") != "AUDIO" or not media.get("GROUP-ID"):
+        return None
+    # Without URI, the rendition is carried in the variant stream.
+    uri = _join(base, media["URI"]) if media.get("URI") else None
+    if media.get("URI") and uri is None:
+        return None
+    return Rendition(media["GROUP-ID"], uri, media.get("DEFAULT") == "YES")
+
+
+def _join(base: str, reference: str) -> str | None:
+    uri = urllib.parse.urljoin(base, reference)
+    return uri if urllib.parse.urlsplit(uri).scheme in SCHEMES else None

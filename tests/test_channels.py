@@ -141,3 +141,10 @@ def test_load_reports_unreadable_and_invalid_files(tmp_path: Path) -> None:
     broken.write_text("[[channel]\n", encoding="utf-8")
     with pytest.raises(ChannelError, match="not valid TOML"):
         channels.load(broken)
+
+
+def test_load_reports_a_file_that_is_not_utf8(tmp_path: Path) -> None:
+    latin = tmp_path / "latin.toml"
+    latin.write_bytes('[[channel]]\nname = "T\xe9l\xe9"\n'.encode("latin-1"))
+    with pytest.raises(ChannelError, match="not UTF-8 text"):
+        channels.load(latin)

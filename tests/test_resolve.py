@@ -1,6 +1,8 @@
 import json
 import logging
 import sys
+import threading
+import time
 from collections.abc import Callable, Sequence
 
 import pytest
@@ -8,7 +10,7 @@ import pytest
 from tellyard import channels
 from tellyard.channels import Channel, Headers
 from tellyard.net import FetchError
-from tellyard.resolve import Resolved, ResolveError, Resolver, run_command
+from tellyard.resolve import LookupCancelledError, Resolved, ResolveError, Resolver, Runner, run_command
 from tellyard.settings import Settings
 
 MASTER = (
@@ -31,8 +33,8 @@ def pages(mapping: dict[str, str]) -> Callable[[str, Headers], tuple[str, str]]:
     return fetch
 
 
-def runner_returning(output: str, seen: list[Sequence[str]] | None = None) -> Callable[[Sequence[str], float], str]:
-    def run(args: Sequence[str], timeout: float) -> str:
+def runner_returning(output: str, seen: list[Sequence[str]] | None = None) -> Runner:
+    def run(args: Sequence[str], timeout: float, cancel: threading.Event | None) -> str:
         if seen is not None:
             seen.append(args)
         return output
@@ -103,6 +105,31 @@ def test_page_that_fails_to_load(make_settings: Callable[..., Settings]) -> None
         Resolver(make_settings(), fetcher=pages({})).resolve(channel(page="https://tv.example.com/live"))
 
 
+def test_page_scan_takes_linear_time(make_settings: Callable[..., Settings]) -> None:
+    fetch = pages({"https://tv.example.com/live": "https://" * 500_000})
+    started = time.monotonic()
+    with pytest.raises(ResolveError, match="no playlist URL"):
+        Resolver(make_settings(), fetcher=fetch).resolve(channel(page="https://tv.example.com/live"))
+    assert time.monotonic() - started < 2
+
+
+def test_page_url_needs_a_host_before_the_playlist(make_settings: Callable[..., Settings]) -> None:
+    fetch = pages({"https://tv.example.com/live": "<a href='https://.m3u8'>"})
+    with pytest.raises(ResolveError, match="no playlist URL"):
+        Resolver(make_settings(), fetcher=fetch).resolve(channel(page="https://tv.example.com/live"))
+
+
+def test_unexpected_lookup_errors_become_resolve_errors(
+    make_settings: Callable[..., Settings], caplog: pytest.LogCaptureFixture
+) -> None:
+    def broken(url: str, headers: Headers) -> tuple[str, str]:
+        raise ValueError("bad value")
+
+    with pytest.raises(ResolveError, match="failed unexpectedly"):
+        Resolver(make_settings(), fetcher=broken).resolve(channel(hls="https://cdn.example.com/m.m3u8"))
+    assert "stream lookup failed unexpectedly" in caplog.text
+
+
 def test_youtube_uses_the_live_manifest(make_settings: Callable[..., Settings]) -> None:
     seen: list[Sequence[str]] = []
     info = json.dumps({"live_status": "is_live", "manifest_url": "https://manifest.googlevideo.com/master.m3u8"})
@@ -151,8 +178,8 @@ def test_run_command_reports_failures() -> None:
         run_command(["/nonexistent/yt-dlp"], 10)
 
 
-def scripted(outputs: dict[str, str], seen: list[Sequence[str]]) -> Callable[[Sequence[str], float], str]:
-    def run(args: Sequence[str], timeout: float) -> str:
+def scripted(outputs: dict[str, str], seen: list[Sequence[str]]) -> Runner:
+    def run(args: Sequence[str], timeout: float, cancel: threading.Event | None) -> str:
         seen.append(args)
         target = args[-1]
         if target not in outputs:
@@ -241,3 +268,35 @@ def test_hls_token_problems(make_settings: Callable[..., Settings], reply: str |
     source = channel(hls="https://cdn.example.com/atv/atv.m3u8", token=TOKEN)
     with pytest.raises(ResolveError, match=message):
         Resolver(make_settings(), fetcher=fetch).resolve(source)
+
+
+def test_run_command_stops_when_cancelled() -> None:
+    cancel = threading.Event()
+    threading.Timer(0.2, cancel.set).start()
+    started = time.monotonic()
+    with pytest.raises(LookupCancelledError):
+        run_command([sys.executable, "-c", "import time; time.sleep(30)"], 60, cancel)
+    assert time.monotonic() - started < 3
+
+
+def test_cancelled_youtube_lookup_skips_the_fallback(make_settings: Callable[..., Settings]) -> None:
+    seen: list[Sequence[str]] = []
+
+    def run(args: Sequence[str], timeout: float, cancel: threading.Event | None) -> str:
+        seen.append(args)
+        raise LookupCancelledError
+
+    resolver = Resolver(make_settings(), runner=run, fetcher=pages({}))
+    with pytest.raises(LookupCancelledError):
+        resolver.resolve(channel(youtube="https://www.youtube.com/@news/live", match="Live"))
+    assert len(seen) == 1
+
+
+def test_a_set_cancel_stops_before_the_playlist_request(make_settings: Callable[..., Settings]) -> None:
+    cancel = threading.Event()
+    cancel.set()
+    fetch = pages({"https://cdn.example.com/live/master.m3u8": MASTER})
+    with pytest.raises(LookupCancelledError):
+        Resolver(make_settings(), fetcher=fetch).resolve(
+            channel(hls="https://cdn.example.com/live/master.m3u8"), cancel
+        )

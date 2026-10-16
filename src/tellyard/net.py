@@ -4,6 +4,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from time import monotonic
 
 from tellyard.channels import Headers
 
@@ -12,6 +13,7 @@ USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 )
 TEXT_LIMIT = 4 * 1024 * 1024
+TEXT_DEADLINE = 30.0
 DOWNLOAD_LIMIT = 256 * 1024 * 1024
 CHUNK = 256 * 1024
 GZIP_MAGIC = b"\x1f\x8b"
@@ -27,11 +29,19 @@ def request(url: str, headers: Headers = ()) -> urllib.request.Request:
     return urllib.request.Request(url, headers=merged)
 
 
-def fetch_text(url: str, headers: Headers = (), timeout: float = 10.0) -> tuple[str, str]:
+def fetch_text(
+    url: str, headers: Headers = (), timeout: float = 10.0, deadline: float = TEXT_DEADLINE
+) -> tuple[str, str]:
+    # The socket timeout applies to each read. A server that sends a byte at a time needs the deadline.
+    end = monotonic() + deadline
+    body = bytearray()
     try:
         with urllib.request.urlopen(request(url, headers), timeout=timeout) as response:
-            body = response.read(TEXT_LIMIT + 1)
             final = response.geturl()
+            while len(body) <= TEXT_LIMIT and (chunk := response.read1(CHUNK)):
+                body += chunk
+                if monotonic() > end:
+                    raise FetchError(f"{_host(url)}: response took longer than {deadline:.0f} s")
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         raise FetchError(f"{_host(url)}: {_reason(error)}") from error
     if len(body) > TEXT_LIMIT:

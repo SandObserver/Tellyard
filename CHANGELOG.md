@@ -19,6 +19,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Fix screen reader labels on the landing page and send a Content Security Policy with it.
+- Free the tuner within a second when the viewer leaves while a channel is still tuning or reconnecting.
+- Scan broadcaster pages and master playlists in linear time, so a hostile page cannot stall every stream.
+- Remove the path and query of stream addresses from ffmpeg messages in the log.
+- Pick the default audio track when it is carried in the video stream.
+- Accept only http and https addresses from master playlists.
+- Stop a page, playlist or token request that takes longer than 30 seconds.
+- Report a `channels.toml` that is not UTF-8 as a channel file error, and keep the guide thread running after an unexpected error.
+- Answer a tune that fails on an unexpected playlist value with the usual stream error.
 
 ## [0.1.0-beta.2] - 2026-10-13
 

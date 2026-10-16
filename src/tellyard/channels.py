@@ -8,8 +8,6 @@ from typing import Any
 NUMBER = re.compile(r"^\d{1,5}(\.\d{1,3})?$")
 HEADER_NAME = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 SOURCE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
-# Also matches JSON with escaped slashes.
-DEFAULT_PAGE_PATTERN = r"https?:(?:\\?/){2}[^\s\"'<>]+?\.m3u8[^\s\"'<>]*"
 CHANNEL_KEYS = frozenset(
     {
         "number",
@@ -105,6 +103,8 @@ def load(path: Path) -> Lineup:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except OSError as error:
         raise ChannelError(f"cannot read {path}: {error.strerror}") from error
+    except UnicodeDecodeError as error:
+        raise ChannelError(f"{path} is not UTF-8 text: byte {error.start} cannot be read") from error
     except tomllib.TOMLDecodeError as error:
         raise ChannelError(f"{path} is not valid TOML: {error}") from error
     return parse(data)

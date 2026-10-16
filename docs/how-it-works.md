@@ -14,7 +14,7 @@ Plex sees Tellyard as an HDHomeRun network tuner with `TUNERS` tuners. When a vi
 3. Starts ffmpeg, which copies the video and audio into one MPEG-TS stream without re-encoding.
 4. Waits up to 30 seconds for the first video, then hands the stream to Plex.
 
-The stream address is found again on every tune, so addresses that expire never break playback. When the viewer leaves, ffmpeg stops and the tuner is free. Nothing runs while nobody watches.
+The stream address is found again on every tune, so addresses that expire never break playback. When the viewer leaves, ffmpeg stops and the tuner is free, also while Tellyard is still finding the stream or reconnecting. Nothing runs while nobody watches.
 
 ## When a source drops
 

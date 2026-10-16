@@ -1,5 +1,7 @@
 import json
+import socket
 import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterator
@@ -9,8 +11,10 @@ from pathlib import Path
 
 import pytest
 
+from tellyard import server
 from tellyard.channels import Channel
 from tellyard.guide import Guide
+from tellyard.resolve import LookupCancelledError, Resolved
 from tellyard.server import App, Server
 from tellyard.settings import Settings
 from tellyard.store import ChannelStore
@@ -247,3 +251,75 @@ def test_guide_loop_stops(app: App) -> None:
     stop = threading.Event()
     stop.set()
     app.guide_loop(stop)
+
+
+def test_guide_loop_survives_an_unexpected_error(
+    app: App, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    stop = threading.Event()
+    calls: list[int] = []
+
+    def refresh() -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            raise UnicodeDecodeError("utf-8", b"\xe9", 0, 1, "invalid continuation byte")
+        stop.set()
+
+    monkeypatch.setattr(server, "GUIDE_CHECK", 0.01)
+    monkeypatch.setattr(app, "refresh_guide", refresh)
+    app.guide_loop(stop)
+    assert len(calls) == 2
+    assert "guide check failed" in caplog.text
+
+
+class SlowResolver(FakeResolver):
+    def __init__(self, settings: Settings, slow_from: int) -> None:
+        super().__init__(settings)
+        self.slow_from = slow_from
+        self.cancelled = threading.Event()
+
+    def resolve(self, channel: Channel, cancel: threading.Event | None = None) -> Resolved:
+        assert cancel is not None
+        if self.calls + 1 >= self.slow_from and cancel.wait(30):
+            self.calls += 1
+            self.cancelled.set()
+            raise LookupCancelledError
+        return super().resolve(channel, cancel)
+
+
+def wait_for(condition: Callable[[], bool], seconds: float) -> bool:
+    deadline = time.monotonic() + seconds
+    while not condition() and time.monotonic() < deadline:
+        threading.Event().wait(0.02)
+    return condition()
+
+
+@pytest.mark.parametrize(("ffmpeg_mode", "slow_from"), [("steady", 1), ("short", 2)], ids=["lookup", "reconnect"])
+def test_viewer_leaving_before_video_flows_frees_the_tuner(
+    make_settings: Callable[..., Settings],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    ffmpeg_mode: str,
+    slow_from: int,
+) -> None:
+    monkeypatch.setenv("FAKE_FFMPEG", ffmpeg_mode)
+    settings = make_settings(TUNERS="1")
+    resolver = SlowResolver(settings, slow_from)
+    ffmpeg = str(fake_ffmpeg(tmp_path))
+    guide = Guide(tmp_path / "data" / "guide.xml", 1, downloader=lambda url, path: None)
+    app = App(settings, ChannelStore(settings.channels_file), guide, lambda channel: Session(channel, resolver, ffmpeg))
+    server = Server(("127.0.0.1", 0), app)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        client = socket.create_connection(("127.0.0.1", server.server_address[1]))
+        client.sendall(b"GET /stream/101 HTTP/1.1\r\nHost: tellyard\r\n\r\n")
+        assert wait_for(lambda: app.streams == 1 and resolver.calls >= slow_from - 1, 5)
+        if slow_from > 1:
+            assert client.recv(64).startswith(b"HTTP/1.0 200")
+            threading.Event().wait(0.5)
+        client.close()
+        assert wait_for(lambda: app.streams == 0, 3)
+        assert resolver.cancelled.is_set()
+    finally:
+        server.shutdown()
+        server.server_close()
