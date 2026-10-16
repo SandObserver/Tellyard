@@ -1,16 +1,17 @@
 import logging
 import os
 import queue
+import re
 import subprocess
 import threading
 from collections.abc import Callable, Iterator, Sequence
-from time import monotonic, sleep
+from time import monotonic
 from types import TracebackType
 from typing import Self
 
 from tellyard.channels import Channel
 from tellyard.net import USER_AGENT
-from tellyard.resolve import Resolved, ResolveError, Resolver
+from tellyard.resolve import LookupCancelledError, Resolved, ResolveError, Resolver
 
 log = logging.getLogger(__name__)
 CHUNK = 188 * 348
@@ -21,11 +22,22 @@ QUICK_DROP = 30.0
 MAX_ATTEMPTS = 3
 BACKOFF = 2.0
 STOP_GRACE = 5.0
+CANCEL_POLL = 1.0
 READ_TIMEOUT_US = "15000000"
+# Stream URLs carry credentials, and signed ones carry tokens in the path and the query.
+URL = re.compile(r"(?P<scheme>\b[a-z][a-z0-9+.-]*://)(?:[^/\s?#@'\"]*@)?(?P<host>[^/\s?#'\"]+)[^\s'\"]*", re.IGNORECASE)
 
 
 class StreamError(Exception):
     pass
+
+
+class ViewerLeftError(StreamError):
+    pass
+
+
+def pause(cancel: threading.Event, seconds: float) -> bool:
+    return cancel.wait(seconds)
 
 
 def ffmpeg_args(ffmpeg: str, resolved: Resolved) -> list[str]:
@@ -96,7 +108,7 @@ class Process:
         assert stderr is not None
         with stderr:
             for line in stderr:
-                text = line.decode("utf-8", errors="replace").strip()
+                text = URL.sub(r"\g<scheme>\g<host>", line.decode("utf-8", errors="replace").strip())
                 if text:
                     # After close, ffmpeg reports the closed pipe. These errors are expected.
                     level = logging.DEBUG if self._closed.is_set() else logging.WARNING
@@ -117,6 +129,7 @@ class Session:
         self._started = 0.0
         self._attempts = 0
         self.height: int | None = None
+        self.cancel = threading.Event()
 
     @property
     def label(self) -> str:
@@ -130,16 +143,18 @@ class Session:
         self._start()
 
     def chunks(self) -> Iterator[bytes]:
-        while True:
+        while not self.cancel.is_set():
             if self._pending is not None:
                 chunk, self._pending = self._pending, None
                 yield chunk
             assert self._process is not None
             try:
-                chunk_or_end = self._process.read(STALL_TIMEOUT)
+                chunk_or_end = self._read(self._process, STALL_TIMEOUT)
             except queue.Empty:
                 log.warning("no data, restarting", extra={**self.fields, "seconds": round(STALL_TIMEOUT)})
                 chunk_or_end = None
+            if self.cancel.is_set():
+                return
             if chunk_or_end:
                 yield chunk_or_end
             elif not self._restart():
@@ -160,15 +175,20 @@ class Session:
 
     def _start(self) -> None:
         try:
-            resolved = self._resolver.resolve(self.channel)
+            resolved = self._resolver.resolve(self.channel, self.cancel)
+        except LookupCancelledError as error:
+            raise ViewerLeftError(str(error)) from error
         except ResolveError as error:
             raise StreamError(str(error)) from error
         self.height = resolved.height
         process = self._starter(ffmpeg_args(self._ffmpeg, resolved), self.label)
         try:
-            first = process.read(FIRST_DATA_TIMEOUT)
+            first = self._read(process, FIRST_DATA_TIMEOUT)
         except queue.Empty:
             first = None
+        if self.cancel.is_set():
+            process.close()
+            raise ViewerLeftError("the viewer left")
         if not first:
             process.close()
             raise StreamError(f"no video arrived within {FIRST_DATA_TIMEOUT:.0f} s")
@@ -176,18 +196,34 @@ class Session:
         self._pending = first
         self._started = monotonic()
 
+    def _read(self, process: Process, timeout: float) -> bytes | None:
+        end = monotonic() + timeout
+        while not self.cancel.is_set():
+            left = end - monotonic()
+            if left <= 0:
+                raise queue.Empty
+            try:
+                return process.read(min(CANCEL_POLL, left))
+            except queue.Empty:
+                continue
+        return None
+
     def _restart(self) -> bool:
         ran = monotonic() - self._started
         self.close()
+        if self.cancel.is_set():
+            return False
         self._attempts = self._attempts + 1 if ran < QUICK_DROP else 1
         while self._attempts <= MAX_ATTEMPTS:
-            if self._attempts > 1:
-                sleep(BACKOFF * (self._attempts - 1))
+            if self._attempts > 1 and pause(self.cancel, BACKOFF * (self._attempts - 1)):
+                return False
             log.info(
                 "source ended, reconnecting", extra={**self.fields, "after_s": round(ran), "attempt": self._attempts}
             )
             try:
                 self._start()
+            except ViewerLeftError:
+                return False
             except StreamError as error:
                 log.warning("reconnect failed", extra={**self.fields, "reason": str(error)})
                 self._attempts += 1

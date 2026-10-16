@@ -23,7 +23,7 @@ class Result:
 def probe_height(ffprobe: str, resolved: Resolved, runner: Runner = run_command) -> int | None:
     args = [ffprobe, "-v", "error", *input_options(resolved)]
     args += ["-select_streams", "v", "-show_entries", "stream=height", "-of", "json", resolved.video]
-    data = json.loads(runner(args, PROBE_TIMEOUT) or "{}")
+    data = json.loads(runner(args, PROBE_TIMEOUT, None) or "{}")
     heights = [stream.get("height") for stream in data.get("streams", []) if isinstance(stream, dict)]
     numbers = [height for height in heights if isinstance(height, int)]
     return max(numbers) if numbers else None

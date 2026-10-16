@@ -1,5 +1,6 @@
 import dataclasses
 import json
+import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from tests.fakes import FakeResolver
 def test_probe_height_reads_ffprobe_json() -> None:
     seen: list[Sequence[str]] = []
 
-    def runner(args: Sequence[str], timeout: float) -> str:
+    def runner(args: Sequence[str], timeout: float, cancel: threading.Event | None) -> str:
         seen.append(args)
         return json.dumps({"streams": [{"height": 720}, {"height": 1080}, {"codec": "x"}]})
 
@@ -20,7 +21,7 @@ def test_probe_height_reads_ffprobe_json() -> None:
     assert check.probe_height("ffprobe", resolved, runner) == 1080
     assert seen[0][-1] == "https://v.example.com/a.m3u8"
     assert "-headers" in seen[0]
-    assert check.probe_height("ffprobe", resolved, lambda args, timeout: "") is None
+    assert check.probe_height("ffprobe", resolved, lambda args, timeout, cancel: "") is None
 
 
 def test_check_and_report(make_settings: Callable[..., Settings], channels_file: Path) -> None:

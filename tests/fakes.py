@@ -1,5 +1,6 @@
 import stat
 import sys
+import threading
 from pathlib import Path
 
 from tellyard.channels import Channel
@@ -38,7 +39,7 @@ class FakeResolver(Resolver):
         self._failures = failures
         self._height = height
 
-    def resolve(self, channel: Channel) -> Resolved:
+    def resolve(self, channel: Channel, cancel: threading.Event | None = None) -> Resolved:
         self.calls += 1
         if self.calls <= self._failures:
             raise ResolveError("the YouTube channel is not live right now")

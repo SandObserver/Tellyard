@@ -1,12 +1,15 @@
+import logging
 import queue
+import threading
 from collections.abc import Callable, Iterator, Sequence
 from itertools import islice
 from pathlib import Path
+from time import monotonic
 
 import pytest
 
 from tellyard import channels, stream
-from tellyard.resolve import Resolved
+from tellyard.resolve import Resolved, ResolveError
 from tellyard.settings import Settings
 from tellyard.stream import Process, Session, StreamError, ffmpeg_args
 from tests.fakes import FakeResolver, fake_ffmpeg
@@ -27,7 +30,7 @@ def ffmpeg(tmp_path: Path) -> str:
 def fast(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(stream, "FIRST_DATA_TIMEOUT", 5.0)
     monkeypatch.setattr(stream, "STALL_TIMEOUT", 1.0)
-    monkeypatch.setattr(stream, "sleep", lambda seconds: None)
+    monkeypatch.setattr(stream, "pause", lambda cancel, seconds: cancel.is_set())
     yield
 
 
@@ -90,13 +93,12 @@ def test_long_running_source_resets_the_attempt_count(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("FAKE_FFMPEG", "short")
-    times = iter([0.0, 100.0, 100.0, 200.0, 200.0, 300.0, 300.0, 400.0, 400.0])
-    monkeypatch.setattr(stream, "monotonic", lambda: next(times, 1000.0))
+    monkeypatch.setattr(stream, "QUICK_DROP", 0.0)
     resolver = FakeResolver(make_settings())
     with Session(channel, resolver, ffmpeg) as session:
         session.open()
-        list(islice(session.chunks(), 12))
-    assert resolver.calls == 4
+        list(islice(session.chunks(), 15))
+    assert resolver.calls == 5
 
 
 def test_open_fails_when_the_channel_cannot_resolve(
@@ -136,6 +138,7 @@ def test_stalled_source_is_restarted(
         def read(self, timeout: float) -> bytes | None:
             item = next(reads, None)
             if isinstance(item, Exception):
+                threading.Event().wait(timeout)
                 raise item
             return item
 
@@ -153,3 +156,128 @@ def test_missing_ffmpeg_is_reported(make_settings: Callable[..., Settings], chan
     session = Session(channel, FakeResolver(make_settings()), "/nonexistent/ffmpeg")
     with pytest.raises(StreamError, match="is not installed"):
         session.open()
+
+
+def test_gives_up_when_reconnects_fail(
+    make_settings: Callable[..., Settings],
+    channel: channels.Channel,
+    ffmpeg: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setenv("FAKE_FFMPEG", "short")
+    waits: list[float] = []
+
+    def pause(cancel: threading.Event, seconds: float) -> bool:
+        waits.append(seconds)
+        return False
+
+    monkeypatch.setattr(stream, "pause", pause)
+
+    class Once(FakeResolver):
+        def resolve(self, channel: channels.Channel, cancel: threading.Event | None = None) -> Resolved:
+            if self.calls:
+                self.calls += 1
+                raise ResolveError("the YouTube channel is not live right now")
+            return super().resolve(channel, cancel)
+
+    resolver = Once(make_settings())
+    with Session(channel, resolver, ffmpeg) as session:
+        session.open()
+        chunks = list(session.chunks())
+    assert len(chunks) == 3
+    assert resolver.calls == 1 + stream.MAX_ATTEMPTS
+    assert waits == [2.0, 4.0]
+    assert "stream given up" in caplog.text
+
+
+def test_ffmpeg_output_is_logged_without_url_paths(caplog: pytest.LogCaptureFixture) -> None:
+    line = "Error opening input file https://user:PASSWORD@cdn.example.com/live/index.m3u8?token=SECRET&e=9."
+    process = Process(["sh", "-c", f"echo '{line}' >&2"], "7 Seven")
+    with caplog.at_level(logging.WARNING):
+        assert process.read(5) is None
+        deadline = monotonic() + 5
+        while not caplog.records and monotonic() < deadline:
+            threading.Event().wait(0.01)
+        process.close()
+    outputs = [getattr(record, "output", "") for record in caplog.records]
+    assert "Error opening input file https://cdn.example.com" in outputs
+    assert "SECRET" not in caplog.text
+    assert "PASSWORD" not in caplog.text
+
+
+def test_leaving_during_the_first_data_wait_stops_ffmpeg(
+    make_settings: Callable[..., Settings],
+    channel: channels.Channel,
+    ffmpeg: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FAKE_FFMPEG", "silent")
+    monkeypatch.setattr(stream, "FIRST_DATA_TIMEOUT", 30.0)
+    started: list[Process] = []
+
+    def starter(args: Sequence[str], label: str) -> Process:
+        started.append(Process(args, label))
+        return started[-1]
+
+    session = Session(channel, FakeResolver(make_settings()), ffmpeg, starter=starter)
+    threading.Timer(0.3, session.cancel.set).start()
+    began = monotonic()
+    with pytest.raises(stream.ViewerLeftError):
+        session.open()
+    assert monotonic() - began < 3
+    assert started[0]._process.poll() is not None
+
+
+def test_leaving_during_a_stall_skips_the_reconnect(
+    make_settings: Callable[..., Settings], channel: channels.Channel, ffmpeg: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(stream, "STALL_TIMEOUT", 30.0)
+    resolver = FakeResolver(make_settings())
+
+    class Stalls(Process):
+        def __init__(self, args: Sequence[str], label: str) -> None:
+            self.first = True
+
+        def read(self, timeout: float) -> bytes | None:
+            if self.first:
+                self.first = False
+                return b"first"
+            threading.Event().wait(timeout)
+            raise queue.Empty
+
+        def close(self) -> None:
+            pass
+
+    with Session(channel, resolver, ffmpeg, starter=Stalls) as session:
+        session.open()
+        threading.Timer(0.3, session.cancel.set).start()
+        began = monotonic()
+        assert list(session.chunks()) == [b"first"]
+    assert monotonic() - began < 3
+    assert resolver.calls == 1
+
+
+def test_leaving_during_the_backoff_skips_the_reconnect(
+    make_settings: Callable[..., Settings], channel: channels.Channel, ffmpeg: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FAKE_FFMPEG", "short")
+
+    def pause(cancel: threading.Event, seconds: float) -> bool:
+        cancel.set()
+        return True
+
+    monkeypatch.setattr(stream, "pause", pause)
+
+    class Once(FakeResolver):
+        def resolve(self, channel: channels.Channel, cancel: threading.Event | None = None) -> Resolved:
+            if self.calls:
+                self.calls += 1
+                raise ResolveError("the YouTube channel is not live right now")
+            return super().resolve(channel, cancel)
+
+    resolver = Once(make_settings())
+    with Session(channel, resolver, ffmpeg) as session:
+        session.open()
+        list(session.chunks())
+    assert resolver.calls == 2

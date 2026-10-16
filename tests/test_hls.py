@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from tellyard import hls
@@ -63,3 +65,67 @@ def test_detects_master_playlists() -> None:
 def test_rejects_non_master_text(text: str) -> None:
     with pytest.raises(hls.PlaylistError):
         hls.parse_master(text, "https://a.example.com/")
+
+
+def test_a_long_tag_line_parses_in_linear_time() -> None:
+    text = "#EXTM3U\n#EXT-X-STREAM-INF:" + "A" * 4_000_000 + "\nv.m3u8\n"
+    started = time.monotonic()
+    variants, _ = hls.parse_master(text, "https://a.example.com/")
+    assert time.monotonic() - started < 2
+    assert variants[0].bandwidth == 0
+
+
+def test_quoted_attributes_keep_their_commas() -> None:
+    assert hls.attributes('BANDWIDTH=1,CODECS="avc1.4d401f,mp4a.40.2",RESOLUTION=1x2') == {
+        "BANDWIDTH": "1",
+        "CODECS": "avc1.4d401f,mp4a.40.2",
+        "RESOLUTION": "1x2",
+    }
+
+
+def test_default_audio_in_the_video_stream_is_kept() -> None:
+    text = (
+        "#EXTM3U\n"
+        '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="English",DEFAULT=YES\n'
+        '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",NAME="Spanish",DEFAULT=NO,URI="es/audio.m3u8"\n'
+        '#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080,AUDIO="aud"\n'
+        "v/1080.m3u8\n"
+    )
+    variants, renditions = hls.parse_master(text, "https://a.example.com/live/master.m3u8")
+    assert hls.choose(variants, renditions).audio is None
+
+
+def test_only_http_addresses_are_used() -> None:
+    text = (
+        "#EXTM3U\n"
+        '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud",DEFAULT=YES,URI="file:///config/channels.toml"\n'
+        '#EXT-X-STREAM-INF:BANDWIDTH=9,RESOLUTION=3840x2160,AUDIO="aud"\n'
+        "gopher://192.0.2.5:6379/1x\n"
+        '#EXT-X-STREAM-INF:BANDWIDTH=5,RESOLUTION=1920x1080,AUDIO="aud"\n'
+        "v/1080.m3u8\n"
+    )
+    variants, renditions = hls.parse_master(text, "https://a.example.com/live/master.m3u8")
+    choice = hls.choose(variants, renditions)
+    assert choice == hls.Choice("https://a.example.com/live/v/1080.m3u8", None, 1080)
+    with pytest.raises(hls.PlaylistError, match="no variants"):
+        hls.parse_master("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nfile:///etc/passwd\n", "https://a.example.com/")
+
+
+def test_a_bandwidth_that_is_not_a_number_counts_as_zero() -> None:
+    variants, _ = hls.parse_master("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=²\nv.m3u8\n", "https://a.example.com/")
+    assert variants[0].bandwidth == 0
+
+
+def test_spaces_after_commas_are_tolerated() -> None:
+    text = (
+        "#EXTM3U\n"
+        '#EXT-X-MEDIA:TYPE=AUDIO, GROUP-ID="aac", DEFAULT=YES, URI="audio/en.m3u8"\n'
+        '#EXT-X-STREAM-INF:PROGRAM-ID=1, BANDWIDTH=800000, RESOLUTION=640x360, AUDIO="aac"\n'
+        "360.m3u8\n"
+        '#EXT-X-STREAM-INF:PROGRAM-ID=1, BANDWIDTH=5000000, RESOLUTION=1920x1080, AUDIO="aac"\n'
+        "1080.m3u8\n"
+    )
+    variants, renditions = hls.parse_master(text, "https://a.example.com/")
+    assert hls.choose(variants, renditions) == hls.Choice(
+        "https://a.example.com/1080.m3u8", "https://a.example.com/audio/en.m3u8", 1080
+    )

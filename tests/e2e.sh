@@ -92,11 +92,16 @@ grep -q '^video,1920,1080' "$work/probe.txt" || fail "the stream has no 1080p vi
 grep -q '^audio' "$work/probe.txt" || fail "the stream has no audio"
 
 echo "== stop"
+running_ffmpeg() {
+  local processes
+  processes=$(docker top "$name") || fail "docker top failed"
+  grep -q '[f]fmpeg' <<<"$processes"
+}
 for _ in $(seq 15); do
-  docker top "$name" -o args | grep -q '[f]fmpeg' || break
+  running_ffmpeg || break
   sleep 1
 done
-docker top "$name" -o args | grep -q '[f]fmpeg' && fail "ffmpeg still runs after the viewer left"
+running_ffmpeg && fail "ffmpeg still runs after the viewer left"
 docker logs "$name" 2>&1 | grep -q 'msg="stream stopped" channel=101' || fail "the stream did not stop"
 
 echo "e2e passed"

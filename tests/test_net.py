@@ -1,5 +1,7 @@
 import gzip
+import socket
 import threading
+import time
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -18,6 +20,14 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(302)
             self.send_header("Location", "/page")
             self.end_headers()
+            return
+        if self.path == "/slow":
+            self.send_response(200)
+            self.end_headers()
+            for _ in range(20):
+                self.wfile.write(b"x")
+                self.wfile.flush()
+                time.sleep(0.2)
             return
         body = PAGES.get(self.path)
         if body is None:
@@ -85,3 +95,30 @@ def test_download_errors_leave_no_partial_file(base: str, tmp_path: Path, monkey
     with pytest.raises(FetchError, match="larger than"):
         net.download(f"{base}/big", target)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_fetch_text_stops_a_slow_response(base: str) -> None:
+    started = time.monotonic()
+    with pytest.raises(FetchError, match="took longer than 1 s"):
+        net.fetch_text(f"{base}/slow", deadline=1.0)
+    assert time.monotonic() - started < 2
+
+
+def test_fetch_text_stops_slow_headers() -> None:
+    listener = socket.create_server(("127.0.0.1", 0))
+
+    def drip() -> None:
+        connection, _ = listener.accept()
+        with connection:
+            for byte in b"HTTP/1.0 200 OK\r\nX-Slow: " + b"x" * 100:
+                try:
+                    connection.sendall(bytes([byte]))
+                except OSError:
+                    return
+                time.sleep(0.1)
+
+    threading.Thread(target=drip, daemon=True).start()
+    started = time.monotonic()
+    with listener, pytest.raises(FetchError, match="took longer than 1 s"):
+        net.fetch_text(f"http://127.0.0.1:{listener.getsockname()[1]}/", deadline=1.0)
+    assert time.monotonic() - started < 3

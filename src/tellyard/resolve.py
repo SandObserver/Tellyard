@@ -3,28 +3,37 @@ import json
 import logging
 import re
 import subprocess
+import threading
 import urllib.parse
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from time import monotonic
 from typing import Any
 
 from tellyard import hls
-from tellyard.channels import DEFAULT_PAGE_PATTERN, Channel, Headers, HlsSource, PageSource, YouTubeSource
+from tellyard.channels import Channel, Headers, HlsSource, PageSource, YouTubeSource
 from tellyard.net import FetchError, fetch_text
 from tellyard.settings import Settings
 
 log = logging.getLogger(__name__)
-PAGE_PATTERN = re.compile(DEFAULT_PAGE_PATTERN)
+# Also matches JSON with escaped slashes. Must stay linear: pages are untrusted and up to 4 MB.
+PAGE_URL = re.compile(r"https?:(?:\\?/){2}[^\s\"'<>]+")
 YTDLP_TIMEOUT = 60.0
 STREAM_SCAN = 20
 FETCH_ATTEMPTS = 3
+CANCEL_POLL = 0.5
 
-type Runner = Callable[[Sequence[str], float], str]
+type Runner = Callable[[Sequence[str], float, threading.Event | None], str]
 type Fetcher = Callable[[str, Headers], tuple[str, str]]
 
 
 class ResolveError(Exception):
     pass
+
+
+class LookupCancelledError(ResolveError):
+    def __init__(self) -> None:
+        super().__init__("the viewer left")
 
 
 @dataclass(frozen=True)
@@ -35,17 +44,30 @@ class Resolved:
     headers: Headers
 
 
-def run_command(args: Sequence[str], timeout: float) -> str:
+def run_command(args: Sequence[str], timeout: float, cancel: threading.Event | None = None) -> str:
     try:
-        done = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
+        process = subprocess.Popen(
+            args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
     except FileNotFoundError as error:
         raise ResolveError(f"{args[0]} is not installed") from error
-    except subprocess.TimeoutExpired as error:
-        raise ResolveError(f"{args[0]} took longer than {timeout:.0f} s") from error
-    if done.returncode != 0:
-        lines = [line for line in done.stderr.splitlines() if line.strip()]
-        raise ResolveError(lines[-1] if lines else f"{args[0]} exited with code {done.returncode}")
-    return done.stdout
+    end = monotonic() + timeout
+    with process:
+        while True:
+            try:
+                stdout, stderr = process.communicate(timeout=CANCEL_POLL)
+                break
+            except subprocess.TimeoutExpired:
+                if cancel is not None and cancel.is_set():
+                    process.kill()
+                    raise LookupCancelledError from None
+                if monotonic() > end:
+                    process.kill()
+                    raise ResolveError(f"{args[0]} took longer than {timeout:.0f} s") from None
+    if process.returncode != 0:
+        lines = [line for line in stderr.splitlines() if line.strip()]
+        raise ResolveError(lines[-1] if lines else f"{args[0]} exited with code {process.returncode}")
+    return stdout
 
 
 class Resolver:
@@ -54,17 +76,27 @@ class Resolver:
         self._run = runner
         self._fetch = fetcher
 
-    def resolve(self, channel: Channel) -> Resolved:
+    def resolve(self, channel: Channel, cancel: threading.Event | None = None) -> Resolved:
+        try:
+            return self._resolve(channel, cancel or threading.Event())
+        except ResolveError:
+            raise
+        except Exception as error:
+            log.exception("stream lookup failed unexpectedly", extra={"channel": channel.number})
+            raise ResolveError(f"the stream lookup failed unexpectedly ({type(error).__name__})") from error
+
+    def _resolve(self, channel: Channel, cancel: threading.Event) -> Resolved:
         source = channel.source
         match source:
             case HlsSource(token=token) if token:
-                return self._pick(self._signed(source), source.headers)
+                return self._pick(self._signed(source), source.headers, cancel)
             case HlsSource(url=url, headers=headers):
-                return self._pick(url, headers)
+                return self._pick(url, headers, cancel)
             case PageSource():
-                return self._pick(self._from_page(source), source.headers)
+                return self._pick(self._from_page(source), source.headers, cancel)
             case YouTubeSource():
-                return self._pick(self._from_youtube(self._youtube_target(source)), ())
+                manifest = self._from_youtube(self._youtube_target(source, cancel), cancel)
+                return self._pick(manifest, (), cancel)
 
     def _signed(self, source: HlsSource) -> str:
         address = source.token.replace("{url}", urllib.parse.quote(source.url, safe=""))
@@ -87,21 +119,23 @@ class Resolver:
             _, text = self._fetch(source.url, source.headers)
         except FetchError as error:
             raise ResolveError(f"could not load the channel page: {error}") from error
-        for found in PAGE_PATTERN.findall(text):
-            url = html.unescape(found).replace("\\/", "/")
-            if source.match in url:
+        for found in PAGE_URL.finditer(text):
+            url = html.unescape(found.group()).replace("\\/", "/")
+            if ".m3u8" in url.partition("//")[2][1:] and source.match in url:
                 return url
         hint = f" containing {source.match!r}" if source.match else ""
         raise ResolveError(f"no playlist URL{hint} on the channel page")
 
-    def _youtube_target(self, source: YouTubeSource) -> str:
+    def _youtube_target(self, source: YouTubeSource, cancel: threading.Event) -> str:
         if not source.match:
             return source.url
         channel = source.url.rstrip("/").removesuffix("/live")
         args = [self._settings.ytdlp, "--no-warnings", "--flat-playlist", "--playlist-end", str(STREAM_SCAN), "-J"]
         args += [*self._settings.ytdlp_args, f"{channel}/streams"]
         try:
-            listing = _json(self._run(args, YTDLP_TIMEOUT))
+            listing = _json(self._run(args, YTDLP_TIMEOUT, cancel))
+        except LookupCancelledError:
+            raise
         except ResolveError as error:
             log.warning("live stream list failed, using the live page", extra={"url": channel, "reason": str(error)})
             return source.url
@@ -116,10 +150,10 @@ class Resolver:
         log.info("no live stream matches, using the live page", extra={"url": channel, "match": source.match})
         return source.url
 
-    def _from_youtube(self, url: str) -> str:
+    def _from_youtube(self, url: str, cancel: threading.Event) -> str:
         args = [self._settings.ytdlp, "--no-warnings", "--no-playlist", "--skip-download", "-J"]
         args += [*self._settings.ytdlp_args, url]
-        info = _json(self._run(args, YTDLP_TIMEOUT))
+        info = _json(self._run(args, YTDLP_TIMEOUT, cancel))
         if info.get("live_status") != "is_live":
             raise ResolveError(f"the YouTube channel is not live right now ({info.get('live_status') or 'unknown'})")
         manifest = info.get("manifest_url")
@@ -134,8 +168,8 @@ class Resolver:
             raise ResolveError("YouTube returned no HLS playlist for the stream")
         return manifest
 
-    def _pick(self, url: str, headers: Headers) -> Resolved:
-        final, text = self._fetch_with_retry(url, headers)
+    def _pick(self, url: str, headers: Headers, cancel: threading.Event) -> Resolved:
+        final, text = self._fetch_with_retry(url, headers, cancel)
         if not hls.is_master(text):
             if not text.lstrip().startswith("#EXTM3U"):
                 raise ResolveError("the stream URL did not return an HLS playlist")
@@ -147,9 +181,11 @@ class Resolver:
         choice = hls.choose(variants, renditions)
         return Resolved(choice.video, choice.audio, choice.height, headers)
 
-    def _fetch_with_retry(self, url: str, headers: Headers) -> tuple[str, str]:
+    def _fetch_with_retry(self, url: str, headers: Headers, cancel: threading.Event) -> tuple[str, str]:
         # Some CDNs hang on some requests. A new connection usually answers.
         for attempt in range(1, FETCH_ATTEMPTS + 1):
+            if cancel.is_set():
+                raise LookupCancelledError
             try:
                 return self._fetch(url, headers)
             except FetchError as error:

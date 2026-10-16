@@ -1,6 +1,8 @@
 import json
 import logging
 import re
+import select
+import socket
 import threading
 import time
 from collections.abc import Callable
@@ -18,7 +20,7 @@ from tellyard.net import FetchError, fetch_text
 from tellyard.resolve import Resolver
 from tellyard.settings import Settings
 from tellyard.store import ChannelStore
-from tellyard.stream import Session, StreamError
+from tellyard.stream import Session, StreamError, ViewerLeftError
 
 log = logging.getLogger(__name__)
 STREAM_PATH = re.compile(r"^/(?:stream/|auto/v)(\d{1,5}(?:\.\d{1,3})?)$")
@@ -27,6 +29,7 @@ GUIDE_CHECK = 60.0
 GUIDE_RETRY = timedelta(minutes=15)
 HEARTBEAT_SECONDS = 60.0
 SOCKET_TIMEOUT = 60.0
+WATCH_INTERVAL = 0.5
 
 type SessionFactory = Callable[[Channel], Session]
 
@@ -171,8 +174,11 @@ class App:
 
     def guide_loop(self, stop: threading.Event) -> None:
         while not stop.is_set():
-            self.refresh_guide()
-            self.heartbeat()
+            try:
+                self.refresh_guide()
+                self.heartbeat()
+            except Exception:
+                log.exception("guide check failed", extra={"retry_s": round(GUIDE_CHECK)})
             stop.wait(GUIDE_CHECK)
 
     def heartbeat(self) -> None:
@@ -263,14 +269,42 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             with app.session(channel) as session:
-                self._play(session)
+                done = threading.Event()
+                watcher = threading.Thread(
+                    target=self._watch, args=(session.cancel, done), name=f"watch {channel.number}", daemon=True
+                )
+                watcher.start()
+                try:
+                    self._play(session)
+                finally:
+                    done.set()
+                    watcher.join()
         finally:
             app.release_tuner()
+
+    def _watch(self, cancel: threading.Event, done: threading.Event) -> None:
+        # Plex sends nothing after the request, so a readable socket with no data means it closed.
+        poller = select.poll()
+        poller.register(self.connection, select.POLLIN)
+        while not done.is_set():
+            try:
+                readable = poller.poll(WATCH_INTERVAL * 1000)
+                if readable and not self.connection.recv(1, socket.MSG_PEEK):
+                    break
+            except OSError:
+                break
+            if readable:
+                done.wait(WATCH_INTERVAL)
+        if not done.is_set():
+            cancel.set()
 
     def _play(self, session: Session) -> None:
         began = time.monotonic()
         try:
             session.open()
+        except ViewerLeftError:
+            log.info("viewer left before the stream started", extra=session.fields)
+            return
         except StreamError as error:
             log.warning("stream failed to start", extra={**session.fields, "reason": str(error)})
             self._send(HTTPStatus.SERVICE_UNAVAILABLE, "text/plain; charset=utf-8", f"{error}\n".encode())
