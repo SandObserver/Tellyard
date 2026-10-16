@@ -3,7 +3,7 @@ import urllib.parse
 from dataclasses import dataclass
 
 # Unanchored, this takes quadratic time on a long line without "=".
-ATTRIBUTE = re.compile(r'(?:^|,)([A-Z0-9-]+)=("[^"]*"|[^,]*)')
+ATTRIBUTE = re.compile(r'(?:^|,)[ \t]*([A-Z0-9-]+)=("[^"]*"|[^,]*)')
 RESOLUTION = re.compile(r"^([0-9]+)x([0-9]+)$")
 SCHEMES = ("http", "https")
 

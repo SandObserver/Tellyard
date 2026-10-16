@@ -114,3 +114,18 @@ def test_only_http_addresses_are_used() -> None:
 def test_a_bandwidth_that_is_not_a_number_counts_as_zero() -> None:
     variants, _ = hls.parse_master("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=²\nv.m3u8\n", "https://a.example.com/")
     assert variants[0].bandwidth == 0
+
+
+def test_spaces_after_commas_are_tolerated() -> None:
+    text = (
+        "#EXTM3U\n"
+        '#EXT-X-MEDIA:TYPE=AUDIO, GROUP-ID="aac", DEFAULT=YES, URI="audio/en.m3u8"\n'
+        '#EXT-X-STREAM-INF:PROGRAM-ID=1, BANDWIDTH=800000, RESOLUTION=640x360, AUDIO="aac"\n'
+        "360.m3u8\n"
+        '#EXT-X-STREAM-INF:PROGRAM-ID=1, BANDWIDTH=5000000, RESOLUTION=1920x1080, AUDIO="aac"\n'
+        "1080.m3u8\n"
+    )
+    variants, renditions = hls.parse_master(text, "https://a.example.com/")
+    assert hls.choose(variants, renditions) == hls.Choice(
+        "https://a.example.com/1080.m3u8", "https://a.example.com/audio/en.m3u8", 1080
+    )

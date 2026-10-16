@@ -284,12 +284,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def _watch(self, cancel: threading.Event, done: threading.Event) -> None:
         # Plex sends nothing after the request, so a readable socket with no data means it closed.
+        poller = select.poll()
+        poller.register(self.connection, select.POLLIN)
         while not done.is_set():
             try:
-                readable, _, _ = select.select([self.connection], [], [], WATCH_INTERVAL)
+                readable = poller.poll(WATCH_INTERVAL * 1000)
                 if readable and not self.connection.recv(1, socket.MSG_PEEK):
                     break
-            except (OSError, ValueError):
+            except OSError:
                 break
             if readable:
                 done.wait(WATCH_INTERVAL)

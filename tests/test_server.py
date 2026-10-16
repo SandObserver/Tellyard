@@ -1,4 +1,6 @@
 import json
+import os
+import resource
 import socket
 import threading
 import time
@@ -323,3 +325,19 @@ def test_viewer_leaving_before_video_flows_frees_the_tuner(
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_streams_when_the_connection_has_a_high_file_descriptor(base: str) -> None:
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    wanted = 1200
+    if hard != resource.RLIM_INFINITY and hard < wanted:
+        pytest.skip("the file descriptor limit is below 1200")
+    resource.setrlimit(resource.RLIMIT_NOFILE, (max(soft, wanted), hard))
+    spare = [os.open(os.devnull, os.O_RDONLY) for _ in range(1100)]
+    try:
+        with urllib.request.urlopen(f"{base}/stream/101", timeout=10) as response:
+            assert len(response.read(188 * 2000)) == 188 * 2000
+    finally:
+        for fd in spare:
+            os.close(fd)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))

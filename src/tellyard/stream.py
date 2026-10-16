@@ -24,8 +24,8 @@ BACKOFF = 2.0
 STOP_GRACE = 5.0
 CANCEL_POLL = 1.0
 READ_TIMEOUT_US = "15000000"
-# Signed stream URLs carry tokens in the path and the query.
-URL = re.compile(r"(?P<origin>\b[a-z][a-z0-9+.-]*://[^/\s?#'\"]+)[^\s'\"]*", re.IGNORECASE)
+# Stream URLs carry credentials, and signed ones carry tokens in the path and the query.
+URL = re.compile(r"(?P<scheme>\b[a-z][a-z0-9+.-]*://)(?:[^/\s?#@'\"]*@)?(?P<host>[^/\s?#'\"]+)[^\s'\"]*", re.IGNORECASE)
 
 
 class StreamError(Exception):
@@ -108,7 +108,7 @@ class Process:
         assert stderr is not None
         with stderr:
             for line in stderr:
-                text = URL.sub(r"\g<origin>", line.decode("utf-8", errors="replace").strip())
+                text = URL.sub(r"\g<scheme>\g<host>", line.decode("utf-8", errors="replace").strip())
                 if text:
                     # After close, ffmpeg reports the closed pipe. These errors are expected.
                     level = logging.DEBUG if self._closed.is_set() else logging.WARNING
@@ -149,10 +149,12 @@ class Session:
                 yield chunk
             assert self._process is not None
             try:
-                chunk_or_end = self._process.read(STALL_TIMEOUT)
+                chunk_or_end = self._read(self._process, STALL_TIMEOUT)
             except queue.Empty:
                 log.warning("no data, restarting", extra={**self.fields, "seconds": round(STALL_TIMEOUT)})
                 chunk_or_end = None
+            if self.cancel.is_set():
+                return
             if chunk_or_end:
                 yield chunk_or_end
             elif not self._restart():
@@ -180,7 +182,10 @@ class Session:
             raise StreamError(str(error)) from error
         self.height = resolved.height
         process = self._starter(ffmpeg_args(self._ffmpeg, resolved), self.label)
-        first = self._first_data(process)
+        try:
+            first = self._read(process, FIRST_DATA_TIMEOUT)
+        except queue.Empty:
+            first = None
         if self.cancel.is_set():
             process.close()
             raise ViewerLeftError("the viewer left")
@@ -191,9 +196,12 @@ class Session:
         self._pending = first
         self._started = monotonic()
 
-    def _first_data(self, process: Process) -> bytes | None:
-        end = monotonic() + FIRST_DATA_TIMEOUT
-        while not self.cancel.is_set() and (left := end - monotonic()) > 0:
+    def _read(self, process: Process, timeout: float) -> bytes | None:
+        end = monotonic() + timeout
+        while not self.cancel.is_set():
+            left = end - monotonic()
+            if left <= 0:
+                raise queue.Empty
             try:
                 return process.read(min(CANCEL_POLL, left))
             except queue.Empty:
@@ -203,6 +211,8 @@ class Session:
     def _restart(self) -> bool:
         ran = monotonic() - self._started
         self.close()
+        if self.cancel.is_set():
+            return False
         self._attempts = self._attempts + 1 if ran < QUICK_DROP else 1
         while self._attempts <= MAX_ATTEMPTS:
             if self._attempts > 1 and pause(self.cancel, BACKOFF * (self._attempts - 1)):
