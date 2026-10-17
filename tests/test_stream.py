@@ -41,6 +41,14 @@ def test_ffmpeg_args_copy_without_reencoding() -> None:
     assert args[args.index("-c") + 1] == "copy"
     assert args[-3:] == ["-f", "mpegts", "pipe:1"]
     assert "0:a:0?" in args
+    assert "-bsf:v" not in args
+
+
+def test_ffmpeg_args_repair_timestamps_when_asked() -> None:
+    resolved = Resolved("https://v.example.com/v.m3u8", None, 1080, (), repair_timestamps=True)
+    args = ffmpeg_args("ffmpeg", resolved)
+    assert args[args.index("-bsf:v") + 1].startswith("setts=")
+    assert args[-3:] == ["-f", "mpegts", "pipe:1"]
 
 
 def test_ffmpeg_args_with_separate_audio_and_custom_agent() -> None:

@@ -6,7 +6,7 @@ import subprocess
 import threading
 import urllib.parse
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from time import monotonic
 from typing import Any
 
@@ -22,6 +22,7 @@ YTDLP_TIMEOUT = 60.0
 STREAM_SCAN = 20
 FETCH_ATTEMPTS = 3
 CANCEL_POLL = 0.5
+TWITCH_HOSTS = ("twitch.tv", ".twitch.tv")
 
 type Runner = Callable[[Sequence[str], float, threading.Event | None], str]
 type Fetcher = Callable[[str, Headers], tuple[str, str]]
@@ -42,6 +43,12 @@ class Resolved:
     audio: str | None
     height: int | None
     headers: Headers
+    repair_timestamps: bool = False
+
+
+def is_twitch(url: str) -> bool:
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    return host == TWITCH_HOSTS[0] or host.endswith(TWITCH_HOSTS[1])
 
 
 def run_command(args: Sequence[str], timeout: float, cancel: threading.Event | None = None) -> str:
@@ -96,7 +103,7 @@ class Resolver:
                 return self._pick(self._from_page(source), source.headers, cancel)
             case LiveSource():
                 manifest = self._from_ytdlp(self._youtube_target(source, cancel), cancel)
-                return self._pick(manifest, (), cancel)
+                return replace(self._pick(manifest, (), cancel), repair_timestamps=is_twitch(source.url))
 
     def _signed(self, source: HlsSource) -> str:
         address = source.token.replace("{url}", urllib.parse.quote(source.url, safe=""))

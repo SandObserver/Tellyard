@@ -24,6 +24,11 @@ BACKOFF = 2.0
 STOP_GRACE = 5.0
 CANCEL_POLL = 1.0
 READ_TIMEOUT_US = "15000000"
+# Twitch ad breaks hand over frames stamped with the stream's uptime. Re-encoding players freeze on them.
+TIMESTAMP_REPAIR = (
+    "setts=pts='if(gt(N,0)*gt(abs(PTS-PREV_OUTPTS)*TB,10),PREV_OUTPTS+1/(30*TB),PTS)'"
+    ":dts='if(gt(N,0)*gt(abs(DTS-PREV_OUTDTS)*TB,10),PREV_OUTDTS+1/(30*TB),DTS)'"
+)
 # Stream URLs carry credentials, and signed ones carry tokens in the path and the query.
 URL = re.compile(r"(?P<scheme>\b[a-z][a-z0-9+.-]*://)(?:[^/\s?#@'\"]*@)?(?P<host>[^/\s?#'\"]+)[^\s'\"]*", re.IGNORECASE)
 
@@ -46,7 +51,10 @@ def ffmpeg_args(ffmpeg: str, resolved: Resolved) -> list[str]:
     if resolved.audio:
         args += [*input_options(resolved), "-i", resolved.audio]
     audio_map = "1:a:0" if resolved.audio else "0:a:0?"
-    return [*args, "-map", "0:v:0", "-map", audio_map, "-c", "copy", "-f", "mpegts", "pipe:1"]
+    args += ["-map", "0:v:0", "-map", audio_map, "-c", "copy"]
+    if resolved.repair_timestamps:
+        args += ["-bsf:v", TIMESTAMP_REPAIR]
+    return [*args, "-f", "mpegts", "pipe:1"]
 
 
 def input_options(resolved: Resolved) -> list[str]:

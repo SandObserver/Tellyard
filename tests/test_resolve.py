@@ -152,6 +152,25 @@ def test_youtube_falls_back_to_format_manifests(make_settings: Callable[..., Set
 
 
 @pytest.mark.parametrize(
+    ("url", "repair"),
+    [
+        ("https://www.twitch.tv/example", True),
+        ("https://twitch.tv/example", True),
+        ("https://www.youtube.com/@n/live", False),
+        ("https://nottwitch.tv/example", False),
+    ],
+)
+def test_live_repairs_timestamps_only_for_twitch(
+    make_settings: Callable[..., Settings], url: str, repair: bool
+) -> None:
+    info = json.dumps({"live_status": "is_live", "manifest_url": "https://m.example.com/x.m3u8"})
+    resolver = Resolver(
+        make_settings(), runner=runner_returning(info), fetcher=pages({"https://m.example.com/x.m3u8": MASTER})
+    )
+    assert resolver.resolve(channel(live=url)).repair_timestamps is repair
+
+
+@pytest.mark.parametrize(
     ("output", "message"),
     [
         (json.dumps({"live_status": "was_live"}), "not live right now \\(was_live\\)"),
