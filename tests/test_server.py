@@ -135,6 +135,16 @@ def test_health_fails_when_the_guide_thread_stops(app: App) -> None:
     assert app.problem() == "the guide thread has stopped"
 
 
+def test_health_fails_without_channels(make_settings: Callable[..., Settings], tmp_path: Path) -> None:
+    missing = tmp_path / "config" / "channels.toml"
+    settings = make_settings(CHANNELS_FILE=str(missing))
+    guide = Guide(tmp_path / "data" / "guide.xml", 1, downloader=lambda url, path: None)
+    app = App(settings, ChannelStore(missing), guide)
+    app.refresh_guide()
+    assert app.lineup("http://tellyard") == []
+    assert app.problem() == f"no channels yet: add them to {missing}"
+
+
 @pytest.fixture
 def pings() -> Iterator[tuple[str, list[str]]]:
     seen: list[str] = []

@@ -25,6 +25,7 @@ Set `LOG_LEVEL=debug` to see every request Plex makes. `docker exec tellyard tel
 | `no data, restarting` | The source stalled and Tellyard restarted it. Now and then is normal. Often means the source is unreliable. |
 | `stream given up` | The source failed 3 times in a row. Plex shows an error. Tune in again later. |
 | `all tuners are busy` | More streams were asked for than `TUNERS` allows. Raise `TUNERS`, or stop a stream. |
+| `no channel file yet, add your channels to it` | Tellyard found no `channels.toml` at `file`. Put your channel list there. Tellyard loads it within a minute. |
 | `channel file has an error, keeping the previous channels` | Fix the mistake named in `reason`. `tellyard validate` checks the file. |
 | `guide source failed, using placeholders` | The XMLTV address could not be downloaded or read. Open it in a browser. |
 | `guide source has no current listings` | The source has no shows for the listed `ids` right now. Check each `id` against the `<channel id="...">` lines in the file. |

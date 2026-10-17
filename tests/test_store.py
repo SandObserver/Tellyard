@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from tellyard.channels import ChannelError
 from tellyard.store import ChannelStore
 
 
@@ -32,3 +33,22 @@ def test_survives_the_file_disappearing(channels_file: Path) -> None:
     store = ChannelStore(channels_file)
     channels_file.unlink()
     assert len(store.current().channels) == 2
+
+
+def test_starts_empty_without_a_file_and_loads_it_later(
+    tmp_path: Path, channels_file: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    missing = tmp_path / "config" / "channels.toml"
+    store = ChannelStore(missing)
+    assert store.current().channels == ()
+    assert "no channel file yet" in caplog.text
+    missing.parent.mkdir()
+    missing.write_text(channels_file.read_text(encoding="utf-8"), encoding="utf-8")
+    assert len(store.current().channels) == 2
+    assert store.version == 2
+
+
+def test_a_bad_file_at_start_is_still_an_error(channels_file: Path) -> None:
+    channels_file.write_text("[[channel]]\nnumber = 1\n", encoding="utf-8")
+    with pytest.raises(ChannelError):
+        ChannelStore(channels_file)

@@ -9,6 +9,7 @@ import pytest
 
 from tellyard import channels, check, cli
 from tellyard.check import Result
+from tellyard.server import App
 from tellyard.settings import Settings
 
 
@@ -29,6 +30,41 @@ def test_bad_channels_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caps
     monkeypatch.setenv("CHANNELS_FILE", str(tmp_path / "none.toml"))
     assert cli.main(["validate"]) == 2
     assert "cannot read" in capsys.readouterr().err
+
+
+class QuietServer:
+    def __init__(self, address: tuple[str, int], app: object) -> None:
+        self.app = app
+
+    def __enter__(self) -> "QuietServer":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def serve_forever(self) -> None:
+        return None
+
+    def shutdown(self) -> None:
+        return None
+
+
+def test_serve_starts_without_a_channel_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("CHANNELS_FILE", str(tmp_path / "none.toml"))
+    monkeypatch.setattr(cli, "Server", QuietServer)
+    monkeypatch.setattr(App, "start", lambda self, stop: None)
+    assert cli.main(["serve"]) == 0
+    assert "0 from" in capsys.readouterr().err
+
+
+def test_serve_refuses_a_bad_channel_file(
+    monkeypatch: pytest.MonkeyPatch, channels_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    channels_file.write_text("[[channel]]\nnumber = 1\n", encoding="utf-8")
+    assert cli.main(["serve"]) == 2
+    assert "tellyard:" in capsys.readouterr().err
 
 
 def test_bad_settings(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

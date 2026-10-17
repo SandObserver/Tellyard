@@ -14,12 +14,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Start with no channels when `channels.toml` is missing, and load it once it appears. `/healthz` reports the missing file.
 - Report a channel that is not live without naming YouTube, since `live` covers other sites.
 - Print a settings summary at start and write log lines as logfmt with UTC times.
 - Run the landing page guide on the visitor's clock, with shows that start at different times.
 
 ### Fixed
 
+- Use `info` when `LOG_LEVEL` is set but empty.
 - Fix screen reader labels on the landing page and send a Content Security Policy with it.
 - Free the tuner within a second when the viewer leaves while a channel is still tuning, frozen or reconnecting.
 - Scan broadcaster pages and master playlists in linear time, so a hostile page cannot stall every stream.
