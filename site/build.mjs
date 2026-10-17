@@ -31,11 +31,14 @@ function escape(text) {
 
 const marked = new Marked({ gfm: true });
 
-function codeBlock(heading, lang) {
-  const block = marked.lexer(section(heading)).find((token) => token.type === 'code' && token.lang === lang);
-  if (!block) fail(`README.md "${heading}" has no ${lang} code block`);
-  return block.text;
+function codeBlock(heading, lang, index = 0) {
+  const blocks = marked.lexer(section(heading)).filter((token) => token.type === 'code' && token.lang === lang);
+  if (!blocks[index]) fail(`README.md "${heading}" has no ${lang} code block ${index + 1}`);
+  return blocks[index].text;
 }
+
+const unraidCheck =
+  section('Unraid').match(/`(docker exec \S+ tellyard check)`/)?.[1] ?? fail('README.md "Unraid" has no check command');
 
 const plain = (html) =>
   html.replace(/<[^>]+>/g, '').replace(/&(amp|lt|gt|quot);/g, (_, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"' })[e]);
@@ -180,6 +183,10 @@ const values = {
   compose_code: highlight(codeBlock('2\\. Create the compose file', 'yaml')),
   start_code: highlight(codeBlock('3\\. Start it', 'sh')),
   check_code: highlight(codeBlock('4\\. Check your channels', 'sh')),
+  run_code: highlight(codeBlock('3\\. Start it', 'sh', 1)),
+  unraid_channels_code: highlight(codeBlock('Unraid', 'sh')),
+  unraid_template_code: highlight(codeBlock('Unraid', 'sh', 1)),
+  unraid_check_code: highlight(unraidCheck),
 };
 
 function fill(file) {

@@ -164,13 +164,19 @@
       .code pre code { font-family: var(--mono); background: none; padding: 0; font-size: 12.5px; line-height: 1.45; color: #e6edf3; }
       .code .c { color: rgba(235, 235, 245, 0.55); }
       .note { font-size: 13.5px; color: var(--dim); }
+      .setup-main { display: grid; gap: 28px; min-width: 0; max-width: 860px; }
+      .seg { display: flex; justify-self: start; max-width: 100%; overflow-x: auto; gap: 2px; padding: 3px; border: 1px solid var(--separator); border-radius: 11px; background: var(--bg-2); }
+      .seg button { flex: none; height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: transparent; color: var(--dim); font: 600 14px var(--font); cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease; }
+      .seg button:hover { color: var(--label); }
+      .seg button[aria-selected="true"] { background: var(--bg-3); color: var(--label); }
+      .steps-tail { counter-reset: step 3; }
 
       .pill, .btn, .copy { transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease; }
       .pill:active, .btn:active, .copy:active { transform: scale(0.97); }
       .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
       @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
       @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
-      @media (forced-colors: active) { .pill, .copy { border: 1px solid ButtonText; } }
+      @media (forced-colors: active) { .pill, .copy, .seg button { border: 1px solid ButtonText; } .seg button[aria-selected="true"] { outline: 2px solid Highlight; } }
 
       .footer { padding: 40px 0 48px; border-top: 1px solid var(--bg-2); }
       .foot { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main credits" "legal credits"; gap: 10px 48px; align-items: start; }
@@ -227,6 +233,7 @@
         .saa { font-size: 34px; }
         .band h2 { font-size: 26px; }
         .code pre code { font-size: 12px; }
+        .seg button { padding: 0 12px; font-size: 13.5px; }
         .credits { margin-top: 10px; grid-auto-flow: row; grid-auto-columns: auto; gap: 14px; }
       }
     </style>
@@ -290,31 +297,83 @@
             <h2>Get started</h2>
             <p class="lede">Free and self-hosted. Needs Docker on a 64-bit Intel, AMD or ARM machine, and Plex or Jellyfin.</p>
           </div>
-          <ol class="steps">
-            <li>
-              <h3>Write your channel list</h3>
-              <p>Create a <code>config</code> folder with a <code>channels.toml</code>. Each channel needs a number, a name, a logo and one source. <a href="{{repo}}/blob/main/docs/channels.md">Every option</a>.</p>
-              <div class="code"><div class="code-bar"><span>config/channels.toml</span><button type="button" class="copy" aria-label="Copy the channel example">Copy</button></div><pre tabindex="0" role="region" aria-label="Channel example"><code>{{channels_code}}</code></pre></div>
-              <p class="note">Only add streams you are allowed to watch.</p>
-            </li>
-            <li>
-              <h3>Create the compose file</h3>
-              <p>Save this as <code>compose.yml</code> next to the <code>config</code> folder.</p>
-              <div class="code"><div class="code-bar"><span>compose.yml</span><button type="button" class="copy" aria-label="Copy the compose file">Copy</button></div><pre tabindex="0" role="region" aria-label="Compose file"><code>{{compose_code}}</code></pre></div>
-            </li>
-            <li>
-              <h3>Start it and check your channels</h3>
-              <div class="code"><div class="code-bar"><span>Terminal, in the folder with compose.yml</span><button type="button" class="copy" aria-label="Copy the start commands">Copy</button></div><pre tabindex="0" role="region" aria-label="Start commands"><code>{{start_code}}
+          <div class="setup-main">
+            <div class="seg" role="tablist" aria-label="Install method">
+              <button type="button" role="tab" id="m-compose" aria-controls="p-compose" aria-selected="true" data-m="compose">Docker Compose</button>
+              <button type="button" role="tab" id="m-run" aria-controls="p-run" aria-selected="false" tabindex="-1" data-m="run">docker run</button>
+              <button type="button" role="tab" id="m-unraid" aria-controls="p-unraid" aria-selected="false" tabindex="-1" data-m="unraid">Unraid</button>
+            </div>
+            <div role="tabpanel" id="p-compose" aria-labelledby="m-compose">
+              <ol class="steps">
+                <li>
+                  <h3>Write your channel list</h3>
+                  <p>Create a <code>config</code> folder with a <code>channels.toml</code>. Each channel needs a number, a name, a logo and one source. <a href="{{repo}}/blob/main/docs/channels.md">Every option</a>.</p>
+                  <div class="code"><div class="code-bar"><span>config/channels.toml</span><button type="button" class="copy" aria-label="Copy the channel example">Copy</button></div><pre tabindex="0" role="region" aria-label="Channel example"><code>{{channels_code}}</code></pre></div>
+                  <p class="note">Only add streams you are allowed to watch.</p>
+                </li>
+                <li>
+                  <h3>Create the compose file</h3>
+                  <p>Save this as <code>compose.yml</code> next to the <code>config</code> folder.</p>
+                  <div class="code"><div class="code-bar"><span>compose.yml</span><button type="button" class="copy" aria-label="Copy the compose file">Copy</button></div><pre tabindex="0" role="region" aria-label="Compose file"><code>{{compose_code}}</code></pre></div>
+                </li>
+                <li>
+                  <h3>Start it and check your channels</h3>
+                  <div class="code"><div class="code-bar"><span>Terminal, in the folder with compose.yml</span><button type="button" class="copy" aria-label="Copy the start commands">Copy</button></div><pre tabindex="0" role="region" aria-label="Start commands"><code>{{start_code}}
 {{check_code}}</code></pre></div>
-              <p><code>tellyard check</code> tunes each channel once and reports the resolution it really sends.</p>
-            </li>
-            <li>
-              <h3>Add it to your media server</h3>
-              <p>Tellyard's address is your server's address with port 5004, such as <code>192.168.1.10:5004</code>, and its guide is <code>http://192.168.1.10:5004/guide.xml</code>.</p>
-              <p><b>Plex:</b> open <b>Settings &gt; Live TV &amp; DVR &gt; Set up Plex DVR</b>, enter the address by hand, and choose the XMLTV option for the guide. On an iPhone, iPad or Apple TV, turn on <b>Force Direct Play</b> in the Plex app. <a href="{{repo}}/blob/main/docs/plex.md">More about Plex</a>.</p>
-              <p><b>Jellyfin:</b> open <b>Dashboard &gt; Live TV</b>, add a tuner device of type HDHomeRun with the address, and add an XMLTV guide provider with the guide address.</p>
-            </li>
-          </ol>
+                  <p><code>tellyard check</code> tunes each channel once and reports the resolution it really sends.</p>
+                </li>
+              </ol>
+            </div>
+            <div role="tabpanel" id="p-run" aria-labelledby="m-run" hidden>
+              <ol class="steps">
+                <li>
+                  <h3>Write your channel list</h3>
+                  <p>Create a <code>config</code> folder with a <code>channels.toml</code>. Each channel needs a number, a name, a logo and one source. <a href="{{repo}}/blob/main/docs/channels.md">Every option</a>.</p>
+                  <div class="code"><div class="code-bar"><span>config/channels.toml</span><button type="button" class="copy" aria-label="Copy the channel example for docker run">Copy</button></div><pre tabindex="0" role="region" aria-label="Channel example for docker run"><code>{{channels_code}}</code></pre></div>
+                  <p class="note">Only add streams you are allowed to watch.</p>
+                </li>
+                <li>
+                  <h3>Start it</h3>
+                  <p>Run this in the folder that holds <code>config</code>.</p>
+                  <div class="code"><div class="code-bar"><span>Terminal, next to the config folder</span><button type="button" class="copy" aria-label="Copy the docker run command">Copy</button></div><pre tabindex="0" role="region" aria-label="docker run command"><code>{{run_code}}</code></pre></div>
+                </li>
+                <li>
+                  <h3>Check your channels</h3>
+                  <div class="code"><div class="code-bar"><span>Terminal</span><button type="button" class="copy" aria-label="Copy the check command">Copy</button></div><pre tabindex="0" role="region" aria-label="Check command"><code>{{check_code}}</code></pre></div>
+                  <p><code>tellyard check</code> tunes each channel once and reports the resolution it really sends.</p>
+                </li>
+              </ol>
+            </div>
+            <div role="tabpanel" id="p-unraid" aria-labelledby="m-unraid" hidden>
+              <ol class="steps">
+                <li>
+                  <h3>Install it from Apps</h3>
+                  <p>In Unraid, open <b>Apps</b>, search for <b>Tellyard</b> and choose <b>Install</b>. The defaults work: the tuner listens on port 5004 and keeps its files in <code>/mnt/user/appdata/tellyard</code>.</p>
+                  <p class="note">Not in Apps yet? Save the template from the Unraid terminal, then pick <b>Tellyard</b> under <b>Docker</b>, <b>Add Container</b>, <b>Template</b>.</p>
+                  <div class="code"><div class="code-bar"><span>Unraid terminal</span><button type="button" class="copy" aria-label="Copy the template command">Copy</button></div><pre tabindex="0" role="region" aria-label="Template command"><code>{{unraid_template_code}}</code></pre></div>
+                </li>
+                <li>
+                  <h3>Write your channel list</h3>
+                  <p>Tellyard starts with no channels. Copy the example into its config folder and replace the examples with your channels. It loads the file within a minute. <a href="{{repo}}/blob/main/docs/channels.md">Every option</a>.</p>
+                  <div class="code"><div class="code-bar"><span>Unraid terminal</span><button type="button" class="copy" aria-label="Copy the channel list commands">Copy</button></div><pre tabindex="0" role="region" aria-label="Channel list commands"><code>{{unraid_channels_code}}</code></pre></div>
+                  <p class="note">Only add streams you are allowed to watch.</p>
+                </li>
+                <li>
+                  <h3>Check your channels</h3>
+                  <div class="code"><div class="code-bar"><span>Unraid terminal</span><button type="button" class="copy" aria-label="Copy the Unraid check command">Copy</button></div><pre tabindex="0" role="region" aria-label="Unraid check command"><code>{{unraid_check_code}}</code></pre></div>
+                  <p>On Unraid the container is named <code>Tellyard</code>, with a capital T.</p>
+                </li>
+              </ol>
+            </div>
+            <ol class="steps steps-tail">
+              <li>
+                <h3>Add it to your media server</h3>
+                <p>Tellyard's address is your server's address with port 5004, such as <code>192.168.1.10:5004</code>, and its guide is <code>http://192.168.1.10:5004/guide.xml</code>.</p>
+                <p><b>Plex:</b> open <b>Settings &gt; Live TV &amp; DVR &gt; Set up Plex DVR</b>, enter the address by hand, and choose the XMLTV option for the guide. On an iPhone, iPad or Apple TV, turn on <b>Force Direct Play</b> in the Plex app. <a href="{{repo}}/blob/main/docs/plex.md">More about Plex</a>.</p>
+                <p><b>Jellyfin:</b> open <b>Dashboard &gt; Live TV</b>, add a tuner device of type HDHomeRun with the address, and add an XMLTV guide provider with the guide address.</p>
+              </li>
+            </ol>
+          </div>
         </div>
       </section>
     </main>
@@ -436,6 +495,31 @@
       }
       tick();
       setInterval(tick, 1000);
+      const tabs = [...document.querySelectorAll('.seg [role="tab"]')];
+      function pick(tab, focus) {
+        for (const t of tabs) {
+          const on = t === tab;
+          t.setAttribute("aria-selected", String(on));
+          t.tabIndex = on ? 0 : -1;
+          document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+        }
+        if (focus) tab.focus();
+        try { localStorage.setItem("tellyard-install", tab.dataset.m); } catch {}
+      }
+      for (const tab of tabs) {
+        tab.addEventListener("click", () => pick(tab, false));
+        tab.addEventListener("keydown", (event) => {
+          const i = tabs.indexOf(tab);
+          const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[event.key];
+          if (next === undefined) return;
+          event.preventDefault();
+          pick(tabs[(next + tabs.length) % tabs.length], true);
+        });
+      }
+      try {
+        const saved = tabs.find((t) => t.dataset.m === localStorage.getItem("tellyard-install"));
+        if (saved) pick(saved, false);
+      } catch {}
       for (const button of document.querySelectorAll(".copy")) {
         button.addEventListener("click", async () => {
           const code = button.closest(".code").querySelector("code");
