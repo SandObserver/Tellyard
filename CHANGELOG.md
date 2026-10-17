@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-17
+
 ### Added
 
 - Add an Unraid template, `templates/tellyard.xml`, and Unraid install steps in the README.
@@ -16,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Point the install steps at the `latest` image tag.
 - Start with no channels when `channels.toml` is missing, and load it once it appears. `/healthz` reports the missing file.
 - Report a channel that is not live without naming YouTube, since `live` covers other sites.
 - Print a settings summary at start and write log lines as logfmt with UTC times.

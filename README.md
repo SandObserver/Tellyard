@@ -40,7 +40,7 @@ Save this as `compose.yml` next to the `config` folder.
 ```yaml
 services:
   tellyard:
-    image: ghcr.io/sandobserver/tellyard:beta
+    image: ghcr.io/sandobserver/tellyard:latest
     container_name: tellyard
     restart: unless-stopped
     init: true
@@ -92,7 +92,7 @@ docker run -d --name tellyard --restart unless-stopped \
   --security-opt no-new-privileges:true --memory 512m \
   -e TZ=America/New_York -e TUNERS=4 -e MIN_HEIGHT=off \
   -v ./config:/config:ro -v ./data:/data -p 5004:5004 \
-  ghcr.io/sandobserver/tellyard:beta
+  ghcr.io/sandobserver/tellyard:latest
 ```
 
 </details>
