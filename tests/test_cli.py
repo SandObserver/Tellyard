@@ -21,7 +21,7 @@ def environment(monkeypatch: pytest.MonkeyPatch, channels_file: Path, tmp_path: 
 def test_validate_lists_channels(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["validate"]) == 0
     out = capsys.readouterr().out
-    assert "101  News One  (YouTubeSource, guide: placeholder)" in out
+    assert "101  News One  (LiveSource, guide: placeholder)" in out
     assert out.strip().endswith("2 channels are valid")
 
 

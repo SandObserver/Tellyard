@@ -30,7 +30,7 @@ uvx pre-commit install --hook-type pre-commit --hook-type pre-push
 | `cli.py`, `settings.py` | Commands and settings from the environment. |
 | `channels.py`, `store.py` | Read and check `channels.toml`; reload it when the file changes and keep the last good list. |
 | `server.py` | The HTTP server: the HDHomeRun API, streams, guide, playlist and health. Counts tuners. |
-| `resolve.py` | Turns a channel into a stream URL when someone tunes in: yt-dlp for YouTube, a page fetch for `page`, an optional token service for `hls`. |
+| `resolve.py` | Turns a channel into a stream URL when someone tunes in: yt-dlp for `live`, a page fetch for `page`, an optional token service for `hls`. |
 | `hls.py` | Reads HLS master playlists and picks the highest resolution and its audio. |
 | `stream.py` | Runs ffmpeg for one viewer, watches for stalls and reconnects. |
 | `guide.py` | Builds the XMLTV guide from XMLTV sources and placeholder blocks. |

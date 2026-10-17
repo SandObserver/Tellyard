@@ -22,7 +22,7 @@ body:
     attributes:
       label: Source type
       options:
-        - youtube
+        - live
         - page
         - hls
         - Not about one channel

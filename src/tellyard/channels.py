@@ -14,6 +14,7 @@ CHANNEL_KEYS = frozenset(
         "name",
         "logo",
         "hls",
+        "live",
         "youtube",
         "page",
         "match",
@@ -25,7 +26,7 @@ CHANNEL_KEYS = frozenset(
     }
 )
 GUIDE_KEYS = frozenset({"xmltv", "id", "title", "description", "category", "hours"})
-SOURCE_KINDS = ("hls", "youtube", "page")
+SOURCE_KINDS = ("hls", "live", "youtube", "page")
 YOUTUBE_CHANNEL = re.compile(r"^https?://(?:www\.)?youtube\.com/(?:@[^/?#]+|channel/[^/?#]+|c/[^/?#]+)(?:/live)?/?$")
 DEFAULT_BLOCK_HOURS = 2.0
 
@@ -46,7 +47,7 @@ class HlsSource:
 
 
 @dataclass(frozen=True)
-class YouTubeSource:
+class LiveSource:
     url: str
     match: str = ""
 
@@ -58,7 +59,7 @@ class PageSource:
     headers: Headers = ()
 
 
-type Source = HlsSource | YouTubeSource | PageSource
+type Source = HlsSource | LiveSource | PageSource
 
 
 @dataclass(frozen=True)
@@ -170,7 +171,7 @@ def _channel(value: Any, index: int, sources: Mapping[str, str]) -> Channel:
 def _source(entry: Mapping[str, Any], where: str) -> Source:
     kinds = [kind for kind in SOURCE_KINDS if kind in entry]
     if len(kinds) != 1:
-        raise ChannelError(f"{where}: set exactly one of hls, youtube or page")
+        raise ChannelError(f"{where}: set exactly one of hls, live or page")
     kind = kinds[0]
     url = _url(entry[kind], f"{where} {kind}")
     headers = _headers(entry.get("headers", {}), where)
@@ -179,21 +180,21 @@ def _source(entry: Mapping[str, Any], where: str) -> Source:
         raise ChannelError(f"{where}: match must be text")
     if kind != "hls" and ("token" in entry or "token_field" in entry):
         raise ChannelError(f"{where}: token only applies to hls sources")
-    if kind == "youtube":
-        return _youtube(url, match, headers, where)
+    if kind in ("live", "youtube"):
+        return _live(url, match, headers, where)
     if kind == "page":
         return PageSource(url, match.strip(), headers)
     if match:
-        raise ChannelError(f"{where}: match only applies to page and youtube sources")
+        raise ChannelError(f"{where}: match only applies to page and live sources")
     return _hls(entry, url, headers, where)
 
 
-def _youtube(url: str, match: str, headers: Headers, where: str) -> YouTubeSource:
+def _live(url: str, match: str, headers: Headers, where: str) -> LiveSource:
     if headers:
-        raise ChannelError(f"{where}: headers are not supported for youtube sources")
+        raise ChannelError(f"{where}: headers are not supported for live sources")
     if match and not YOUTUBE_CHANNEL.match(url):
-        raise ChannelError(f"{where}: match needs a channel URL such as https://www.youtube.com/@handle/live")
-    return YouTubeSource(url, match.strip())
+        raise ChannelError(f"{where}: match needs a YouTube channel URL such as https://www.youtube.com/@handle/live")
+    return LiveSource(url, match.strip())
 
 
 def _hls(entry: Mapping[str, Any], url: str, headers: Headers, where: str) -> HlsSource:

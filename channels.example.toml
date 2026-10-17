@@ -1,11 +1,11 @@
 # Tellyard channel list. Copy this file to channels.toml and replace the examples with your channels.
 #
 # Each [[channel]] needs a number, a name, a logo and exactly one source:
-#   youtube = "https://www.youtube.com/@handle/live"   the channel's current live stream
-#   page    = "https://example.com/live"               a web page that embeds an .m3u8 URL
-#   hls     = "https://example.com/master.m3u8"        a direct HLS playlist
+#   live = "https://www.youtube.com/@handle/live"   a live channel on YouTube, Twitch, Kick or another site yt-dlp supports
+#   page = "https://example.com/live"               a web page that embeds an .m3u8 URL
+#   hls  = "https://example.com/master.m3u8"        a direct HLS playlist
 # A page source can narrow the URL it picks with match = "part-of-the-url".
-# A youtube channel running several live streams can pick one by title with match = "part of the title".
+# A live source on a YouTube channel running several live streams can pick one by title with match = "part of the title".
 # hls and page sources can send extra request headers: headers = { Referer = "https://example.com/" }
 # An hls source whose broadcaster issues short-lived signed links can request a fresh one before every tune:
 #   token = "https://example.com/sign?url={url}"   {url} becomes the hls URL; the reply is JSON
@@ -34,7 +34,7 @@ my-guide = "https://example.com/guide.xml.gz"
 number = 101
 name = "Example News"
 logo = "https://example.com/logos/example-news.png"
-youtube = "https://www.youtube.com/@example/live"
+live = "https://www.youtube.com/@example/live"
 [channel.guide]
 description = "Live news, around the clock."
 category = "News"

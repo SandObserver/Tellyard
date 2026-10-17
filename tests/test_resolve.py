@@ -136,7 +136,7 @@ def test_youtube_uses_the_live_manifest(make_settings: Callable[..., Settings]) 
     fetch = pages({"https://manifest.googlevideo.com/master.m3u8": MASTER})
     settings = make_settings(YTDLP="/opt/yt-dlp", YTDLP_ARGS="--proxy http://p:1")
     resolver = Resolver(settings, runner=runner_returning(info, seen), fetcher=fetch)
-    resolved = resolver.resolve(channel(youtube="https://www.youtube.com/@news/live"))
+    resolved = resolver.resolve(channel(live="https://www.youtube.com/@news/live"))
     assert resolved.height == 1080
     assert seen[0][0] == "/opt/yt-dlp"
     assert seen[0][-3:] == ["--proxy", "http://p:1", "https://www.youtube.com/@news/live"]
