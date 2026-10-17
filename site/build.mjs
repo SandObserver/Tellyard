@@ -31,11 +31,14 @@ function escape(text) {
 
 const marked = new Marked({ gfm: true });
 
-function codeBlock(heading, lang) {
-  const block = marked.lexer(section(heading)).find((token) => token.type === 'code' && token.lang === lang);
-  if (!block) fail(`README.md "${heading}" has no ${lang} code block`);
-  return block.text;
+function codeBlock(heading, lang, index = 0) {
+  const blocks = marked.lexer(section(heading)).filter((token) => token.type === 'code' && token.lang === lang);
+  if (!blocks[index]) fail(`README.md "${heading}" has no ${lang} code block ${index + 1}`);
+  return blocks[index].text;
 }
+
+const unraidCheck =
+  section('Unraid').match(/`(docker exec \S+ tellyard check)`/)?.[1] ?? fail('README.md "Unraid" has no check command');
 
 const plain = (html) =>
   html.replace(/<[^>]+>/g, '').replace(/&(amp|lt|gt|quot);/g, (_, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"' })[e]);
@@ -161,6 +164,78 @@ function guideRows() {
     .join('');
 }
 
+function code(label, text, name) {
+  return (
+    `<div class="code"><div class="code-bar"><span>${escape(label)}</span><button type="button" class="copy" aria-label="Copy the ${escape(name)}">Copy</button></div>` +
+    `<pre tabindex="0" role="region" aria-label="${escape(name[0].toUpperCase() + name.slice(1))}"><code>${highlight(text)}</code></pre></div>`
+  );
+}
+
+const note = (html) => `<p class="fill-note">${html}</p>`;
+const channelsCode = codeBlock('Channels', 'toml');
+const checkCode = codeBlock('4\\. Check your channels', 'sh');
+const everyOption = `<a href="${repo}/blob/main/docs/channels.md">Every option</a>`;
+const channelNote = note(
+  `Put it in a <code>config</code> folder. Each channel needs a number, a name, a logo and one source. ${everyOption}. Only add streams you are allowed to watch.`,
+);
+
+const icons = {
+  tuner: '<path d="M4 7h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path class="ia" d="M8 3l4 4 4-4" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  guide: '<path d="M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path class="ia" d="M7 9h4M14 9h3M7 14h7M17 14h0" fill="none" stroke-width="2" stroke-linecap="round"/>',
+  phone: '<path d="M8 2h8a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path class="ia" d="M11 18h2" fill="none" stroke-width="2" stroke-linecap="round"/>',
+};
+const row = (icon, name, text) =>
+  `<li><div class="irow"><svg viewBox="0 0 24 24" aria-hidden="true">${icons[icon]}</svg><span class="imain"><span class="iname">${name}</span><span class="itext">${text}</span></span></div></li>`;
+const address = '<code>192.168.1.10:5004</code>';
+const guideUrl = '<code>http://192.168.1.10:5004/guide.xml</code>';
+
+const install = {
+  methods: {
+    compose: {
+      label: 'Docker Compose',
+      html:
+        code('config/channels.toml', channelsCode, 'channel example') +
+        channelNote +
+        code('compose.yml', codeBlock('2\\. Create the compose file', 'yaml'), 'compose file') +
+        code('Terminal, in the folder with compose.yml', `${codeBlock('3\\. Start it', 'sh')}\n${checkCode}`, 'start commands') +
+        note('<code>tellyard check</code> tunes each channel once and reports the resolution it really sends.'),
+    },
+    run: {
+      label: 'docker run',
+      html:
+        code('config/channels.toml', channelsCode, 'channel example') +
+        channelNote +
+        code('Terminal, next to the config folder', `${codeBlock('3\\. Start it', 'sh', 1)}\n${checkCode}`, 'start commands') +
+        note('<code>tellyard check</code> tunes each channel once and reports the resolution it really sends.'),
+    },
+    unraid: {
+      label: 'Unraid',
+      html:
+        code('Unraid', 'Apps tab › search "Tellyard" › Install', 'install steps') +
+        code('Unraid terminal', `${codeBlock('Unraid', 'sh')}\n${unraidCheck}`, 'channel commands') +
+        note(
+          `Tellyard starts with no channels and loads <code>channels.toml</code> within a minute. Replace the examples with your channels. ${everyOption}. ` +
+            `Not in Apps yet? <a href="${repo}#unraid">Add the template by hand</a>.`,
+        ),
+    },
+  },
+  servers: {
+    plex: {
+      label: 'Plex',
+      html:
+        row('tuner', 'Add the tuner in Plex', `Open <b>Settings › Live TV &amp; DVR › Set up Plex DVR</b> and enter your server's address with port 5004, such as ${address}.`) +
+        row('guide', 'Use the guide from Tellyard', `Choose the XMLTV option and enter ${guideUrl}.`) +
+        row('phone', 'Watch on iPhone, iPad or Apple TV', 'Turn on <b>Force Direct Play</b> in the Plex app.'),
+    },
+    jellyfin: {
+      label: 'Jellyfin',
+      html:
+        row('tuner', 'Add the tuner in Jellyfin', `Open <b>Dashboard › Live TV</b> and add a tuner device of type HDHomeRun at your server's address with port 5004, such as ${address}.`) +
+        row('guide', 'Add the guide from Tellyard', `Add an XMLTV guide provider with ${guideUrl}.`),
+    },
+  },
+};
+
 const lastmod = lastChange();
 
 const values = {
@@ -176,10 +251,9 @@ const values = {
   guide_ruler: [0, 30, 60, 90].map((m) => `<span style="left: ${(m / WINDOW) * 100}%">${clock(STATIC_START + m)}</span>`).join(''),
   guide_data: JSON.stringify(channels.map(({ number, slots }) => ({ number, slots }))).replaceAll('<', '\\u003c'),
   now_left: String(((STATIC_NOW - STATIC_START) / WINDOW) * 100),
-  channels_code: highlight(codeBlock('Channels', 'toml')),
-  compose_code: highlight(codeBlock('2\\. Create the compose file', 'yaml')),
-  start_code: highlight(codeBlock('3\\. Start it', 'sh')),
-  check_code: highlight(codeBlock('4\\. Check your channels', 'sh')),
+  install_blocks: install.methods.compose.html,
+  install_next: install.servers.plex.html,
+  install_data: JSON.stringify(install).replaceAll('<', '\\u003c'),
 };
 
 function fill(file) {
