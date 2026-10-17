@@ -12,8 +12,12 @@ class ChannelStore:
     def __init__(self, path: Path) -> None:
         self._path = path
         self._lock = threading.Lock()
-        self._lineup = channels.load(path)
         self._stamp = self._read_stamp()
+        if self._stamp is None and not path.exists():
+            self._lineup = Lineup(())
+            log.warning("no channel file yet, add your channels to it", extra={"file": path})
+        else:
+            self._lineup = channels.load(path)
         self.version = 1
 
     def current(self) -> Lineup:

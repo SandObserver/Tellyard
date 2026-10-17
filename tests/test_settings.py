@@ -41,6 +41,12 @@ def test_reads_values() -> None:
     assert Settings.from_env({"MIN_HEIGHT": "Off"}).min_height is None
 
 
+def test_empty_values_mean_the_defaults() -> None:
+    names = ["TUNERS", "MIN_HEIGHT", "DEVICE_NAME", "DEVICE_ID", "BASE_URL", "GUIDE_DAYS", "GUIDE_REFRESH_HOURS"]
+    names += ["YTDLP_ARGS", "HEARTBEAT_URL", "LOG_LEVEL", "LISTEN_PORT"]
+    assert Settings.from_env(dict.fromkeys(names, "")) == Settings.from_env({})
+
+
 @pytest.mark.parametrize(
     ("env", "message"),
     [

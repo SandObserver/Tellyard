@@ -51,7 +51,7 @@ class Settings:
         if base_url and not BASE_URL.match(base_url):
             raise SettingsError("BASE_URL must look like http://192.168.1.10:5004, with no path")
         try:
-            level = LogLevel(env.get("LOG_LEVEL", "info").strip().lower())
+            level = LogLevel(env.get("LOG_LEVEL", "").strip().lower() or "info")
         except ValueError:
             raise SettingsError("LOG_LEVEL must be debug, info, warning or error") from None
         heartbeat_url = env.get("HEARTBEAT_URL", "").strip()

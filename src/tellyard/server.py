@@ -121,6 +121,8 @@ class App:
     def problem(self, now: datetime | None = None) -> str | None:
         if self._guide_thread is not None and not self._guide_thread.is_alive():
             return "the guide thread has stopped"
+        if not self.store.current().channels:
+            return f"no channels yet: add them to {self.settings.channels_file}"
         age = (now or datetime.now(UTC)) - (self.guide.built_at or self._started_at)
         limit = timedelta(hours=2 * self.settings.guide_refresh_hours)
         if age > limit:
