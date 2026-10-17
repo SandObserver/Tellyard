@@ -7,6 +7,7 @@
 <p align="center">
   <a href="https://github.com/SandObserver/Tellyard/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/SandObserver/Tellyard/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/SandObserver/Tellyard/pkgs/container/tellyard"><img alt="ghcr.io" src="https://img.shields.io/badge/ghcr.io-tellyard-2496ED?logo=github&logoColor=white"></a>
+  <a href="https://hub.docker.com/r/sandobserver/tellyard"><img alt="Docker Hub" src="https://img.shields.io/badge/docker%20hub-tellyard-2496ED?logo=docker&logoColor=white"></a>
 </p>
 
 <p align="center"><b><a href="https://tellyard.sandobserver.com">tellyard.sandobserver.com</a></b></p>
@@ -116,6 +117,30 @@ address with port 5004, for example `192.168.1.10:5004`. Its guide is
   iPhone, iPad or Apple TV, turn on **Force Direct Play** in the Plex app. See [Plex](docs/plex.md).
 - **Jellyfin:** **Dashboard > Live TV**. Add a tuner device of type HDHomeRun with the address,
   then add an XMLTV guide provider with the guide address.
+
+## Unraid
+
+Open **Apps**, search for **Tellyard** and choose **Install**. It starts with no channels. Put your
+list in place from the Unraid terminal, starting from the example:
+
+```sh
+curl -fsSL -o /mnt/user/appdata/tellyard/config/channels.toml \
+  https://raw.githubusercontent.com/SandObserver/Tellyard/main/channels.example.toml
+nano /mnt/user/appdata/tellyard/config/channels.toml
+```
+
+Tellyard loads the file within a minute. Check the channels with `docker exec Tellyard tellyard check`
+(on Unraid the container is named `Tellyard`), then add it to your media server as in step 5, with
+your Unraid server's address. The template runs as Unraid's `nobody` user (`--user=99:100`) with the
+same lockdown as the compose file, and restarts the container after a crash.
+
+If **Apps** does not list Tellyard yet, save the template from the Unraid terminal, then pick
+**Tellyard** under **Docker**, **Add Container**, **Template**:
+
+```sh
+curl -fsSL -o /boot/config/plugins/dockerMan/templates-user/my-Tellyard.xml \
+  https://raw.githubusercontent.com/SandObserver/Tellyard/main/templates/tellyard.xml
+```
 
 ## Channels
 

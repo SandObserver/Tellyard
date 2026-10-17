@@ -60,12 +60,13 @@ jobs:
         run: |
           set -euo pipefail
           version=$(python3 tools/release.py prepare --note "$NOTE")
+          python3 tools/unraid_template.py
           uv lock
           branch="release/v$version"
           git config user.name 'SandObserver'
           git config user.email '260779319+SandObserver@users.noreply.github.com'
           git checkout -b "$branch"
-          git add pyproject.toml uv.lock CHANGELOG.md
+          git add pyproject.toml uv.lock CHANGELOG.md templates/tellyard.xml
           git commit -m "Release $version"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:$branch"
           gh pr create --base main --head "$branch" --title "Release: $version" \
