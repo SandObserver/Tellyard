@@ -283,7 +283,7 @@ class Handler(BaseHTTPRequestHandler):
             app.release_tuner()
 
     def _watch(self, cancel: threading.Event, done: threading.Event) -> None:
-        # Plex sends nothing after the request, so a readable socket with no data means it closed.
+        # Clients send nothing after the request, so a readable socket with no data means the viewer left.
         poller = select.poll()
         poller.register(self.connection, select.POLLIN)
         while not done.is_set():

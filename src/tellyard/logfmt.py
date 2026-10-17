@@ -14,7 +14,7 @@ LABEL_WIDTH = 11
 
 
 def value(raw: object) -> str:
-    # Escape control characters. A raw newline can forge a log record.
+    # A raw newline can forge a log record.
     if raw is None:
         return ""
     text = ("true" if raw else "false") if isinstance(raw, bool) else str(raw)
