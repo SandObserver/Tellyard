@@ -8,6 +8,8 @@
 docker compose pull && docker compose up -d
 ```
 
+On Unraid, open **Docker**, choose **Check for Updates**, then **apply update** on Tellyard.
+
 When yt-dlp publishes a new stable release, a new Tellyard release follows on its own, usually within a day. It keeps YouTube channels working. Stay on the latest release.
 
 ## Backups

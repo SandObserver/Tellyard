@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<Profile>
+  <Profile>Tellyard is a small HDHomeRun tuner for Plex and Jellyfin. It streams the live channels you list only while someone watches. This repository holds the source, the image build and the Community Applications template.</Profile>
+  <Icon>https://raw.githubusercontent.com/SandObserver/Tellyard/main/site/public/icon-512.png</Icon>
+  <WebPage>https://github.com/SandObserver/Tellyard</WebPage>
+  <DonateText>If Tellyard is useful to you, you can buy me a coffee.</DonateText>
+  <DonateLink>https://buymeacoffee.com/sandobserver</DonateLink>
+</Profile>

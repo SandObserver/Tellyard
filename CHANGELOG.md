@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Add an Unraid template, `templates/tellyard.xml`, and Unraid install steps in the README.
+- Publish the image to Docker Hub as `sandobserver/tellyard` as well as to ghcr.io.
 - Add the `live` source for channels on YouTube, Twitch, Kick and other sites yt-dlp supports. The `youtube` key still works.
 - Add `HEARTBEAT_URL`, called once a minute while Tellyard is healthy.
 - Add `/healthz`, which answers 503 with a reason when the guide has stopped updating. `/health` stays as an alias.

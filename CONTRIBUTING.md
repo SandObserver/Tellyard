@@ -75,7 +75,11 @@ The channels on the page are fictional. The page names no video platform, and th
 
 ## Releases
 
-Semantic versioning. Move the `Unreleased` entries in [CHANGELOG.md](CHANGELOG.md) under the new version with its date, set `version` in `pyproject.toml`, merge, and push a `vX.Y.Z` tag. The tag runs the CI checks, then pushes `ghcr.io/sandobserver/tellyard:X.Y.Z`, `:X.Y` and `:latest` for amd64 and arm64, and publishes a GitHub release with the version's CHANGELOG section. The release stops if the tag, `pyproject.toml` and a dated CHANGELOG section do not agree. The image carries an SBOM and build provenance.
+Semantic versioning. Move the `Unreleased` entries in [CHANGELOG.md](CHANGELOG.md) under the new version with its date, set `version` in `pyproject.toml`, merge, and push a `vX.Y.Z` tag. The tag runs the CI checks, then pushes `ghcr.io/sandobserver/tellyard:X.Y.Z`, `:X.Y` and `:latest` for amd64 and arm64, and publishes a GitHub release with the version's CHANGELOG section. The release stops if the tag, `pyproject.toml` and a dated CHANGELOG section do not agree. The image carries an SBOM and build provenance. Every tag is also pushed to `docker.io/sandobserver/tellyard`, and a stable release rewrites the Docker Hub page from `README.md` with `tools/dockerhub_description.py`. Docker Hub needs the repository secret `DOCKERHUB_TOKEN`, an access token with Read, Write and Delete. Docker Hub refuses to move an `X.Y.Z` tag, so a version cannot be published twice. The `Docker Hub page` workflow updates the page by hand.
+
+### Unraid template
+
+`templates/tellyard.xml` is the Unraid Community Applications template. It takes each setting's description and default from its row in the `README.md` Settings table, and its `Changes` from the newest dated `CHANGELOG.md` section. A new setting goes into the template by hand with its name, display and mask; then run `uv run python tools/unraid_template.py`. Release prep runs the script in every release pull request. `tests/test_unraid.py` fails when the template is out of date, a template default differs from the built-in default, or a template setting has no README row.
 
 ### Automatic yt-dlp releases
 
