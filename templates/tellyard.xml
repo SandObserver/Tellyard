@@ -13,28 +13,37 @@
   <Overview>A live TV tuner for Plex and Jellyfin that you'll forget is running.[br][br]Tellyard shows up in Plex and Jellyfin as a network tuner. You list your channels in one file. When someone tunes in, Tellyard finds the channel's live stream on YouTube, Twitch, a broadcaster's page or an HLS address and passes it on without re-encoding. When they stop watching, it stops. The guide merges XMLTV schedules with placeholder blocks, so it is never empty.[br][br]Tellyard ships no channels. It starts with an empty line-up: put your channels.toml in /mnt/user/appdata/tellyard/config and it is loaded within a minute. Then add the tuner in Plex at UNRAID-IP:5004 and the guide at http://UNRAID-IP:5004/guide.xml.</Overview>
   <Requires>Plex or Jellyfin, and a channels.toml listing the live streams you may watch. Tellyard ships no channels.</Requires>
   <Changes>
-### 0.1.0-beta.2 - 2026-10-13
+### 0.1.0 - 2026-10-17
 
 #### Added
 
-- License Tellyard under Apache 2.0, with a NOTICE for the name and the software in the image.
-- Add a Legal section to the README.
-- Add documentation pages for channels, Plex, how it works, troubleshooting and maintenance.
-- Add a security policy, contributing guide and issue templates.
-- Publish the image for 64-bit ARM as well as Intel and AMD.
-- Add the Tellyard logo and a landing page at tellyard.sandobserver.com.
+- Add an Unraid template, `templates/tellyard.xml`, and Unraid install steps in the README.
+- Publish the image to Docker Hub as `sandobserver/tellyard` as well as to ghcr.io.
+- Add the `live` source for channels on YouTube, Twitch, Kick and other sites yt-dlp supports. The `youtube` key still works.
+- Add `HEARTBEAT_URL`, called once a minute while Tellyard is healthy.
+- Add `/healthz`, which answers 503 with a reason when the guide has stopped updating. `/health` stays as an alias.
 
 #### Changed
 
-- Point the install steps at the `beta` image tag until the first stable release.
-
-#### Removed
-
-- Remove the start-up cleanup of artwork files left by early test builds.
+- Point the install steps at the `latest` image tag.
+- Start with no channels when `channels.toml` is missing, and load it once it appears. `/healthz` reports the missing file.
+- Report a channel that is not live without naming YouTube, since `live` covers other sites.
+- Print a settings summary at start and write log lines as logfmt with UTC times.
+- Run the landing page guide on the visitor's clock, with shows that start at different times.
 
 #### Fixed
 
-- End a show when the next one starts, so overlapping listings from a guide source no longer collide.
+- Use `info` when `LOG_LEVEL` is set but empty.
+- Fix screen reader labels on the landing page and send a Content Security Policy with it.
+- Free the tuner within a second when the viewer leaves while a channel is still tuning, frozen or reconnecting.
+- Scan broadcaster pages and master playlists in linear time, so a hostile page cannot stall every stream.
+- Remove credentials, path and query of stream addresses from ffmpeg messages in the log.
+- Pick the default audio track when it is carried in the video stream.
+- Accept only http and https addresses from master playlists.
+- Stop a page, playlist or token request that takes longer than 30 seconds.
+- Report a `channels.toml` that is not UTF-8 as a channel file error, and keep the guide thread running after an unexpected error.
+- Answer a tune that fails on an unexpected playlist value with the usual stream error.
+- Explain that a subchannel number needs quotes in `channels.toml`, and ignore spaces around a page `match`.
   </Changes>
   <Category>MediaApp:Video MediaServer:Video</Category>
   <TemplateURL>https://raw.githubusercontent.com/SandObserver/Tellyard/main/templates/tellyard.xml</TemplateURL>
