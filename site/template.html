@@ -50,7 +50,7 @@
       body { margin: 0; background: var(--bg); color: var(--label); font-family: var(--font); -webkit-font-smoothing: antialiased; }
       a { color: var(--accent); text-decoration: none; }
       a:hover { color: var(--accent-strong); }
-      .hero p a, .lede a, .steps p a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+      .hero p a, .lede a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
       a:focus-visible, button:focus-visible, pre:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
       .skip { position: absolute; left: -9999px; top: 0; z-index: 50; padding: 10px 16px; border-radius: 0 0 10px 0; background: var(--accent-fill); color: var(--on-accent); font-weight: 600; }
       .skip:focus { left: 0; color: var(--on-accent); }
@@ -149,12 +149,6 @@
       .setup-grid { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 40px; }
       .setup-side { align-self: start; position: sticky; top: 24px; }
       .setup-side .lede { margin: 0; }
-      .steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 28px; min-width: 0; max-width: 860px; }
-      .steps > li { counter-increment: step; display: grid; gap: 10px; min-width: 0; }
-      .steps h3 { margin: 0; display: flex; align-items: center; gap: 12px; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
-      .steps h3::before { content: counter(step); flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--fill); display: grid; place-items: center; font-size: 14px; font-weight: 700; }
-      .steps p { margin: 0; font-size: 15px; line-height: 1.55; color: #d1d1d6; }
-      .steps code:not(pre code) { font-family: var(--mono); font-size: 0.88em; background: var(--bg-3); padding: 0.12em 0.4em; border-radius: 6px; color: var(--label); }
       .code { border: 1px solid var(--separator); border-radius: 12px; background: #0d1117; overflow: hidden; }
       .code-bar { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px 4px 16px; border-bottom: 1px solid var(--separator); font-family: var(--mono); font-size: 12.5px; color: var(--dim); }
       .copy { position: relative; height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--label); font: 600 13px var(--font); cursor: pointer; }
@@ -164,19 +158,42 @@
       .code pre code { font-family: var(--mono); background: none; padding: 0; font-size: 12.5px; line-height: 1.45; color: #e6edf3; }
       .code .c { color: rgba(235, 235, 245, 0.55); }
       .note { font-size: 13.5px; color: var(--dim); }
-      .setup-main { display: grid; gap: 28px; min-width: 0; max-width: 860px; }
-      .seg { display: flex; justify-self: start; max-width: 100%; overflow-x: auto; gap: 2px; padding: 3px; border: 1px solid var(--separator); border-radius: 11px; background: var(--bg-2); }
-      .seg button { flex: none; height: 36px; padding: 0 16px; border: 0; border-radius: 8px; background: transparent; color: var(--dim); font: 600 14px var(--font); cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease; }
-      .seg button:hover { color: var(--label); }
-      .seg button[aria-selected="true"] { background: var(--bg-3); color: var(--label); }
-      .steps-tail { counter-reset: step 3; }
+      #getting-started { --fill-1: rgba(120, 120, 128, 0.36); --fill-3: rgba(118, 118, 128, 0.24); --row-sep: rgba(255, 255, 255, 0.17); --ov-strong: rgba(255, 255, 255, 0.1); --menu-bg: rgba(30, 30, 32, 0.72); --menu-rim: rgba(255, 255, 255, 0.12); --shadow-pop: 0 8px 48px rgba(0, 0, 0, 0.45); --ease: cubic-bezier(0.32, 0.72, 0, 1); --pill-ease: cubic-bezier(0.22, 1, 0.36, 1); }
+      .pop-root { position: relative; }
+      .gs { display: grid; gap: 16px; align-content: start; min-width: 0; max-width: 860px; }
+      .gs.morphing { overflow: hidden; }
+      .sentence { margin: 0 0 4px; font-size: 22px; line-height: 2.1; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance; }
+      .pop { display: inline-flex; align-items: center; gap: 4px; vertical-align: baseline; min-height: 40px; border: 0; margin: 0 1px; padding: 0 10px 0 16px; border-radius: 20px; background: var(--fill-3); color: var(--accent); font: inherit; letter-spacing: inherit; cursor: pointer; transition: background 0.15s ease; }
+      .pop:hover, .pop[aria-expanded="true"] { background: var(--fill-1); }
+      .pop svg { width: 20px; height: 20px; opacity: 0.85; flex-shrink: 0; }
+      .fill-note { margin: -4px 0 0; padding-inline: 4px; font-size: 13.5px; line-height: 1.5; color: var(--dim); }
+      .fill-note a, .itext a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+      .fill-note code, .itext code { font-family: var(--mono); font-size: 0.9em; background: var(--bg-3); padding: 0.12em 0.4em; border-radius: 6px; color: var(--label); }
+      .menu { position: absolute; z-index: 30; margin: 0; padding: 10px 0; min-width: 230px; max-width: calc(100% - 16px); background: var(--menu-bg); -webkit-backdrop-filter: blur(32px) saturate(180%); backdrop-filter: blur(32px) saturate(180%); border: 0.5px solid var(--menu-rim); border-radius: 34px; box-shadow: var(--shadow-pop); opacity: 0; transform: scale(0.9); pointer-events: none; transition: opacity 0.14s ease, transform 0.14s ease; }
+      .menu.open { opacity: 1; transform: none; pointer-events: auto; transition: opacity 0.2s ease, transform 0.38s var(--ease); }
+      .menu [role="option"] { position: relative; margin-inline: 8px; border-radius: 20px; padding-block: 10px; padding-inline: 6px 16px; min-height: 40px; display: flex; align-items: center; gap: 8px; font-size: 17px; line-height: 1.29; letter-spacing: -0.025em; color: #f5f5f5; cursor: pointer; outline: none; }
+      .menu [role="option"]::before { content: ""; width: 24px; flex-shrink: 0; text-align: center; font-weight: 600; }
+      .menu [role="option"][aria-selected="true"]::before { content: "\2713"; }
+      .menu .mp { position: absolute; top: 0; left: 0; border-radius: 20px; background: var(--ov-strong); pointer-events: none; opacity: 0; transition: opacity 0.12s ease; }
+      .menu .mp.on { opacity: 1; transition: opacity 0.12s ease, transform 0.19s var(--pill-ease), width 0.19s var(--pill-ease), height 0.19s var(--pill-ease); }
+      @media (prefers-reduced-transparency: reduce) { .menu { background: var(--bg-3); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+      .ilist { margin: 0; padding: 0; list-style: none; background: var(--bg-2); border-radius: 18px; }
+      .ilist > li { position: relative; }
+      .ilist > li + li::before { content: ""; position: absolute; top: 0; inset-inline: 52px 0; height: 1px; background: var(--row-sep); }
+      .irow { display: flex; align-items: flex-start; gap: 12px; min-height: 52px; padding: 12px 16px; }
+      .irow svg { width: 24px; height: 24px; flex: none; color: var(--dim); }
+      .irow .ia { stroke: var(--accent); }
+      .imain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+      .iname { font-size: 15px; line-height: 1.33; font-weight: 500; color: var(--label); }
+      .itext { font-size: 13.5px; line-height: 1.45; color: var(--dim); }
+      .list-foot { padding-inline: 16px; margin: -6px 0 0; font-size: 13px; line-height: 1.38; color: var(--dim); }
 
       .pill, .btn, .copy { transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease; }
       .pill:active, .btn:active, .copy:active { transform: scale(0.97); }
       .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
       @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
-      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
-      @media (forced-colors: active) { .pill, .copy, .seg button { border: 1px solid ButtonText; } .seg button[aria-selected="true"] { outline: 2px solid Highlight; } }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } .menu, .menu.open { transform: none !important; } }
+      @media (forced-colors: active) { .pill, .copy, .pop { border: 1px solid ButtonText; } .menu [role="option"][aria-selected="true"] { outline: 2px solid Highlight; } }
 
       .footer { padding: 40px 0 48px; border-top: 1px solid var(--bg-2); }
       .foot { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main credits" "legal credits"; gap: 10px 48px; align-items: start; }
@@ -233,7 +250,7 @@
         .saa { font-size: 34px; }
         .band h2 { font-size: 26px; }
         .code pre code { font-size: 12px; }
-        .seg button { padding: 0 12px; font-size: 13.5px; }
+        .sentence { font-size: 20px; }
         .credits { margin-top: 10px; grid-auto-flow: row; grid-auto-columns: auto; gap: 14px; }
       }
     </style>
@@ -292,87 +309,16 @@
       </section>
 
       <section class="band" id="getting-started">
-        <div class="wrap setup-grid">
+        <div class="wrap setup-grid pop-root">
           <div class="setup-side">
             <h2>Get started</h2>
             <p class="lede">Free and self-hosted. Needs Docker on a 64-bit Intel, AMD or ARM machine, and Plex or Jellyfin.</p>
           </div>
-          <div class="setup-main">
-            <div class="seg" role="tablist" aria-label="Install method">
-              <button type="button" role="tab" id="m-compose" aria-controls="p-compose" aria-selected="true" data-m="compose">Docker Compose</button>
-              <button type="button" role="tab" id="m-run" aria-controls="p-run" aria-selected="false" tabindex="-1" data-m="run">docker run</button>
-              <button type="button" role="tab" id="m-unraid" aria-controls="p-unraid" aria-selected="false" tabindex="-1" data-m="unraid">Unraid</button>
-            </div>
-            <div role="tabpanel" id="p-compose" aria-labelledby="m-compose">
-              <ol class="steps">
-                <li>
-                  <h3>Write your channel list</h3>
-                  <p>Create a <code>config</code> folder with a <code>channels.toml</code>. Each channel needs a number, a name, a logo and one source. <a href="{{repo}}/blob/main/docs/channels.md">Every option</a>.</p>
-                  <div class="code"><div class="code-bar"><span>config/channels.toml</span><button type="button" class="copy" aria-label="Copy the channel example">Copy</button></div><pre tabindex="0" role="region" aria-label="Channel example"><code>{{channels_code}}</code></pre></div>
-                  <p class="note">Only add streams you are allowed to watch.</p>
-                </li>
-                <li>
-                  <h3>Create the compose file</h3>
-                  <p>Save this as <code>compose.yml</code> next to the <code>config</code> folder.</p>
-                  <div class="code"><div class="code-bar"><span>compose.yml</span><button type="button" class="copy" aria-label="Copy the compose file">Copy</button></div><pre tabindex="0" role="region" aria-label="Compose file"><code>{{compose_code}}</code></pre></div>
-                </li>
-                <li>
-                  <h3>Start it and check your channels</h3>
-                  <div class="code"><div class="code-bar"><span>Terminal, in the folder with compose.yml</span><button type="button" class="copy" aria-label="Copy the start commands">Copy</button></div><pre tabindex="0" role="region" aria-label="Start commands"><code>{{start_code}}
-{{check_code}}</code></pre></div>
-                  <p><code>tellyard check</code> tunes each channel once and reports the resolution it really sends.</p>
-                </li>
-              </ol>
-            </div>
-            <div role="tabpanel" id="p-run" aria-labelledby="m-run" hidden>
-              <ol class="steps">
-                <li>
-                  <h3>Write your channel list</h3>
-                  <p>Create a <code>config</code> folder with a <code>channels.toml</code>. Each channel needs a number, a name, a logo and one source. <a href="{{repo}}/blob/main/docs/channels.md">Every option</a>.</p>
-                  <div class="code"><div class="code-bar"><span>config/channels.toml</span><button type="button" class="copy" aria-label="Copy the channel example for docker run">Copy</button></div><pre tabindex="0" role="region" aria-label="Channel example for docker run"><code>{{channels_code}}</code></pre></div>
-                  <p class="note">Only add streams you are allowed to watch.</p>
-                </li>
-                <li>
-                  <h3>Start it</h3>
-                  <p>Run this in the folder that holds <code>config</code>.</p>
-                  <div class="code"><div class="code-bar"><span>Terminal, next to the config folder</span><button type="button" class="copy" aria-label="Copy the docker run command">Copy</button></div><pre tabindex="0" role="region" aria-label="docker run command"><code>{{run_code}}</code></pre></div>
-                </li>
-                <li>
-                  <h3>Check your channels</h3>
-                  <div class="code"><div class="code-bar"><span>Terminal</span><button type="button" class="copy" aria-label="Copy the check command">Copy</button></div><pre tabindex="0" role="region" aria-label="Check command"><code>{{check_code}}</code></pre></div>
-                  <p><code>tellyard check</code> tunes each channel once and reports the resolution it really sends.</p>
-                </li>
-              </ol>
-            </div>
-            <div role="tabpanel" id="p-unraid" aria-labelledby="m-unraid" hidden>
-              <ol class="steps">
-                <li>
-                  <h3>Install it from Apps</h3>
-                  <p>In Unraid, open <b>Apps</b>, search for <b>Tellyard</b> and choose <b>Install</b>. The defaults work: the tuner listens on port 5004 and keeps its files in <code>/mnt/user/appdata/tellyard</code>.</p>
-                  <p class="note">Not in Apps yet? Save the template from the Unraid terminal, then pick <b>Tellyard</b> under <b>Docker</b>, <b>Add Container</b>, <b>Template</b>.</p>
-                  <div class="code"><div class="code-bar"><span>Unraid terminal</span><button type="button" class="copy" aria-label="Copy the template command">Copy</button></div><pre tabindex="0" role="region" aria-label="Template command"><code>{{unraid_template_code}}</code></pre></div>
-                </li>
-                <li>
-                  <h3>Write your channel list</h3>
-                  <p>Tellyard starts with no channels. Copy the example into its config folder and replace the examples with your channels. It loads the file within a minute. <a href="{{repo}}/blob/main/docs/channels.md">Every option</a>.</p>
-                  <div class="code"><div class="code-bar"><span>Unraid terminal</span><button type="button" class="copy" aria-label="Copy the channel list commands">Copy</button></div><pre tabindex="0" role="region" aria-label="Channel list commands"><code>{{unraid_channels_code}}</code></pre></div>
-                  <p class="note">Only add streams you are allowed to watch.</p>
-                </li>
-                <li>
-                  <h3>Check your channels</h3>
-                  <div class="code"><div class="code-bar"><span>Unraid terminal</span><button type="button" class="copy" aria-label="Copy the Unraid check command">Copy</button></div><pre tabindex="0" role="region" aria-label="Unraid check command"><code>{{unraid_check_code}}</code></pre></div>
-                  <p>On Unraid the container is named <code>Tellyard</code>, with a capital T.</p>
-                </li>
-              </ol>
-            </div>
-            <ol class="steps steps-tail">
-              <li>
-                <h3>Add it to your media server</h3>
-                <p>Tellyard's address is your server's address with port 5004, such as <code>192.168.1.10:5004</code>, and its guide is <code>http://192.168.1.10:5004/guide.xml</code>.</p>
-                <p><b>Plex:</b> open <b>Settings &gt; Live TV &amp; DVR &gt; Set up Plex DVR</b>, enter the address by hand, and choose the XMLTV option for the guide. On an iPhone, iPad or Apple TV, turn on <b>Force Direct Play</b> in the Plex app. <a href="{{repo}}/blob/main/docs/plex.md">More about Plex</a>.</p>
-                <p><b>Jellyfin:</b> open <b>Dashboard &gt; Live TV</b>, add a tuner device of type HDHomeRun with the address, and add an XMLTV guide provider with the guide address.</p>
-              </li>
-            </ol>
+          <div class="gs" id="gs">
+            <p class="sentence">I use <button class="pop" type="button" aria-haspopup="listbox" aria-expanded="false" data-k="server" aria-label="Media server: Plex"><span>Plex</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 9l4-4 4 4M8 15l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button> and run containers with <button class="pop" type="button" aria-haspopup="listbox" aria-expanded="false" data-k="method" aria-label="Install method: Docker Compose"><span>Docker Compose</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 9l4-4 4 4M8 15l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>.</p>
+            <div class="gs" id="g-blocks">{{install_blocks}}</div>
+            <ul class="ilist" id="g-next">{{install_next}}</ul>
+            <p class="list-foot">Plex apps, guide refresh and log messages: <a href="{{repo}}/tree/main/docs">Full setup guide<span aria-hidden="true"> ›</span></a></p>
           </div>
         </div>
       </section>
@@ -404,6 +350,7 @@
     </footer>
     <p class="sr-only" id="live" aria-live="polite"></p>
     <script type="application/json" id="guide-data">{{guide_data}}</script>
+    <script type="application/json" id="install-data">{{install_data}}</script>
     <script>
       const live = document.getElementById("live");
       async function copyText(code) {
@@ -495,33 +442,9 @@
       }
       tick();
       setInterval(tick, 1000);
-      const tabs = [...document.querySelectorAll('.seg [role="tab"]')];
-      function pick(tab, focus) {
-        for (const t of tabs) {
-          const on = t === tab;
-          t.setAttribute("aria-selected", String(on));
-          t.tabIndex = on ? 0 : -1;
-          document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
-        }
-        if (focus) tab.focus();
-        try { localStorage.setItem("tellyard-install", tab.dataset.m); } catch {}
-      }
-      for (const tab of tabs) {
-        tab.addEventListener("click", () => pick(tab, false));
-        tab.addEventListener("keydown", (event) => {
-          const i = tabs.indexOf(tab);
-          const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[event.key];
-          if (next === undefined) return;
-          event.preventDefault();
-          pick(tabs[(next + tabs.length) % tabs.length], true);
-        });
-      }
-      try {
-        const saved = tabs.find((t) => t.dataset.m === localStorage.getItem("tellyard-install"));
-        if (saved) pick(saved, false);
-      } catch {}
-      for (const button of document.querySelectorAll(".copy")) {
-        button.addEventListener("click", async () => {
+      document.addEventListener("click", async (event) => {
+        const button = event.target.closest(".copy");
+        if (button) {
           const code = button.closest(".code").querySelector("code");
           try {
             await copyText(code);
@@ -537,8 +460,111 @@
           } catch {
             getSelection().selectAllChildren(code);
           }
-        });
+        }
+      });
+      const install = JSON.parse(document.getElementById("install-data").textContent);
+      const pickers = {
+        server: { name: "Media server", options: install.servers },
+        method: { name: "Install method", options: install.methods },
+      };
+      const choice = { server: "plex", method: "compose" };
+      try {
+        const saved = JSON.parse(localStorage.getItem("tellyard-install")) || {};
+        for (const k of Object.keys(choice)) if (pickers[k].options[saved[k]]) choice[k] = saved[k];
+      } catch {}
+      const gs = document.getElementById("gs");
+      function morph(mutate, animate) {
+        const from = gs.offsetHeight;
+        mutate();
+        if (!animate || reduce.matches) return;
+        const to = gs.offsetHeight;
+        if (from === to) return;
+        gs.classList.add("morphing");
+        gs.animate({ height: [`${from}px`, `${to}px`] }, { duration: Math.min(480, 260 + Math.abs(to - from) / 4), easing: "cubic-bezier(0.32, 0.72, 0, 1)" })
+          .finished.finally(() => gs.classList.remove("morphing"));
       }
+      function drawInstall(animate) {
+        morph(() => {
+          document.getElementById("g-blocks").innerHTML = install.methods[choice.method].html;
+          document.getElementById("g-next").innerHTML = install.servers[choice.server].html;
+          for (const b of gs.querySelectorAll(".pop")) {
+            const k = b.dataset.k, name = pickers[k].options[choice[k]].label;
+            b.querySelector("span").textContent = name;
+            b.setAttribute("aria-label", `${pickers[k].name}: ${name}`);
+          }
+        }, animate);
+        if (animate) live.textContent = `Install steps now show ${install.servers[choice.server].label} with ${install.methods[choice.method].label}.`;
+      }
+      let openMenu = null;
+      function closeMenu(refocus) {
+        if (!openMenu) return;
+        const { list, btn } = openMenu;
+        list.classList.remove("open");
+        btn.setAttribute("aria-expanded", "false");
+        btn.removeAttribute("aria-controls");
+        setTimeout(() => list.remove(), 160);
+        if (refocus) btn.focus({ preventScroll: true });
+        openMenu = null;
+      }
+      function placePill(list, option) {
+        const pill = list.querySelector(".mp");
+        if (!option) { pill.classList.remove("on"); return; }
+        pill.style.width = `${option.offsetWidth}px`;
+        pill.style.height = `${option.offsetHeight}px`;
+        pill.style.transform = `translate3d(${option.offsetLeft}px, ${option.offsetTop}px, 0)`;
+        if (!pill.classList.contains("on")) { pill.getBoundingClientRect(); pill.classList.add("on"); }
+      }
+      function showMenu(btn) {
+        if (openMenu?.btn === btn) { closeMenu(true); return; }
+        closeMenu(false);
+        const k = btn.dataset.k;
+        const root = btn.closest(".pop-root");
+        const list = document.createElement("div");
+        list.className = "menu";
+        list.id = `menu-${k}`;
+        list.setAttribute("role", "listbox");
+        list.setAttribute("aria-label", pickers[k].name);
+        list.innerHTML = '<div class="mp" aria-hidden="true"></div>' + Object.entries(pickers[k].options)
+          .map(([v, o]) => `<div role="option" tabindex="-1" data-v="${v}" aria-selected="${v === choice[k]}">${o.label}</div>`).join("");
+        root.append(list);
+        const opts = [...list.querySelectorAll("[role=option]")];
+        const rr = root.getBoundingClientRect(), br = btn.getBoundingClientRect();
+        const left = Math.min(Math.max(8, br.left - rr.left), rr.width - list.offsetWidth - 8);
+        list.style.left = `${left}px`;
+        list.style.top = `${br.bottom - rr.top + 6}px`;
+        list.style.transformOrigin = `${Math.max(16, Math.min(list.offsetWidth - 16, br.left - rr.left - left + br.width / 2))}px -6px`;
+        btn.setAttribute("aria-expanded", "true");
+        btn.setAttribute("aria-controls", list.id);
+        requestAnimationFrame(() => list.classList.add("open"));
+        openMenu = { list, btn };
+        let active = Math.max(0, opts.findIndex((o) => o.dataset.v === choice[k]));
+        const setActive = (i) => { active = (i + opts.length) % opts.length; opts[active].focus({ preventScroll: true }); placePill(list, opts[active]); };
+        const choose = (o) => {
+          closeMenu(true);
+          if (choice[k] === o.dataset.v) return;
+          choice[k] = o.dataset.v;
+          try { localStorage.setItem("tellyard-install", JSON.stringify(choice)); } catch {}
+          drawInstall(true);
+        };
+        for (const o of opts) {
+          o.addEventListener("pointerenter", () => placePill(list, o));
+          o.addEventListener("click", () => choose(o));
+        }
+        list.addEventListener("pointerleave", () => placePill(list, document.activeElement?.closest?.(".menu [role=option]")));
+        list.addEventListener("focusout", (e) => { if (!list.contains(e.relatedTarget) && e.relatedTarget !== btn) closeMenu(false); });
+        list.addEventListener("keydown", (e) => {
+          const step = { ArrowDown: active + 1, ArrowUp: active - 1, Home: 0, End: opts.length - 1 }[e.key];
+          if (step !== undefined) { e.preventDefault(); setActive(step); }
+          else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(opts[active]); }
+          else if (e.key === "Escape") { e.preventDefault(); closeMenu(true); }
+          else if (e.key === "Tab") closeMenu(true);
+        });
+        requestAnimationFrame(() => setActive(active));
+      }
+      for (const b of gs.querySelectorAll(".pop")) b.addEventListener("click", () => showMenu(b));
+      document.addEventListener("pointerdown", (e) => { if (openMenu && !openMenu.list.contains(e.target) && !openMenu.btn.contains(e.target)) closeMenu(false); });
+      addEventListener("resize", () => closeMenu(false));
+      if (choice.server !== "plex" || choice.method !== "compose") drawInstall(false);
     </script>
   </body>
 </html>
