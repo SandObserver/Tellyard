@@ -49,6 +49,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     logfmt.setup(settings.log_level)
     if args.command == "health":
         return _health(settings)
+    if args.command == "serve":
+        return _serve(settings)
     try:
         lineup = channels.load(settings.channels_file)
     except ChannelError as error:
@@ -69,18 +71,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         results = check.check(chosen, Resolver(settings), measure, settings.min_height)
         print(check.report(results))
         return 0 if all(result.ok for result in results) else 1
-    if args.command == "guide":
-        data = build(lineup, datetime.now(UTC), settings.guide_days)
-        if args.output:
-            args.output.write_bytes(data)
-        else:
-            sys.stdout.buffer.write(data)
-        return 0
-    return _serve(settings)
+    data = build(lineup, datetime.now(UTC), settings.guide_days)
+    if args.output:
+        args.output.write_bytes(data)
+    else:
+        sys.stdout.buffer.write(data)
+    return 0
 
 
 def _serve(settings: Settings) -> int:
-    store = ChannelStore(settings.channels_file)
+    try:
+        store = ChannelStore(settings.channels_file)
+    except ChannelError as error:
+        print(f"tellyard: {error}", file=sys.stderr)
+        return 2
     guide = Guide(settings.data_dir / "guide.xml", settings.guide_days)
     app = App(settings, store, guide)
     server = Server(("", settings.port), app)
