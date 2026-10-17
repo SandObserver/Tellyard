@@ -136,7 +136,7 @@ def test_youtube_uses_the_live_manifest(make_settings: Callable[..., Settings]) 
     fetch = pages({"https://manifest.googlevideo.com/master.m3u8": MASTER})
     settings = make_settings(YTDLP="/opt/yt-dlp", YTDLP_ARGS="--proxy http://p:1")
     resolver = Resolver(settings, runner=runner_returning(info, seen), fetcher=fetch)
-    resolved = resolver.resolve(channel(youtube="https://www.youtube.com/@news/live"))
+    resolved = resolver.resolve(channel(live="https://www.youtube.com/@news/live"))
     assert resolved.height == 1080
     assert seen[0][0] == "/opt/yt-dlp"
     assert seen[0][-3:] == ["--proxy", "http://p:1", "https://www.youtube.com/@news/live"]
@@ -149,6 +149,25 @@ def test_youtube_falls_back_to_format_manifests(make_settings: Callable[..., Set
     fetch = pages({"https://m.example.com/x.m3u8": MASTER})
     resolver = Resolver(make_settings(), runner=runner_returning(info), fetcher=fetch)
     assert resolver.resolve(channel(youtube="https://www.youtube.com/@n/live")).height == 1080
+
+
+@pytest.mark.parametrize(
+    ("url", "repair"),
+    [
+        ("https://www.twitch.tv/example", True),
+        ("https://twitch.tv/example", True),
+        ("https://www.youtube.com/@n/live", False),
+        ("https://nottwitch.tv/example", False),
+    ],
+)
+def test_live_repairs_timestamps_only_for_twitch(
+    make_settings: Callable[..., Settings], url: str, repair: bool
+) -> None:
+    info = json.dumps({"live_status": "is_live", "manifest_url": "https://m.example.com/x.m3u8"})
+    resolver = Resolver(
+        make_settings(), runner=runner_returning(info), fetcher=pages({"https://m.example.com/x.m3u8": MASTER})
+    )
+    assert resolver.resolve(channel(live=url)).repair_timestamps is repair
 
 
 @pytest.mark.parametrize(

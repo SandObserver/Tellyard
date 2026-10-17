@@ -11,7 +11,7 @@ Channels live in one file, `config/channels.toml`. [`channels.example.toml`](../
 number = 101
 name = "Example News"
 logo = "https://example.com/logos/example-news.png"
-youtube = "https://www.youtube.com/@example/live"
+live = "https://www.youtube.com/@example/live"
 [channel.guide]
 category = "News"
 ```
@@ -21,16 +21,16 @@ category = "News"
 | `number` | Channel number, such as `101`, or `"101.1"` in quotes for a subchannel. Each number once. |
 | `name` | Name shown in Plex and the guide. |
 | `logo` | Public https link to the channel logo. Plex loads it as given. |
-| `youtube` | A YouTube channel's live page, such as `https://www.youtube.com/@example/live`. |
+| `live` | A live channel on YouTube, Twitch, Kick or another site yt-dlp supports, such as `https://www.youtube.com/@example/live` or `https://www.twitch.tv/example`. `youtube` is the older name for this key and still works. |
 | `page` | A web page that contains the stream's `.m3u8` address. |
 | `hls` | The stream's `.m3u8` playlist address. |
-| `match` | For `youtube`: part of the title of the live stream to play, when the channel runs several. For `page`: part of the `.m3u8` address to pick. |
+| `match` | For `live` on YouTube: part of the title of the live stream to play, when the channel runs several. For `page`: part of the `.m3u8` address to pick. |
 | `headers` | For `page` and `hls`: extra request headers, such as `{ Referer = "https://example.com/" }`. |
 | `token` | For `hls`: a token service that returns a fresh signed address before every tune. `{url}` in it becomes the `hls` address. The reply must be JSON. |
 | `token_field` | The JSON key holding the signed address. Default `url`. |
 | `min_height` | Lowest resolution `tellyard check` accepts for this channel, such as `720`. Overrides `MIN_HEIGHT`. |
 
-Set exactly one of `youtube`, `page` or `hls`.
+Set exactly one of `live`, `page` or `hls`.
 
 ## The guide
 
@@ -60,6 +60,7 @@ A channel without `xmltv` gets placeholder blocks only.
 ## Finding sources
 
 - **YouTube:** open the channel's page and add `/live` to its address. If the channel runs several live streams at once, add `match` with part of the stream's title.
+- **Twitch and Kick:** use the channel's address, such as `https://www.twitch.tv/example`. Twitch shows a 30-second "Commercial break in progress" screen each time you tune in.
 - **A broadcaster's own stream:** many broadcasters publish their live channel as an HLS playlist (`.m3u8`). Use `hls` with the playlist address, or `page` with the address of the page that links to it. Some streams need a `Referer` header, set with `headers`.
 - **Guides:** any XMLTV file or address works. Find your channel in the file and copy the `id` from its `<channel id="...">` line.
 - **Logos:** a public https link to a wide, transparent PNG, the largest official version you can find.

@@ -7,7 +7,7 @@
 Plex sees Tellyard as an HDHomeRun network tuner with `TUNERS` tuners. When a viewer picks a channel, Plex asks Tellyard for `/stream/<number>`, and Tellyard:
 
 1. Finds the channel's current stream:
-   - `youtube`: asks yt-dlp for the channel's live stream. With `match`, it first lists the channel's live streams and takes the one whose title contains the text. If none does, it uses the `/live` page.
+   - `live`: asks yt-dlp for the channel's live stream. On YouTube, with `match`, it first lists the channel's live streams and takes the one whose title contains the text. If none does, it uses the `/live` page.
    - `page`: loads the page and takes the first `.m3u8` address in it, or the first one containing `match`.
    - `hls`: uses the playlist address. With `token`, it first asks the token service for a signed address.
 2. Reads the playlist and picks the highest resolution, with its default audio track.

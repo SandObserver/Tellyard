@@ -4,13 +4,13 @@ from typing import Any
 import pytest
 
 from tellyard import channels
-from tellyard.channels import ChannelError, HlsSource, PageSource, YouTubeSource
+from tellyard.channels import ChannelError, HlsSource, LiveSource, PageSource
 
 LOGO = "https://example.com/logo.png"
 
 
 def entry(**overrides: Any) -> dict[str, Any]:
-    base: dict[str, Any] = {"number": 101, "name": "News", "logo": LOGO, "youtube": "https://www.youtube.com/@n/live"}
+    base: dict[str, Any] = {"number": 101, "name": "News", "logo": LOGO, "live": "https://www.youtube.com/@n/live"}
     base.update(overrides)
     return {key: value for key, value in base.items() if value is not None}
 
@@ -22,7 +22,7 @@ def parse(*entries: dict[str, Any], **top: Any) -> channels.Lineup:
 def test_loads_the_example_file() -> None:
     lineup = channels.load(Path(__file__).parent.parent / "channels.example.toml")
     assert {type(channel.source).__name__ for channel in lineup.channels} == {
-        "YouTubeSource",
+        "LiveSource",
         "HlsSource",
         "PageSource",
     }
@@ -31,23 +31,34 @@ def test_loads_the_example_file() -> None:
 def test_parses_each_source_kind() -> None:
     lineup = parse(
         entry(number=1),
-        entry(number=2, youtube=None, hls="https://cdn.example.com/a.m3u8", headers={"Referer": "https://x.example/"}),
-        entry(number=3, youtube=None, page="https://example.com/live", match=" cdn "),
+        entry(number=2, live=None, hls="https://cdn.example.com/a.m3u8", headers={"Referer": "https://x.example/"}),
+        entry(number=3, live=None, page="https://example.com/live", match=" cdn "),
     )
-    youtube, hls, page = (channel.source for channel in lineup.channels)
-    assert isinstance(youtube, YouTubeSource)
+    live, hls, page = (channel.source for channel in lineup.channels)
+    assert isinstance(live, LiveSource)
     assert hls == HlsSource("https://cdn.example.com/a.m3u8", (("Referer", "https://x.example/"),))
     assert page == PageSource("https://example.com/live", "cdn", ())
 
 
-def test_youtube_match_keeps_the_title_text() -> None:
-    channel = parse(entry(youtube="https://www.youtube.com/@LiveNOWFOX/live", match=" 24/7 ")).channels[0]
-    assert channel.source == YouTubeSource("https://www.youtube.com/@LiveNOWFOX/live", "24/7")
+def test_live_match_keeps_the_title_text() -> None:
+    channel = parse(entry(live="https://www.youtube.com/@LiveNOWFOX/live", match=" 24/7 ")).channels[0]
+    assert channel.source == LiveSource("https://www.youtube.com/@LiveNOWFOX/live", "24/7")
+
+
+def test_live_accepts_other_sites_and_the_youtube_key() -> None:
+    lineup = parse(
+        entry(number=1, live="https://www.twitch.tv/example"),
+        entry(number=2, live=None, youtube="https://www.youtube.com/@n/live"),
+    )
+    assert [channel.source for channel in lineup.channels] == [
+        LiveSource("https://www.twitch.tv/example"),
+        LiveSource("https://www.youtube.com/@n/live"),
+    ]
 
 
 def test_hls_token_settings() -> None:
     channel = parse(
-        entry(youtube=None, hls="https://cdn.example.com/a.m3u8", token="https://t.example.com/s?url={url}")
+        entry(live=None, hls="https://cdn.example.com/a.m3u8", token="https://t.example.com/s?url={url}")
     ).channels[0]
     assert channel.source == HlsSource("https://cdn.example.com/a.m3u8", (), "https://t.example.com/s?url={url}", "url")
 
@@ -101,15 +112,17 @@ def test_min_height_is_optional_per_channel() -> None:
         ({"channel": [entry(number=101.1)]}, 'in quotes, such as number = "101.1"'),
         ({"channel": [entry(name=" ")]}, "name must be non-empty"),
         ({"channel": [entry(logo="ftp://x")]}, "logo must be an http"),
-        ({"channel": [entry(youtube=None)]}, "exactly one of"),
+        ({"channel": [entry(live=None)]}, "exactly one of"),
         ({"channel": [entry(hls="https://a.example/x.m3u8")]}, "exactly one of"),
+        ({"channel": [entry(youtube="https://www.youtube.com/@n/live")]}, "exactly one of hls, live or page"),
+        ({"channel": [entry(live="https://www.twitch.tv/example", match="x")]}, "needs a YouTube channel URL"),
         ({"channel": [entry(colour="red")]}, "unknown keys colour"),
-        ({"channel": [entry(youtube=None, hls="https://a.example/x.m3u8", match="x")]}, "match only applies"),
-        ({"channel": [entry(youtube="https://www.youtube.com/watch?v=abc", match="x")]}, "needs a channel URL"),
-        ({"channel": [entry(headers={"Referer": "https://x/"})]}, "not supported for youtube"),
-        ({"channel": [entry(youtube=None, hls="https://a.example/x", headers={"Bad Name": "x"})]}, "not valid"),
-        ({"channel": [entry(youtube=None, hls="https://a.example/x", headers={"X": "a\r\nb"})]}, "not valid"),
-        ({"channel": [entry(youtube=None, page="https://a.example/", match=3)]}, "match must be text"),
+        ({"channel": [entry(live=None, hls="https://a.example/x.m3u8", match="x")]}, "match only applies"),
+        ({"channel": [entry(live="https://www.youtube.com/watch?v=abc", match="x")]}, "needs a YouTube channel URL"),
+        ({"channel": [entry(headers={"Referer": "https://x/"})]}, "not supported for live"),
+        ({"channel": [entry(live=None, hls="https://a.example/x", headers={"Bad Name": "x"})]}, "not valid"),
+        ({"channel": [entry(live=None, hls="https://a.example/x", headers={"X": "a\r\nb"})]}, "not valid"),
+        ({"channel": [entry(live=None, page="https://a.example/", match=3)]}, "match must be text"),
         ({"channel": [entry(guide={"hours": 5})]}, "divide a day"),
         ({"channel": [entry(guide={"hours": 30})]}, "between 0.5 and 24"),
         ({"channel": [entry(guide={"id": "x"})]}, "id needs xmltv"),
@@ -119,8 +132,8 @@ def test_min_height_is_optional_per_channel() -> None:
         ({"channel": [entry(guide={"tags": []})]}, "unknown keys tags"),
         ({"channel": [entry(min_height=0)]}, "positive whole number"),
         ({"channel": [entry(token="https://t.example/s?url={url}")]}, "token only applies to hls"),
-        ({"channel": [entry(youtube=None, hls="https://a.example/x", token_field="u")]}, "token_field needs token"),
-        ({"channel": [entry(youtube=None, hls="https://a.example/x", token="nope")]}, "token must be an http"),
+        ({"channel": [entry(live=None, hls="https://a.example/x", token_field="u")]}, "token_field needs token"),
+        ({"channel": [entry(live=None, hls="https://a.example/x", token="nope")]}, "token must be an http"),
         ({"channel": [entry()], "guide_sources": {"Bad Name": "https://x/"}}, "lowercase"),
         ({"channel": ["not a table"]}, "must be a table"),
     ],

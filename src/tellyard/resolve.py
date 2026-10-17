@@ -6,12 +6,12 @@ import subprocess
 import threading
 import urllib.parse
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from time import monotonic
 from typing import Any
 
 from tellyard import hls
-from tellyard.channels import Channel, Headers, HlsSource, PageSource, YouTubeSource
+from tellyard.channels import Channel, Headers, HlsSource, LiveSource, PageSource
 from tellyard.net import FetchError, fetch_text
 from tellyard.settings import Settings
 
@@ -22,6 +22,7 @@ YTDLP_TIMEOUT = 60.0
 STREAM_SCAN = 20
 FETCH_ATTEMPTS = 3
 CANCEL_POLL = 0.5
+TWITCH_HOSTS = ("twitch.tv", ".twitch.tv")
 
 type Runner = Callable[[Sequence[str], float, threading.Event | None], str]
 type Fetcher = Callable[[str, Headers], tuple[str, str]]
@@ -42,6 +43,12 @@ class Resolved:
     audio: str | None
     height: int | None
     headers: Headers
+    repair_timestamps: bool = False
+
+
+def is_twitch(url: str) -> bool:
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    return host == TWITCH_HOSTS[0] or host.endswith(TWITCH_HOSTS[1])
 
 
 def run_command(args: Sequence[str], timeout: float, cancel: threading.Event | None = None) -> str:
@@ -94,9 +101,9 @@ class Resolver:
                 return self._pick(url, headers, cancel)
             case PageSource():
                 return self._pick(self._from_page(source), source.headers, cancel)
-            case YouTubeSource():
-                manifest = self._from_youtube(self._youtube_target(source, cancel), cancel)
-                return self._pick(manifest, (), cancel)
+            case LiveSource():
+                manifest = self._from_ytdlp(self._youtube_target(source, cancel), cancel)
+                return replace(self._pick(manifest, (), cancel), repair_timestamps=is_twitch(source.url))
 
     def _signed(self, source: HlsSource) -> str:
         address = source.token.replace("{url}", urllib.parse.quote(source.url, safe=""))
@@ -126,7 +133,7 @@ class Resolver:
         hint = f" containing {source.match!r}" if source.match else ""
         raise ResolveError(f"no playlist URL{hint} on the channel page")
 
-    def _youtube_target(self, source: YouTubeSource, cancel: threading.Event) -> str:
+    def _youtube_target(self, source: LiveSource, cancel: threading.Event) -> str:
         if not source.match:
             return source.url
         channel = source.url.rstrip("/").removesuffix("/live")
@@ -150,12 +157,12 @@ class Resolver:
         log.info("no live stream matches, using the live page", extra={"url": channel, "match": source.match})
         return source.url
 
-    def _from_youtube(self, url: str, cancel: threading.Event) -> str:
+    def _from_ytdlp(self, url: str, cancel: threading.Event) -> str:
         args = [self._settings.ytdlp, "--no-warnings", "--no-playlist", "--skip-download", "-J"]
         args += [*self._settings.ytdlp_args, url]
         info = _json(self._run(args, YTDLP_TIMEOUT, cancel))
         if info.get("live_status") != "is_live":
-            raise ResolveError(f"the YouTube channel is not live right now ({info.get('live_status') or 'unknown'})")
+            raise ResolveError(f"the channel is not live right now ({info.get('live_status') or 'unknown'})")
         manifest = info.get("manifest_url")
         if not isinstance(manifest, str):
             formats = info.get("formats")
@@ -165,7 +172,7 @@ class Resolver:
                 None,
             )
         if not isinstance(manifest, str) or not manifest:
-            raise ResolveError("YouTube returned no HLS playlist for the stream")
+            raise ResolveError("yt-dlp returned no HLS playlist for the stream")
         return manifest
 
     def _pick(self, url: str, headers: Headers, cancel: threading.Event) -> Resolved:

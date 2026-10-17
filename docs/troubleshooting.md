@@ -5,7 +5,7 @@
 Read the log first: `docker logs --tail 100 tellyard`. At start, Tellyard prints a short summary of its settings. After that, each line has the UTC time, a level (`DBG`, `INF`, `WRN` or `ERR`), the message, and details as `key=value`:
 
 ```text
-2026-10-12T21:04:17.512Z WRN msg="stream failed to start" channel=101 title="Example News" reason="the YouTube channel is not live right now (was_live)"
+2026-10-12T21:04:17.512Z WRN msg="stream failed to start" channel=101 title="Example News" reason="the channel is not live right now (was_live)"
 ```
 
 Set `LOG_LEVEL=debug` to see every request Plex makes. `docker exec tellyard tellyard check 101` tunes one channel and prints what went wrong.
@@ -14,10 +14,10 @@ Set `LOG_LEVEL=debug` to see every request Plex makes. `docker exec tellyard tel
 
 | Message | What to do |
 | --- | --- |
-| `stream failed to start`, reason `the YouTube channel is not live right now` | The channel has no live stream at the moment. Open its `/live` page in a browser. If it runs several streams, set `match` to part of the right stream's title. |
-| `stream failed to start`, reason `YouTube returned no HLS playlist for the stream` | YouTube changed how it serves the stream. Update to the latest Tellyard release, which carries the latest yt-dlp. |
-| `stream failed to start`, reason with a yt-dlp error, such as `Sign in to confirm you're not a bot` | YouTube refused the request from your server's address. Update to the latest release and try again later. |
-| `stream failed to start`, reason `yt-dlp took longer than 60 s` | YouTube or your connection is slow. Tune in again. |
+| `stream failed to start`, reason `the channel is not live right now` | The channel has no live stream at the moment. Open its page in a browser. If a YouTube channel runs several streams, set `match` to part of the right stream's title. |
+| `stream failed to start`, reason `yt-dlp returned no HLS playlist for the stream` | The site changed how it serves the stream. Update to the latest Tellyard release, which carries the latest yt-dlp. |
+| `stream failed to start`, reason with a yt-dlp error, such as `Sign in to confirm you're not a bot` | The site refused the request from your server's address. Update to the latest release and try again later. |
+| `stream failed to start`, reason `yt-dlp took longer than 60 s` | The site or your connection is slow. Tune in again. |
 | `stream failed to start`, reason `no playlist URL on the channel page` | The page no longer contains an `.m3u8` address, or none containing `match`. Find the playlist again, see [Finding sources](channels.md#finding-sources). |
 | `stream failed to start`, reason `could not load the playlist:` with `HTTP 403` | The playlist refuses the request. It may need a `Referer` header (`headers`), or a fresh signed address (`token`). |
 | `stream failed to start`, reason `the stream URL did not return an HLS playlist` | The `hls` address is not a playlist, or the server answered with an error page. |
