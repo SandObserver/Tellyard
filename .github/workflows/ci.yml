@@ -88,7 +88,7 @@ jobs:
           mkdir -p unraid/config unraid/data
           chmod 0777 unraid/config unraid/data
           env=()
-          for name in $(grep -o 'Target="[A-Z_]*"' templates/tellyard.xml | cut -d'"' -f2); do env+=(-e "$name="); done
+          while read -r name; do env+=(-e "$name="); done < <(grep -o 'Target="[A-Z_]*"' templates/tellyard.xml | cut -d'"' -f2)
           docker run -d --name unraid --user 99:100 --init --read-only --tmpfs /tmp --cap-drop ALL \
             --security-opt no-new-privileges:true "${env[@]}" \
             -v "$PWD/unraid/config:/config:ro" -v "$PWD/unraid/data:/data" tellyard:ci
