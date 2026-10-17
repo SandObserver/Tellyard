@@ -32,7 +32,7 @@ def test_parses_each_source_kind() -> None:
     lineup = parse(
         entry(number=1),
         entry(number=2, youtube=None, hls="https://cdn.example.com/a.m3u8", headers={"Referer": "https://x.example/"}),
-        entry(number=3, youtube=None, page="https://example.com/live", match="cdn"),
+        entry(number=3, youtube=None, page="https://example.com/live", match=" cdn "),
     )
     youtube, hls, page = (channel.source for channel in lineup.channels)
     assert isinstance(youtube, YouTubeSource)
@@ -98,6 +98,7 @@ def test_min_height_is_optional_per_channel() -> None:
         ({"channel": [entry(), entry()]}, "more than once"),
         ({"channel": [entry(number="1a")]}, "number must look like"),
         ({"channel": [entry(number=True)]}, "number must look like"),
+        ({"channel": [entry(number=101.1)]}, 'in quotes, such as number = "101.1"'),
         ({"channel": [entry(name=" ")]}, "name must be non-empty"),
         ({"channel": [entry(logo="ftp://x")]}, "logo must be an http"),
         ({"channel": [entry(youtube=None)]}, "exactly one of"),

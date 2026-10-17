@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Stop a page, playlist or token request that takes longer than 30 seconds.
 - Report a `channels.toml` that is not UTF-8 as a channel file error, and keep the guide thread running after an unexpected error.
 - Answer a tune that fails on an unexpected playlist value with the usual stream error.
+- Explain that a subchannel number needs quotes in `channels.toml`, and ignore spaces around a page `match`.
 
 ## [0.1.0-beta.2] - 2026-10-13
 

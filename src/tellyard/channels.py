@@ -153,9 +153,11 @@ def _channel(value: Any, index: int, sources: Mapping[str, str]) -> Channel:
         raise ChannelError(f"{where}: unknown keys {', '.join(sorted(unknown))}")
     name = _text(raw_name, f"{where} name")
     number = entry.get("number")
+    if isinstance(number, float):
+        raise ChannelError(f'{where}: write subchannel numbers in quotes, such as number = "{number}"')
     number_text = str(number) if isinstance(number, int | str) and not isinstance(number, bool) else ""
     if not NUMBER.match(number_text):
-        raise ChannelError(f"{where}: number must look like 101 or 101.1")
+        raise ChannelError(f'{where}: number must look like 101 or "101.1"')
     logo = _url(entry.get("logo"), f"{where} logo")
     source = _source(entry, where)
     guide = _table(entry.get("guide", {}), f"{where} guide")
@@ -180,7 +182,7 @@ def _source(entry: Mapping[str, Any], where: str) -> Source:
     if kind == "youtube":
         return _youtube(url, match, headers, where)
     if kind == "page":
-        return PageSource(url, match, headers)
+        return PageSource(url, match.strip(), headers)
     if match:
         raise ChannelError(f"{where}: match only applies to page and youtube sources")
     return _hls(entry, url, headers, where)
