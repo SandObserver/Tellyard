@@ -18,7 +18,7 @@ category = "News"
 
 | Key | What it does |
 | --- | --- |
-| `number` | Channel number, such as `101` or `101.1`. Each number once. |
+| `number` | Channel number, such as `101`, or `"101.1"` in quotes for a subchannel. Each number once. |
 | `name` | Name shown in Plex and the guide. |
 | `logo` | Public https link to the channel logo. Plex loads it as given. |
 | `youtube` | A YouTube channel's live page, such as `https://www.youtube.com/@example/live`. |
