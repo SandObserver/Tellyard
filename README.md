@@ -134,14 +134,6 @@ Tellyard loads the file within a minute. Check the channels with `docker exec Te
 your Unraid server's address. The template runs as Unraid's `nobody` user (`--user=99:100`) with the
 same lockdown as the compose file, and restarts the container after a crash.
 
-If **Apps** does not list Tellyard yet, save the template from the Unraid terminal, then pick
-**Tellyard** under **Docker**, **Add Container**, **Template**:
-
-```sh
-curl -fsSL -o /boot/config/plugins/dockerMan/templates-user/my-Tellyard.xml \
-  https://raw.githubusercontent.com/SandObserver/Tellyard/main/templates/tellyard.xml
-```
-
 ## Channels
 
 Each channel in `channels.toml` needs a number, a name, a logo and one source:
