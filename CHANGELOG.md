@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Let landing page visitors pick Plex or Jellyfin and Docker Compose, docker run or Unraid, and show the matching install steps.
+- Drop the manual Unraid template steps now that Tellyard is in Unraid Apps, and name the Docker Hub image on the landing page.
 
 ## [0.1.0] - 2026-10-17
 

@@ -175,6 +175,10 @@ const note = (html) => `<p class="fill-note">${html}</p>`;
 const channelsCode = codeBlock('Channels', 'toml');
 const checkCode = codeBlock('4\\. Check your channels', 'sh');
 const everyOption = `<a href="${repo}/blob/main/docs/channels.md">Every option</a>`;
+const checkNote = note(
+  '<code>tellyard check</code> tunes each channel once and reports the resolution it really sends. ' +
+    'The image is also on <a href="https://hub.docker.com/r/sandobserver/tellyard">Docker Hub</a> as <code>sandobserver/tellyard</code>.',
+);
 const channelNote = note(
   `Put it in a <code>config</code> folder. Each channel needs a number, a name, a logo and one source. ${everyOption}. Only add streams you are allowed to watch.`,
 );
@@ -198,7 +202,7 @@ const install = {
         channelNote +
         code('compose.yml', codeBlock('2\\. Create the compose file', 'yaml'), 'compose file') +
         code('Terminal, in the folder with compose.yml', `${codeBlock('3\\. Start it', 'sh')}\n${checkCode}`, 'start commands') +
-        note('<code>tellyard check</code> tunes each channel once and reports the resolution it really sends.'),
+        checkNote,
     },
     run: {
       label: 'docker run',
@@ -206,7 +210,7 @@ const install = {
         code('config/channels.toml', channelsCode, 'channel example') +
         channelNote +
         code('Terminal, next to the config folder', `${codeBlock('3\\. Start it', 'sh', 1)}\n${checkCode}`, 'start commands') +
-        note('<code>tellyard check</code> tunes each channel once and reports the resolution it really sends.'),
+        checkNote,
     },
     unraid: {
       label: 'Unraid',
@@ -214,8 +218,7 @@ const install = {
         code('Unraid', 'Apps tab › search "Tellyard" › Install', 'install steps') +
         code('Unraid terminal', `${codeBlock('Unraid', 'sh')}\n${unraidCheck}`, 'channel commands') +
         note(
-          `Tellyard starts with no channels and loads <code>channels.toml</code> within a minute. Replace the examples with your channels. ${everyOption}. ` +
-            `Not in Apps yet? <a href="${repo}#unraid">Add the template by hand</a>.`,
+          `Tellyard starts with no channels and loads <code>channels.toml</code> within a minute. Replace the examples with your channels. ${everyOption}.`,
         ),
     },
   },
