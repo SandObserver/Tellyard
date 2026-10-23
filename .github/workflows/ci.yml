@@ -135,7 +135,7 @@ jobs:
       - run: docker run --rm --platform linux/arm64 tellyard:arm64 tellyard --version
       - run: >-
           docker run --rm --platform linux/arm64 --entrypoint sh tellyard:arm64 -c
-          "ffmpeg -version | head -1 && ffprobe -version | head -1 && deno --version | head -1 && yt-dlp --version"
+          "ffmpeg -version | head -1 && deno --version | head -1 && yt-dlp --version"
       - run: >-
           docker run --rm --platform linux/arm64 -e CHANNELS_FILE=/config/channels.example.toml tellyard:arm64
           tellyard validate

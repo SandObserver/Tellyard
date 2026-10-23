@@ -36,7 +36,6 @@ class Settings:
     ytdlp: str
     ytdlp_args: tuple[str, ...]
     ffmpeg: str
-    ffprobe: str
     log_level: LogLevel
     min_height: int | None
     heartbeat_url: str
@@ -74,7 +73,6 @@ class Settings:
             ytdlp=env.get("YTDLP", "yt-dlp"),
             ytdlp_args=ytdlp_args,
             ffmpeg=env.get("FFMPEG", "ffmpeg"),
-            ffprobe=env.get("FFPROBE", "ffprobe"),
             log_level=level,
             min_height=_min_height(env),
             heartbeat_url=heartbeat_url,

@@ -86,10 +86,10 @@ grep -q '<programme ' "$work/guide.xml" || fail "the guide has no programmes"
 
 echo "== stream"
 curl -s --max-time 8 "$base/stream/101" -o "$work/out.ts" || [ $? -eq 28 ] || fail "the stream request failed"
-docker run --rm -v "$work:/work:ro" --entrypoint ffprobe "$image" -v error \
-  -show_entries stream=codec_type,width,height -of csv=p=0 /work/out.ts | sort -u | tee "$work/probe.txt"
-grep -q '^video,1920,1080' "$work/probe.txt" || fail "the stream has no 1080p video"
-grep -q '^audio' "$work/probe.txt" || fail "the stream has no audio"
+{ docker run --rm -v "$work:/work:ro" --entrypoint ffmpeg "$image" -hide_banner -i /work/out.ts 2>&1 || true; } \
+  | grep 'Stream #' | tee "$work/probe.txt"
+grep -q 'Video: .*, 1920x1080' "$work/probe.txt" || fail "the stream has no 1080p video"
+grep -q 'Audio: ' "$work/probe.txt" || fail "the stream has no audio"
 
 echo "== stop"
 running_ffmpeg() {

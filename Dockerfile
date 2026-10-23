@@ -16,14 +16,17 @@ FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 MALLOC_ARENA_MAX=2 \
     CHANNELS_FILE=/config/channels.toml DATA_DIR=/data \
     XDG_CACHE_HOME=/data/cache DENO_DIR=/data/cache/deno
-COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/
+COPY --from=ffmpeg /ffmpeg /usr/local/bin/
 COPY --from=deno /deno /usr/local/bin/deno
 COPY --from=build /app/.venv /app/.venv
-RUN mkdir /config /data && chown 1000:1000 /data
+# The base image has no standard library bytecode, and user 1000 cannot write it.
+RUN python -m compileall -q -j0 -x '/(site-packages|idlelib|tkinter|turtledemo|ensurepip|pydoc_data)/' \
+      "$(python -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')" \
+    && mkdir /config /data && chown 1000:1000 /data
 COPY channels.example.toml /config/channels.example.toml
 USER 1000:1000
 VOLUME /data
 EXPOSE 5004
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s \
-  CMD ["tellyard", "health"]
+  CMD ["python", "-m", "tellyard.health"]
 CMD ["tellyard", "serve"]

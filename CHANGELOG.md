@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Drop the manual Unraid template steps now that Tellyard is in Unraid Apps, and name the Docker Hub image on the landing page.
 - Read every stream through Tellyard, so ffmpeg reaches only addresses Tellyard has checked.
 - Report on `/healthz` when the guide cannot be saved to `/data`, and keep serving the guide that was built.
+- Use less CPU and memory while streaming: all HTTPS requests share one TLS setup instead of loading every CA certificate again, and stream data is read in larger blocks.
+- Ship the Python standard library compiled, and let the container health check load only what it needs. Idle CPU and start-up time go down.
+
+### Removed
+
+- ffprobe from the image, and the undocumented `FFPROBE` setting. `tellyard check` reads the resolution from ffmpeg. The image is about a quarter smaller.
 
 ### Security
 
