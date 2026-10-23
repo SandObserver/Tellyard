@@ -1,3 +1,6 @@
+import contextlib
+import http.client
+import io
 import json
 import logging
 import re
@@ -16,7 +19,8 @@ from xml.sax.saxutils import escape
 from tellyard import __version__
 from tellyard.channels import Channel
 from tellyard.guide import Guide
-from tellyard.net import FetchError, fetch_text
+from tellyard.net import FetchError, fetch_text, hosts_of
+from tellyard.relay import Relay
 from tellyard.resolve import Resolver
 from tellyard.settings import Settings
 from tellyard.store import ChannelStore
@@ -29,6 +33,10 @@ GUIDE_CHECK = 60.0
 GUIDE_RETRY = timedelta(minutes=15)
 HEARTBEAT_SECONDS = 60.0
 SOCKET_TIMEOUT = 60.0
+MAX_CONNECTIONS = 64
+REQUEST_DEADLINE = 10.0
+REQUEST_LIMIT = 128 * 1024
+REFUSAL_LOG_SECONDS = 60.0
 WATCH_INTERVAL = 0.5
 
 type SessionFactory = Callable[[Channel], Session]
@@ -45,8 +53,15 @@ class App:
         self.settings = settings
         self.store = store
         self.guide = guide
-        resolver = Resolver(settings)
-        self._make_session = session_factory or (lambda channel: Session(channel, resolver, settings.ffmpeg))
+        self._relay: Relay | None = None
+        if session_factory is None:
+            relay = self._relay = Relay()
+            resolver = Resolver(settings)
+
+            def session_factory(channel: Channel) -> Session:
+                return Session(channel, resolver, settings.ffmpeg, relay)
+
+        self._make_session = session_factory
         self._tuners = threading.BoundedSemaphore(settings.tuners)
         self._lock = threading.Lock()
         self._streams = 0
@@ -121,6 +136,8 @@ class App:
     def problem(self, now: datetime | None = None) -> str | None:
         if self._guide_thread is not None and not self._guide_thread.is_alive():
             return "the guide thread has stopped"
+        if self.guide.write_error:
+            return self.guide.write_error
         if not self.store.current().channels:
             return f"no channels yet: add them to {self.settings.channels_file}"
         age = (now or datetime.now(UTC)) - (self.guide.built_at or self._started_at)
@@ -156,6 +173,10 @@ class App:
     def session(self, channel: Channel) -> Session:
         return self._make_session(channel)
 
+    def close(self) -> None:
+        if self._relay is not None:
+            self._relay.close()
+
     def refresh_guide(self, now: datetime | None = None) -> None:
         moment = now or datetime.now(UTC)
         lineup = self.store.current()
@@ -190,7 +211,7 @@ class App:
             return
         self._last_heartbeat = now
         try:
-            fetch_text(url)
+            fetch_text(url, trusted=hosts_of([url]))
         except FetchError as error:
             log.warning("HEARTBEAT_URL call failed", extra={"reason": str(error)})
 
@@ -208,12 +229,54 @@ class Server(ThreadingHTTPServer):
     def __init__(self, address: tuple[str, int], app: App) -> None:
         super().__init__(address, Handler)
         self.app = app
+        self._slots = threading.BoundedSemaphore(MAX_CONNECTIONS)
+        self._refused_at = float("-inf")
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        if not self._slots.acquire(blocking=False):
+            if time.monotonic() - self._refused_at > REFUSAL_LOG_SECONDS:
+                self._refused_at = time.monotonic()
+                log.warning("too many connections, refusing new ones", extra={"limit": MAX_CONNECTIONS})
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
 
 
 class Handler(BaseHTTPRequestHandler):
     server: Server
     server_version = "Tellyard"
     timeout = SOCKET_TIMEOUT
+
+    def setup(self) -> None:
+        super().setup()
+        self.rfile = _Limited(self.rfile, REQUEST_LIMIT)
+        self._expired = False
+        self._deadline = threading.Timer(REQUEST_DEADLINE, self._expire)
+        self._deadline.start()
+
+    def parse_request(self) -> bool:
+        parsed = super().parse_request()
+        self._deadline.cancel()
+        return parsed and not self._expired
+
+    def finish(self) -> None:
+        self._deadline.cancel()
+        super().finish()
+
+    def _expire(self) -> None:
+        self._expired = True
+        with contextlib.suppress(OSError):
+            self.connection.shutdown(socket.SHUT_RDWR)
 
     def do_GET(self) -> None:
         app = self.server.app
@@ -333,3 +396,29 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+
+class _Limited(io.BufferedIOBase):
+    def __init__(self, stream: io.BufferedIOBase, limit: int) -> None:
+        self._stream = stream
+        self._left = limit
+
+    def readline(self, size: int | None = -1) -> bytes:
+        line = self._stream.readline(self._budget(size))
+        return self._take(line)
+
+    def read(self, size: int | None = -1) -> bytes:
+        return self._take(self._stream.read(self._budget(size)))
+
+    def close(self) -> None:
+        self._stream.close()
+        super().close()
+
+    def _budget(self, size: int | None) -> int:
+        if self._left <= 0:
+            raise http.client.HTTPException("the request is too large")
+        return self._left if size is None or size < 0 else min(size, self._left)
+
+    def _take(self, data: bytes) -> bytes:
+        self._left -= len(data)
+        return data

@@ -1,5 +1,6 @@
 import re
 import tomllib
+import urllib.parse
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -89,6 +90,13 @@ class Channel:
     @property
     def guide_id(self) -> str:
         return f"tellyard.{self.number}"
+
+    @property
+    def hosts(self) -> frozenset[str]:
+        urls = [self.source.url]
+        if isinstance(self.source, HlsSource) and self.source.token:
+            urls.append(self.source.token.replace("{url}", ""))
+        return frozenset(host for url in urls if (host := _host(url)))
 
 
 @dataclass(frozen=True)
@@ -262,6 +270,13 @@ def _url(value: Any, where: str) -> str:
     if not re.match(r"^https?://[^\s/]+", text):
         raise ChannelError(f"{where} must be an http or https URL")
     return text
+
+
+def _host(url: str) -> str:
+    try:
+        return urllib.parse.urlsplit(url).hostname or ""
+    except ValueError:
+        return ""
 
 
 def _positive_int(value: Any, where: str) -> int:

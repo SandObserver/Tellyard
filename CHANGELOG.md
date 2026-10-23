@@ -10,9 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Let landing page visitors pick Plex or Jellyfin and Docker Compose, docker run or Unraid, and show the matching install steps.
 - Drop the manual Unraid template steps now that Tellyard is in Unraid Apps, and name the Docker Hub image on the landing page.
+- Read every stream through Tellyard, so ffmpeg reaches only addresses Tellyard has checked.
+- Report on `/healthz` when the guide cannot be saved to `/data`, and keep serving the guide that was built.
 
 ### Security
 
+- Refuse private and local addresses unless the channel, guide source or `HEARTBEAT_URL` names that host, also after a redirect and inside playlists.
+- Refuse redirects to addresses other than http and https.
+- Limit every download, including guide sources, to a total time.
+- Bound the memory a guide source can use, including compressed sources.
+- Send `Authorization` and `Cookie` headers only to the hosts the channel names.
+- Show only the host of an address in logs and error messages.
+- Limit the server to 64 connections and each request to 10 seconds and 128 KB.
 - Update certifi to 2026.10.23, which removes the emSign root certificates with compromised intermediate keys (GHSA-6q48-6c7w-9gw2).
 
 ## [0.1.0] - 2026-10-17

@@ -16,6 +16,7 @@ import pytest
 from tellyard import server
 from tellyard.channels import Channel
 from tellyard.guide import Guide
+from tellyard.relay import Relay
 from tellyard.resolve import LookupCancelledError, Resolved
 from tellyard.server import App, Server
 from tellyard.settings import Settings
@@ -25,14 +26,14 @@ from tests.fakes import FakeResolver, fake_ffmpeg
 
 
 @pytest.fixture
-def app(make_settings: Callable[..., Settings], channels_file: Path, tmp_path: Path) -> App:
+def app(relay: Relay, make_settings: Callable[..., Settings], channels_file: Path, tmp_path: Path) -> App:
     settings = make_settings(TUNERS="1")
     resolver = FakeResolver(settings)
     ffmpeg = str(fake_ffmpeg(tmp_path))
     guide = Guide(tmp_path / "data" / "guide.xml", 1, downloader=lambda url, path: None)
 
     def session(channel: Channel) -> Session:
-        return Session(channel, resolver, ffmpeg)
+        return Session(channel, resolver, ffmpeg, relay)
 
     return App(settings, ChannelStore(channels_file), guide, session_factory=session)
 
@@ -316,10 +317,13 @@ def test_viewer_leaving_before_video_flows_frees_the_tuner(
 ) -> None:
     monkeypatch.setenv("FAKE_FFMPEG", ffmpeg_mode)
     settings = make_settings(TUNERS="1")
+    relay = Relay()
     resolver = SlowResolver(settings, slow_from)
     ffmpeg = str(fake_ffmpeg(tmp_path))
     guide = Guide(tmp_path / "data" / "guide.xml", 1, downloader=lambda url, path: None)
-    app = App(settings, ChannelStore(settings.channels_file), guide, lambda channel: Session(channel, resolver, ffmpeg))
+    app = App(
+        settings, ChannelStore(settings.channels_file), guide, lambda channel: Session(channel, resolver, ffmpeg, relay)
+    )
     server = Server(("127.0.0.1", 0), app)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -335,6 +339,7 @@ def test_viewer_leaving_before_video_flows_frees_the_tuner(
     finally:
         server.shutdown()
         server.server_close()
+        relay.close()
 
 
 def test_streams_when_the_connection_has_a_high_file_descriptor(base: str) -> None:
@@ -351,3 +356,60 @@ def test_streams_when_the_connection_has_a_high_file_descriptor(base: str) -> No
         for fd in spare:
             os.close(fd)
         resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
+
+
+def closed_within(client: socket.socket, seconds: float) -> bool:
+    client.settimeout(seconds)
+    try:
+        return client.recv(1024) == b""
+    except TimeoutError:
+        return False
+    except OSError:
+        return True
+
+
+def test_connections_are_capped(app: App, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    monkeypatch.setattr(server, "MAX_CONNECTIONS", 1)
+    capped = Server(("127.0.0.1", 0), app)
+    threading.Thread(target=capped.serve_forever, daemon=True).start()
+    address = ("127.0.0.1", capped.server_address[1])
+    try:
+        with socket.create_connection(address) as held:
+            with socket.create_connection(address) as refused:
+                assert closed_within(refused, 2)
+            assert not closed_within(held, 0.3)
+        assert "too many connections" in caplog.text
+        assert wait_for(lambda: get(f"http://127.0.0.1:{address[1]}/lineup_status.json")[0] == 200, 3)
+    finally:
+        capped.shutdown()
+        capped.server_close()
+
+
+def test_slow_requests_are_dropped(base: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server, "REQUEST_DEADLINE", 0.5)
+    with socket.create_connection(("127.0.0.1", int(base.rsplit(":", 1)[1]))) as client:
+        client.sendall(b"GET /lineup.json HTTP/1.1\r\nHost: t\r\n")
+        started = time.monotonic()
+        assert closed_within(client, 3)
+        assert time.monotonic() - started < 2
+
+
+def test_oversized_requests_are_refused(base: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server, "REQUEST_LIMIT", 4096)
+    with socket.create_connection(("127.0.0.1", int(base.rsplit(":", 1)[1]))) as client:
+        client.sendall(b"GET /lineup.json HTTP/1.1\r\nHost: t\r\n" + b"X-Big: " + b"x" * 8000 + b"\r\n\r\n")
+        client.settimeout(5)
+        assert client.recv(64).startswith(b"HTTP/1.0 431")
+
+
+def test_health_reports_a_guide_that_cannot_be_saved(app: App, tmp_path: Path) -> None:
+    (tmp_path / "data").mkdir(exist_ok=True)
+    (tmp_path / "data").chmod(0o555)
+    try:
+        app.refresh_guide()
+        assert app.guide.data is not None
+        problem = app.problem()
+        assert problem is not None
+        assert problem.startswith("cannot write the guide to ")
+    finally:
+        (tmp_path / "data").chmod(0o755)

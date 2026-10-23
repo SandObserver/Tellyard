@@ -9,7 +9,7 @@ import pytest
 
 from tellyard import channels
 from tellyard.channels import Channel, Headers
-from tellyard.net import FetchError
+from tellyard.net import FetchError, Hosts
 from tellyard.resolve import LookupCancelledError, Resolved, ResolveError, Resolver, Runner, run_command
 from tellyard.settings import Settings
 
@@ -24,8 +24,8 @@ def channel(**source: object) -> Channel:
     return channels.parse({"channel": [entry]}).channels[0]
 
 
-def pages(mapping: dict[str, str]) -> Callable[[str, Headers], tuple[str, str]]:
-    def fetch(url: str, headers: Headers) -> tuple[str, str]:
+def pages(mapping: dict[str, str]) -> Callable[[str, Headers, Hosts], tuple[str, str]]:
+    def fetch(url: str, headers: Headers, trusted: Hosts) -> tuple[str, str]:
         if url not in mapping:
             raise FetchError(f"{url}: HTTP 404")
         return url, mapping[url]
@@ -46,7 +46,9 @@ def test_hls_source_picks_the_best_variant(make_settings: Callable[..., Settings
     fetch = pages({"https://cdn.example.com/live/master.m3u8": MASTER})
     resolver = Resolver(make_settings(), fetcher=fetch)
     resolved = resolver.resolve(channel(hls="https://cdn.example.com/live/master.m3u8"))
-    assert resolved == Resolved("https://cdn.example.com/live/1080.m3u8", None, 1080, ())
+    assert resolved == Resolved(
+        "https://cdn.example.com/live/1080.m3u8", None, 1080, (), frozenset({"cdn.example.com"})
+    )
 
 
 def test_media_playlist_is_used_as_is(make_settings: Callable[..., Settings]) -> None:
@@ -65,7 +67,7 @@ def test_rejects_a_non_playlist(make_settings: Callable[..., Settings]) -> None:
 def test_retries_a_hanging_playlist_request(make_settings: Callable[..., Settings]) -> None:
     attempts: list[str] = []
 
-    def flaky(url: str, headers: Headers) -> tuple[str, str]:
+    def flaky(url: str, headers: Headers, trusted: Hosts) -> tuple[str, str]:
         attempts.append(url)
         if len(attempts) < 3:
             raise FetchError("cdn.example.com: The read operation timed out")
@@ -122,7 +124,7 @@ def test_page_url_needs_a_host_before_the_playlist(make_settings: Callable[..., 
 def test_unexpected_lookup_errors_become_resolve_errors(
     make_settings: Callable[..., Settings], caplog: pytest.LogCaptureFixture
 ) -> None:
-    def broken(url: str, headers: Headers) -> tuple[str, str]:
+    def broken(url: str, headers: Headers, trusted: Hosts) -> tuple[str, str]:
         raise ValueError("bad value")
 
     with pytest.raises(ResolveError, match="failed unexpectedly"):
@@ -259,7 +261,7 @@ def test_hls_token_signs_the_url_before_each_tune(make_settings: Callable[..., S
     reply = json.dumps({"Success": True, "Url": "https://cdn.example.com/atv/atv.m3u8?st=abc&e=1"})
     table = {SIGNED_REQUEST: reply, "https://cdn.example.com/atv/atv.m3u8?st=abc&e=1": MASTER}
 
-    def fetch(url: str, headers: Headers) -> tuple[str, str]:
+    def fetch(url: str, headers: Headers, trusted: Hosts) -> tuple[str, str]:
         seen.append((url, headers))
         return url, table[url]
 

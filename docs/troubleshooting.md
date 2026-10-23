@@ -20,6 +20,8 @@ Set `LOG_LEVEL=debug` to see every request Plex makes. `docker exec tellyard tel
 | `stream failed to start`, reason `yt-dlp took longer than 60 s` | The site or your connection is slow. Tune in again. |
 | `stream failed to start`, reason `no playlist URL on the channel page` | The page no longer contains an `.m3u8` address, or none containing `match`. Find the playlist again, see [Finding sources](channels.md#finding-sources). |
 | `stream failed to start`, reason `could not load the playlist:` with `HTTP 403` | The playlist refuses the request. It may need a `Referer` header (`headers`), or a fresh signed address (`token`). |
+| `stream failed to start` or `source request failed`, reason `refused <address>: private addresses need a host named in the configuration` | The stream, page or a redirect points at a private address that the channel does not name. Write that host in `hls` or `page`, see [Addresses Tellyard reaches](how-it-works.md#addresses-tellyard-reaches). |
+| `source request failed` | A playlist, key or video segment could not be loaded. Now and then is normal. If the stream does not start, see `reason`. |
 | `stream failed to start`, reason `the stream URL did not return an HLS playlist` | The `hls` address is not a playlist, or the server answered with an error page. |
 | `stream failed to start`, reason `no video arrived within 30 s` | The source answered but sent no video. Check the channel with `tellyard check`. |
 | `no data, restarting` | The source stalled and Tellyard restarted it. Now and then is normal. Often means the source is unreliable. |
@@ -27,7 +29,9 @@ Set `LOG_LEVEL=debug` to see every request Plex makes. `docker exec tellyard tel
 | `all tuners are busy` | More streams were asked for than `TUNERS` allows. Raise `TUNERS`, or stop a stream. |
 | `no channel file yet, add your channels to it` | Tellyard found no `channels.toml` at `file`. Put your channel list there. Tellyard loads it within a minute. |
 | `channel file has an error, keeping the previous channels` | Fix the mistake named in `reason`. `tellyard validate` checks the file. |
-| `guide source failed, using placeholders` | The XMLTV address could not be downloaded or read. Open it in a browser. |
+| `guide source failed, using placeholders` | The XMLTV address could not be downloaded or read, or is too large. See `reason`, and open the address in a browser. |
+| `guide not saved` | Tellyard cannot write to `/data`. `/healthz` reports it. Give user 1000 write access to the data folder, such as `sudo chown 1000:1000 ./data`. |
+| `too many connections, refusing new ones` | More than 64 connections are open. Something on your network keeps connections open. |
 | `guide source has no current listings` | The source has no shows for the listed `ids` right now. Check each `id` against the `<channel id="...">` lines in the file. |
 | `HEARTBEAT_URL call failed` | The monitor did not answer. Check the address in `HEARTBEAT_URL`. |
 

@@ -2,6 +2,7 @@ import logging
 import queue
 import threading
 from collections.abc import Callable, Iterator, Sequence
+from contextlib import closing
 from itertools import islice
 from pathlib import Path
 from time import monotonic
@@ -9,6 +10,7 @@ from time import monotonic
 import pytest
 
 from tellyard import channels, stream
+from tellyard.relay import Relay
 from tellyard.resolve import Resolved, ResolveError
 from tellyard.settings import Settings
 from tellyard.stream import Process, Session, StreamError, ffmpeg_args
@@ -35,33 +37,42 @@ def fast(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 def test_ffmpeg_args_copy_without_reencoding() -> None:
-    resolved = Resolved("https://v.example.com/v.m3u8", None, 1080, (("Referer", "https://r.example.com/"),))
+    resolved = Resolved("http://127.0.0.1:9/t/0/v.m3u8", None, 1080, ())
     args = ffmpeg_args("ffmpeg", resolved)
-    assert args[args.index("-headers") + 1] == "Referer: https://r.example.com/\r\n"
     assert args[args.index("-c") + 1] == "copy"
     assert args[-3:] == ["-f", "mpegts", "pipe:1"]
     assert "0:a:0?" in args
     assert "-bsf:v" not in args
+    assert "-headers" not in args
 
 
 def test_ffmpeg_args_repair_timestamps_when_asked() -> None:
-    resolved = Resolved("https://v.example.com/v.m3u8", None, 1080, (), repair_timestamps=True)
+    resolved = Resolved("http://127.0.0.1:9/t/0/v.m3u8", None, 1080, (), repair_timestamps=True)
     args = ffmpeg_args("ffmpeg", resolved)
     assert args[args.index("-bsf:v") + 1].startswith("setts=")
     assert args[-3:] == ["-f", "mpegts", "pipe:1"]
 
 
-def test_ffmpeg_args_with_separate_audio_and_custom_agent() -> None:
-    resolved = Resolved("https://v.example.com/v.m3u8", "https://v.example.com/a.m3u8", 1080, (("User-Agent", "TV"),))
+def test_ffmpeg_args_with_separate_audio() -> None:
+    resolved = Resolved("http://127.0.0.1:9/t/0/v.m3u8", "http://127.0.0.1:9/t/1/a.m3u8", 1080, ())
     args = ffmpeg_args("ffmpeg", resolved)
     assert args.count("-i") == 2
-    assert args.count("TV") == 2
-    assert "-headers" not in args
     assert "1:a:0" in args
 
 
+def test_ffmpeg_reads_only_through_the_relay(relay: Relay) -> None:
+    headers = (("Referer", "https://r.example.com/"), ("Cookie", "secret"))
+    resolved = Resolved("https://v.example.com/v.m3u8", "https://v.example.com/a.m3u8", 1080, headers)
+    feed = relay.open(resolved, "7 Seven")
+    args = ffmpeg_args("ffmpeg", stream.local(resolved, feed))
+    inputs = [args[index + 1] for index, arg in enumerate(args) if arg == "-i"]
+    assert inputs == [feed.video, feed.audio]
+    assert all(value.startswith(f"{relay.base}/") for value in inputs)
+    assert not any("secret" in arg or "example.com" in arg for arg in args)
+
+
 def test_streams_and_stops_ffmpeg(
-    make_settings: Callable[..., Settings], channel: channels.Channel, ffmpeg: str
+    relay: Relay, make_settings: Callable[..., Settings], channel: channels.Channel, ffmpeg: str
 ) -> None:
     started: list[Process] = []
 
@@ -70,7 +81,7 @@ def test_streams_and_stops_ffmpeg(
         started.append(process)
         return process
 
-    with Session(channel, FakeResolver(make_settings()), ffmpeg, starter=starter) as session:
+    with Session(channel, FakeResolver(make_settings()), ffmpeg, relay, starter=starter) as session:
         session.open()
         assert session.height == 1080
         chunks = list(islice(session.chunks(), 5))
@@ -79,6 +90,7 @@ def test_streams_and_stops_ffmpeg(
 
 
 def test_reconnects_when_the_source_ends(
+    relay: Relay,
     make_settings: Callable[..., Settings],
     channel: channels.Channel,
     ffmpeg: str,
@@ -86,7 +98,7 @@ def test_reconnects_when_the_source_ends(
 ) -> None:
     monkeypatch.setenv("FAKE_FFMPEG", "short")
     resolver = FakeResolver(make_settings())
-    with Session(channel, resolver, ffmpeg) as session:
+    with Session(channel, resolver, ffmpeg, relay) as session:
         session.open()
         chunks = list(session.chunks())
     # Each attempt yields 3 chunks; quick drops are retried until MAX_ATTEMPTS.
@@ -95,6 +107,7 @@ def test_reconnects_when_the_source_ends(
 
 
 def test_long_running_source_resets_the_attempt_count(
+    relay: Relay,
     make_settings: Callable[..., Settings],
     channel: channels.Channel,
     ffmpeg: str,
@@ -103,34 +116,35 @@ def test_long_running_source_resets_the_attempt_count(
     monkeypatch.setenv("FAKE_FFMPEG", "short")
     monkeypatch.setattr(stream, "QUICK_DROP", 0.0)
     resolver = FakeResolver(make_settings())
-    with Session(channel, resolver, ffmpeg) as session:
+    with Session(channel, resolver, ffmpeg, relay) as session:
         session.open()
         list(islice(session.chunks(), 15))
     assert resolver.calls == 5
 
 
 def test_open_fails_when_the_channel_cannot_resolve(
-    make_settings: Callable[..., Settings], channel: channels.Channel, ffmpeg: str
+    relay: Relay, make_settings: Callable[..., Settings], channel: channels.Channel, ffmpeg: str
 ) -> None:
-    session = Session(channel, FakeResolver(make_settings(), failures=1), ffmpeg)
+    session = Session(channel, FakeResolver(make_settings(), failures=1), ffmpeg, relay)
     with pytest.raises(StreamError, match="not live"):
         session.open()
 
 
 def test_open_fails_when_ffmpeg_sends_nothing(
+    relay: Relay,
     make_settings: Callable[..., Settings],
     channel: channels.Channel,
     ffmpeg: str,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     monkeypatch.setenv("FAKE_FFMPEG", "fail")
-    session = Session(channel, FakeResolver(make_settings()), ffmpeg)
+    session = Session(channel, FakeResolver(make_settings()), ffmpeg, relay)
     with pytest.raises(StreamError, match="no video arrived"):
         session.open()
 
 
 def test_stalled_source_is_restarted(
+    relay: Relay,
     make_settings: Callable[..., Settings],
     channel: channels.Channel,
     ffmpeg: str,
@@ -153,15 +167,17 @@ def test_stalled_source_is_restarted(
         def close(self) -> None:
             self.closed = True
 
-    with Session(channel, resolver, ffmpeg, starter=Scripted) as session:
+    with Session(channel, resolver, ffmpeg, relay, starter=Scripted) as session:
         session.open()
         chunks = list(islice(session.chunks(), 2))
     assert chunks == [b"first", b"after"]
     assert resolver.calls == 2
 
 
-def test_missing_ffmpeg_is_reported(make_settings: Callable[..., Settings], channel: channels.Channel) -> None:
-    session = Session(channel, FakeResolver(make_settings()), "/nonexistent/ffmpeg")
+def test_missing_ffmpeg_is_reported(
+    relay: Relay, make_settings: Callable[..., Settings], channel: channels.Channel
+) -> None:
+    session = Session(channel, FakeResolver(make_settings()), "/nonexistent/ffmpeg", relay)
     with pytest.raises(StreamError, match="is not installed"):
         session.open()
 
@@ -190,7 +206,7 @@ def test_gives_up_when_reconnects_fail(
             return super().resolve(channel, cancel)
 
     resolver = Once(make_settings())
-    with Session(channel, resolver, ffmpeg) as session:
+    with closing(Relay()) as relay, Session(channel, resolver, ffmpeg, relay) as session:
         session.open()
         chunks = list(session.chunks())
     assert len(chunks) == 3
@@ -215,6 +231,7 @@ def test_ffmpeg_output_is_logged_without_url_paths(caplog: pytest.LogCaptureFixt
 
 
 def test_leaving_during_the_first_data_wait_stops_ffmpeg(
+    relay: Relay,
     make_settings: Callable[..., Settings],
     channel: channels.Channel,
     ffmpeg: str,
@@ -228,7 +245,7 @@ def test_leaving_during_the_first_data_wait_stops_ffmpeg(
         started.append(Process(args, label))
         return started[-1]
 
-    session = Session(channel, FakeResolver(make_settings()), ffmpeg, starter=starter)
+    session = Session(channel, FakeResolver(make_settings()), ffmpeg, relay, starter=starter)
     threading.Timer(0.3, session.cancel.set).start()
     began = monotonic()
     with pytest.raises(stream.ViewerLeftError):
@@ -238,7 +255,11 @@ def test_leaving_during_the_first_data_wait_stops_ffmpeg(
 
 
 def test_leaving_during_a_stall_skips_the_reconnect(
-    make_settings: Callable[..., Settings], channel: channels.Channel, ffmpeg: str, monkeypatch: pytest.MonkeyPatch
+    relay: Relay,
+    make_settings: Callable[..., Settings],
+    channel: channels.Channel,
+    ffmpeg: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(stream, "STALL_TIMEOUT", 30.0)
     resolver = FakeResolver(make_settings())
@@ -257,7 +278,7 @@ def test_leaving_during_a_stall_skips_the_reconnect(
         def close(self) -> None:
             pass
 
-    with Session(channel, resolver, ffmpeg, starter=Stalls) as session:
+    with Session(channel, resolver, ffmpeg, relay, starter=Stalls) as session:
         session.open()
         threading.Timer(0.3, session.cancel.set).start()
         began = monotonic()
@@ -267,7 +288,11 @@ def test_leaving_during_a_stall_skips_the_reconnect(
 
 
 def test_leaving_during_the_backoff_skips_the_reconnect(
-    make_settings: Callable[..., Settings], channel: channels.Channel, ffmpeg: str, monkeypatch: pytest.MonkeyPatch
+    relay: Relay,
+    make_settings: Callable[..., Settings],
+    channel: channels.Channel,
+    ffmpeg: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("FAKE_FFMPEG", "short")
 
@@ -285,7 +310,7 @@ def test_leaving_during_the_backoff_skips_the_reconnect(
             return super().resolve(channel, cancel)
 
     resolver = Once(make_settings())
-    with Session(channel, resolver, ffmpeg) as session:
+    with Session(channel, resolver, ffmpeg, relay) as session:
         session.open()
         list(session.chunks())
     assert resolver.calls == 2

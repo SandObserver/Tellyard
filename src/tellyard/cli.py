@@ -17,6 +17,7 @@ from types import FrameType
 from tellyard import __version__, channels, check, logfmt
 from tellyard.channels import ChannelError, Lineup
 from tellyard.guide import Guide, build
+from tellyard.relay import Relay
 from tellyard.resolve import Resolver
 from tellyard.server import App, Server
 from tellyard.settings import Settings, SettingsError
@@ -67,8 +68,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not chosen:
             print("tellyard: no channels match those numbers", file=sys.stderr)
             return 2
-        measure = functools.partial(check.probe_height, settings.ffprobe)
-        results = check.check(chosen, Resolver(settings), measure, settings.min_height)
+        relay = Relay()
+        try:
+            measure = functools.partial(check.probe_height, settings.ffprobe, relay)
+            results = check.check(chosen, Resolver(settings), measure, settings.min_height)
+        finally:
+            relay.close()
         print(check.report(results))
         return 0 if all(result.ok for result in results) else 1
     data = build(lineup, datetime.now(UTC), settings.guide_days)
@@ -100,8 +105,11 @@ def _serve(settings: Settings) -> int:
     print(_banner(settings, store.current()), file=sys.stderr, flush=True)
     app.start(stop)
     log.info("service ready", extra={"version": __version__, "port": settings.port})
-    with server:
-        server.serve_forever()
+    try:
+        with server:
+            server.serve_forever()
+    finally:
+        app.close()
     return 0
 
 

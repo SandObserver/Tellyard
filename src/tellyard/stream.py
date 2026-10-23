@@ -1,16 +1,17 @@
 import logging
 import os
 import queue
-import re
 import subprocess
 import threading
 from collections.abc import Callable, Iterator, Sequence
+from dataclasses import replace
 from time import monotonic
 from types import TracebackType
 from typing import Self
 
 from tellyard.channels import Channel
-from tellyard.net import USER_AGENT
+from tellyard.net import redact
+from tellyard.relay import Feed, Relay
 from tellyard.resolve import LookupCancelledError, Resolved, ResolveError, Resolver
 
 log = logging.getLogger(__name__)
@@ -29,8 +30,6 @@ TIMESTAMP_REPAIR = (
     "setts=pts='if(gt(N,0)*gt(abs(PTS-PREV_OUTPTS)*TB,10),PREV_OUTPTS+1/(30*TB),PTS)'"
     ":dts='if(gt(N,0)*gt(abs(DTS-PREV_OUTDTS)*TB,10),PREV_OUTDTS+1/(30*TB),DTS)'"
 )
-# Stream URLs carry credentials, and signed ones carry tokens in the path and the query.
-URL = re.compile(r"(?P<scheme>\b[a-z][a-z0-9+.-]*://)(?:[^/\s?#@'\"]*@)?(?P<host>[^/\s?#'\"]+)[^\s'\"]*", re.IGNORECASE)
 
 
 class StreamError(Exception):
@@ -47,9 +46,9 @@ def pause(cancel: threading.Event, seconds: float) -> bool:
 
 def ffmpeg_args(ffmpeg: str, resolved: Resolved) -> list[str]:
     args = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error"]
-    args += [*input_options(resolved), "-i", resolved.video]
+    args += [*input_options(), "-i", resolved.video]
     if resolved.audio:
-        args += [*input_options(resolved), "-i", resolved.audio]
+        args += [*input_options(), "-i", resolved.audio]
     audio_map = "1:a:0" if resolved.audio else "0:a:0?"
     args += ["-map", "0:v:0", "-map", audio_map, "-c", "copy"]
     if resolved.repair_timestamps:
@@ -57,13 +56,13 @@ def ffmpeg_args(ffmpeg: str, resolved: Resolved) -> list[str]:
     return [*args, "-f", "mpegts", "pipe:1"]
 
 
-def input_options(resolved: Resolved) -> list[str]:
-    agent = next((value for key, value in resolved.headers if key.lower() == "user-agent"), USER_AGENT)
-    extra = "".join(f"{key}: {value}\r\n" for key, value in resolved.headers if key.lower() != "user-agent")
-    args = ["-user_agent", agent]
-    if extra:
-        args += ["-headers", extra]
-    return [*args, "-rw_timeout", READ_TIMEOUT_US]
+def input_options() -> list[str]:
+    return ["-rw_timeout", READ_TIMEOUT_US]
+
+
+def local(resolved: Resolved, feed: Feed) -> Resolved:
+    # ffmpeg reads the source only through the relay, which checks every address it requests.
+    return replace(resolved, video=feed.video, audio=feed.audio, headers=())
 
 
 class Process:
@@ -116,7 +115,7 @@ class Process:
         assert stderr is not None
         with stderr:
             for line in stderr:
-                text = URL.sub(r"\g<scheme>\g<host>", line.decode("utf-8", errors="replace").strip())
+                text = redact(line.decode("utf-8", errors="replace").strip())
                 if text:
                     # After close, ffmpeg reports the closed pipe. These errors are expected.
                     level = logging.DEBUG if self._closed.is_set() else logging.WARNING
@@ -127,12 +126,16 @@ type Starter = Callable[[Sequence[str], str], Process]
 
 
 class Session:
-    def __init__(self, channel: Channel, resolver: Resolver, ffmpeg: str, *, starter: Starter = Process) -> None:
+    def __init__(
+        self, channel: Channel, resolver: Resolver, ffmpeg: str, relay: Relay, *, starter: Starter = Process
+    ) -> None:
         self.channel = channel
         self._resolver = resolver
         self._ffmpeg = ffmpeg
+        self._relay = relay
         self._starter = starter
         self._process: Process | None = None
+        self._feed: Feed | None = None
         self._pending: bytes | None = None
         self._started = 0.0
         self._attempts = 0
@@ -172,6 +175,9 @@ class Session:
         if self._process is not None:
             self._process.close()
             self._process = None
+        if self._feed is not None:
+            self._feed.close()
+            self._feed = None
 
     def __enter__(self) -> Self:
         return self
@@ -189,18 +195,24 @@ class Session:
         except ResolveError as error:
             raise StreamError(str(error)) from error
         self.height = resolved.height
-        process = self._starter(ffmpeg_args(self._ffmpeg, resolved), self.label)
+        feed = self._relay.open(resolved, self.label)
+        try:
+            process = self._starter(ffmpeg_args(self._ffmpeg, local(resolved, feed)), self.label)
+        except BaseException:
+            feed.close()
+            raise
         try:
             first = self._read(process, FIRST_DATA_TIMEOUT)
         except queue.Empty:
             first = None
-        if self.cancel.is_set():
+        if self.cancel.is_set() or not first:
             process.close()
-            raise ViewerLeftError("the viewer left")
-        if not first:
-            process.close()
+            feed.close()
+            if self.cancel.is_set():
+                raise ViewerLeftError("the viewer left")
             raise StreamError(f"no video arrived within {FIRST_DATA_TIMEOUT:.0f} s")
         self._process = process
+        self._feed = feed
         self._pending = first
         self._started = monotonic()
 
