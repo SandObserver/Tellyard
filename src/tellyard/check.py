@@ -3,8 +3,9 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
 from tellyard.channels import Channel
+from tellyard.relay import Relay
 from tellyard.resolve import Resolved, ResolveError, Resolver, Runner, run_command
-from tellyard.stream import input_options
+from tellyard.stream import input_options, local
 
 PROBE_TIMEOUT = 45.0
 
@@ -20,10 +21,14 @@ class Result:
         return self.problem is None
 
 
-def probe_height(ffprobe: str, resolved: Resolved, runner: Runner = run_command) -> int | None:
-    args = [ffprobe, "-v", "error", *input_options(resolved)]
-    args += ["-select_streams", "v", "-show_entries", "stream=height", "-of", "json", resolved.video]
-    data = json.loads(runner(args, PROBE_TIMEOUT, None) or "{}")
+def probe_height(ffprobe: str, relay: Relay, resolved: Resolved, runner: Runner = run_command) -> int | None:
+    feed = relay.open(resolved, "check")
+    try:
+        args = [ffprobe, "-v", "error", *input_options()]
+        args += ["-select_streams", "v", "-show_entries", "stream=height", "-of", "json", local(resolved, feed).video]
+        data = json.loads(runner(args, PROBE_TIMEOUT, None) or "{}")
+    finally:
+        feed.close()
     heights = [stream.get("height") for stream in data.get("streams", []) if isinstance(stream, dict)]
     numbers = [height for height in heights if isinstance(height, int)]
     return max(numbers) if numbers else None

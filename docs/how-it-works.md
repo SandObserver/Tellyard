@@ -11,7 +11,7 @@ Plex sees Tellyard as an HDHomeRun network tuner with `TUNERS` tuners. When a vi
    - `page`: loads the page and takes the first `.m3u8` address in it, or the first one containing `match`.
    - `hls`: uses the playlist address. With `token`, it first asks the token service for a signed address.
 2. Reads the playlist and picks the highest resolution, with its default audio track.
-3. Starts ffmpeg, which copies the video and audio into one MPEG-TS stream without re-encoding.
+3. Starts ffmpeg, which copies the video and audio into one MPEG-TS stream without re-encoding. ffmpeg reads the stream only through Tellyard, so every address it uses passes the checks in [Addresses Tellyard reaches](#addresses-tellyard-reaches).
 4. Waits up to 30 seconds for the first video, then hands the stream to Plex.
 
 The stream address is found again on every tune, so addresses that expire never break playback. When the viewer leaves, ffmpeg stops and the tuner is free, also while Tellyard is still finding the stream or reconnecting. Nothing runs while nobody watches.
@@ -24,6 +24,17 @@ The stream address is found again on every tune, so addresses that expire never 
 
 During a reconnect the picture freezes. In the worst case, a YouTube channel can take over a minute to come back.
 
+## Addresses Tellyard reaches
+
+Tellyard fetches every page, playlist, key and video segment itself. ffmpeg receives them from Tellyard over a private address inside the container.
+
+- Only `http` and `https` addresses are used, also after a redirect.
+- An address on your home network, on the host itself or in another private range is reached only when its host is written in that channel's `live`, `page`, `hls` or `token`, is a guide source, or is `HEARTBEAT_URL`. A stream, page or redirect that points at any other private address fails. The log then says `refused <address>: private addresses need a host named in the configuration`.
+- `Authorization` and `Cookie` headers go only to the hosts written in the channel. Other `headers` go to every host the stream uses.
+- Each request has a time limit: 30 seconds for a page, playlist or token answer, 60 seconds for a video segment and 10 minutes for a guide download.
+
+yt-dlp opens `live` channels on its own.
+
 ## The guide
 
 Tellyard publishes an XMLTV guide at `/guide.xml` for `GUIDE_DAYS` days, starting two hours back.
@@ -33,6 +44,8 @@ Tellyard publishes an XMLTV guide at `/guide.xml` for `GUIDE_DAYS` days, startin
 - Every gap, and every channel without a guide, gets placeholder blocks of `hours` length, aligned to the clock. Their title is the channel name unless `title` says otherwise.
 - Every entry gets a category, and every entry that is not a movie gets an episode number with its air date, so Plex files it as a TV episode.
 - The channel logo is the `logo` URL as written. Shows keep the pictures their source guide gives them; placeholder blocks have none.
+
+A guide source is skipped, and its channels get placeholder blocks, when it is larger than 256 MB to download or 1 GB unpacked, has an entry larger than 64 KB, or has more than 32 MB of shows for your channels.
 
 The guide is rebuilt every `GUIDE_REFRESH_HOURS` hours and within a minute of a change to `channels.toml`. If a rebuild fails, Tellyard keeps the last guide and tries again 15 minutes later. If a guide source fails, its channels get placeholder blocks until the next rebuild.
 
@@ -50,7 +63,9 @@ Tellyard checks `channels.toml` for changes every time Plex asks for the line-up
 | `/stream/<number>` | One channel as MPEG-TS. Also at `/auto/v<number>`. |
 | `/guide.xml` | The XMLTV guide. Also at `/epg.xml`. |
 | `/playlist.m3u` | An M3U playlist for players such as VLC. |
-| `/healthz` | Status as JSON. Answers 503 with a `reason` when there are no channels or the guide has stopped updating. Also at `/health`. |
+| `/healthz` | Status as JSON. Answers 503 with a `reason` when there are no channels, the guide has stopped updating, or the guide cannot be saved to `/data`. Also at `/health`. |
+
+Tellyard handles up to 64 connections at once and closes any more. A request must arrive complete within 10 seconds and be smaller than 128 KB.
 
 Tellyard does not answer HDHomeRun network discovery, so Plex never finds it on its own. Enter its address in Plex by hand.
 

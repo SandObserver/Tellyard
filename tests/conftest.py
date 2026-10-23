@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from tellyard.relay import Relay
 from tellyard.settings import Settings
 
 BASIC = """
@@ -47,3 +48,10 @@ def make_settings(tmp_path: Path, channels_file: Path) -> Callable[..., Settings
         return Settings.from_env(base)
 
     return make
+
+
+@pytest.fixture
+def relay() -> Iterator[Relay]:
+    instance = Relay()
+    yield instance
+    instance.close()

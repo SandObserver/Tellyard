@@ -1,5 +1,6 @@
 import gzip
 import itertools
+import tracemalloc
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -172,3 +173,99 @@ def test_existing_icons_are_kept() -> None:
     items = programmes(guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving(source)))
     dizi = next(item for item in items if item.findtext("title") == "Dizi")
     assert [icon.get("src") for icon in dizi.findall("icon")] == ["https://own.example/x.jpg"]
+
+
+ENTRY = (
+    b'<programme start="20261011150000 +0000" stop="20261011160000 +0000" channel="ATV.tr"><title>A</title></programme>'
+)
+
+
+def bulk(path: Path, parts: list[bytes]) -> None:
+    with gzip.open(path, "wb") as out:
+        for part in parts:
+            out.write(part)
+
+
+def read_feed(path: Path) -> list[str]:
+    found = guide._read(path, {"ATV.tr": ["201"]}, NOW - timedelta(days=1), NOW + timedelta(days=1))
+    return [slot.element.findtext("title") or "" for slot in found["201"] if slot.element is not None]
+
+
+def test_feed_with_many_small_entries_stays_small(tmp_path: Path) -> None:
+    path = tmp_path / "feed.xml.gz"
+    keep = ENTRY
+    bulk(path, [b"<tv>", b"<x/>" * 1_000_000, keep, b"</tv>"])
+    tracemalloc.start()
+    try:
+        titles = read_feed(path)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert titles == ["A"]
+    assert peak < 20 * 1024 * 1024
+
+
+@pytest.mark.parametrize(
+    ("parts", "message"),
+    [
+        ([b"<tv><programme>", b"<x/>" * 2000, b"</programme></tv>"], "more than 1000 parts"),
+        ([b"<tv><programme><desc>", b"x" * 2_000_000, b"</desc></programme></tv>"], "larger than 64 KB"),
+    ],
+    ids=["parts", "text"],
+)
+def test_oversized_entries_stop_the_feed(tmp_path: Path, parts: list[bytes], message: str) -> None:
+    path = tmp_path / "feed.xml.gz"
+    bulk(path, parts)
+    with pytest.raises(guide.FeedError, match=message):
+        read_feed(path)
+
+
+def test_feed_limits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    path = tmp_path / "feed.xml.gz"
+    entry = ENTRY
+    bulk(path, [b"<tv>", entry * 20, b"</tv>"])
+    monkeypatch.setattr(guide, "KEPT_LIMIT", 100)
+    with pytest.raises(guide.FeedError, match="listings for these channels are larger"):
+        read_feed(path)
+    monkeypatch.setattr(guide, "KEPT_LIMIT", 10_000)
+    monkeypatch.setattr(guide, "FEED_LIMIT", 100)
+    with pytest.raises(guide.FeedError, match="larger than 0 MB unpacked"):
+        read_feed(path)
+
+    def copy_feed(url: str, destination: Path) -> None:
+        destination.write_bytes(path.read_bytes())
+
+    items = programmes(guide.build(lineup(xmltv="https://u:p@e.example.com/x?key=s", id="ATV.tr"), NOW, 1, copy_feed))
+    assert {item.findtext("title") for item in items} == {"atv"}
+    assert [getattr(record, "url", "") for record in caplog.records] == ["e.example.com"]
+
+
+def test_guide_kept_in_memory_when_it_cannot_be_saved(tmp_path: Path) -> None:
+    folder = tmp_path / "data"
+    folder.mkdir()
+    folder.chmod(0o555)
+    try:
+        cache = guide.Guide(folder / "guide.xml", 1)
+        cache.rebuild(lineup(), NOW)
+        assert cache.data is not None
+        assert cache.built_at == NOW
+        assert cache.write_error is not None
+        assert cache.write_error.startswith(f"cannot write the guide to {folder}: ")
+        folder.chmod(0o755)
+        cache.rebuild(lineup(), NOW)
+        assert cache.write_error is None
+    finally:
+        folder.chmod(0o755)
+
+
+def test_huge_entry_is_stopped_while_reading(tmp_path: Path) -> None:
+    path = tmp_path / "feed.xml.gz"
+    bulk(path, [b"<tv><programme><desc>", b"x" * 50_000_000, b"</desc></programme></tv>"])
+    tracemalloc.start()
+    try:
+        with pytest.raises(guide.FeedError, match="larger than 64 KB"):
+            read_feed(path)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak < 5 * 1024 * 1024

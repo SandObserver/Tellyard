@@ -11,14 +11,15 @@ import pytest
 from tellyard import net
 from tellyard.net import FetchError
 
+REDIRECTS = {"/redirect": "/page", "/to-ftp": "ftp://127.0.0.1:1/x.m3u8", "/to-localhost": "http://localhost:PORT/page"}
 PAGES = {"/page": b"<html>hello</html>", "/guide.xml.gz": gzip.compress(b"<tv/>"), "/big": b"x" * 2048}
 
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
-        if self.path == "/redirect":
+        if self.path in REDIRECTS:
             self.send_response(302)
-            self.send_header("Location", "/page")
+            self.send_header("Location", REDIRECTS[self.path].replace("PORT", str(self.connection.getsockname()[1])))
             self.end_headers()
             return
         if self.path == "/slow":
@@ -44,6 +45,9 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+LOCAL = frozenset({"127.0.0.1"})
+
+
 @pytest.fixture
 def base() -> Iterator[str]:
     server = HTTPServer(("127.0.0.1", 0), Handler)
@@ -54,7 +58,7 @@ def base() -> Iterator[str]:
 
 
 def test_fetch_text_follows_redirects(base: str) -> None:
-    final, text = net.fetch_text(f"{base}/redirect", (("Referer", "https://r.example.com/"),))
+    final, text = net.fetch_text(f"{base}/redirect", (("Referer", "https://r.example.com/"),), LOCAL)
     assert final == f"{base}/page"
     assert text == "<html>hello</html>"
 
@@ -67,17 +71,17 @@ def test_request_sends_a_browser_agent_and_headers() -> None:
 
 def test_fetch_text_errors(base: str, monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(FetchError, match="HTTP 404"):
-        net.fetch_text(f"{base}/missing")
+        net.fetch_text(f"{base}/missing", trusted=LOCAL)
     monkeypatch.setattr(net, "TEXT_LIMIT", 1024)
     with pytest.raises(FetchError, match="larger than"):
-        net.fetch_text(f"{base}/big")
+        net.fetch_text(f"{base}/big", trusted=LOCAL)
     with pytest.raises(FetchError):
-        net.fetch_text("http://127.0.0.1:1/")
+        net.fetch_text("http://127.0.0.1:1/", trusted=LOCAL)
 
 
 def test_download_and_open_gzip(base: str, tmp_path: Path) -> None:
     target = tmp_path / "guide.xml"
-    net.download(f"{base}/guide.xml.gz", target)
+    net.download(f"{base}/guide.xml.gz", target, LOCAL)
     with net.open_maybe_gzip(target) as stream:
         assert stream.read() == b"<tv/>"
     plain = tmp_path / "plain.xml"
@@ -89,18 +93,18 @@ def test_download_and_open_gzip(base: str, tmp_path: Path) -> None:
 def test_download_errors_leave_no_partial_file(base: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     target = tmp_path / "guide.xml"
     with pytest.raises(FetchError, match="HTTP 404"):
-        net.download(f"{base}/missing", target)
+        net.download(f"{base}/missing", target, LOCAL)
     monkeypatch.setattr(net, "DOWNLOAD_LIMIT", 1024)
     monkeypatch.setattr(net, "CHUNK", 512)
     with pytest.raises(FetchError, match="larger than"):
-        net.download(f"{base}/big", target)
+        net.download(f"{base}/big", target, LOCAL)
     assert list(tmp_path.iterdir()) == []
 
 
 def test_fetch_text_stops_a_slow_response(base: str) -> None:
     started = time.monotonic()
     with pytest.raises(FetchError, match="took longer than 1 s"):
-        net.fetch_text(f"{base}/slow", deadline=1.0)
+        net.fetch_text(f"{base}/slow", trusted=LOCAL, deadline=1.0)
     assert time.monotonic() - started < 2
 
 
@@ -120,5 +124,82 @@ def test_fetch_text_stops_slow_headers() -> None:
     threading.Thread(target=drip, daemon=True).start()
     started = time.monotonic()
     with listener, pytest.raises(FetchError, match="took longer than 1 s"):
-        net.fetch_text(f"http://127.0.0.1:{listener.getsockname()[1]}/", deadline=1.0)
+        net.fetch_text(f"http://127.0.0.1:{listener.getsockname()[1]}/", trusted=LOCAL, deadline=1.0)
     assert time.monotonic() - started < 3
+
+
+def test_private_addresses_need_a_named_host(base: str) -> None:
+    with pytest.raises(FetchError, match=r"refused 127\.0\.0\.1"):
+        net.fetch_text(f"{base}/page")
+    with pytest.raises(FetchError, match=r"refused .*private"):
+        net.fetch_text(f"{base}/to-localhost", trusted=LOCAL)
+
+
+def test_redirects_to_other_schemes_are_refused(base: str) -> None:
+    started = time.monotonic()
+    with pytest.raises(FetchError, match="refused a redirect to a ftp address"):
+        net.fetch_text(f"{base}/to-ftp", trusted=LOCAL)
+    assert time.monotonic() - started < 2
+    with pytest.raises(FetchError, match="only http and https"):
+        net.fetch_text("ftp://127.0.0.1:1/x.m3u8", trusted=LOCAL)
+
+
+def test_credentials_go_only_to_named_hosts() -> None:
+    headers = (("Authorization", "Bearer x"), ("Cookie", "c=1"), ("Referer", "https://r.example.com/"))
+    named = net.request("https://tv.example.com/a", headers, frozenset({"tv.example.com"}))
+    other = net.request("https://cdn.example.com/a", headers, frozenset({"tv.example.com"}))
+    assert named.get_header("Authorization") == "Bearer x"
+    assert named.get_header("Cookie") == "c=1"
+    assert other.get_header("Authorization") is None
+    assert other.get_header("Cookie") is None
+    assert other.get_header("Referer") == "https://r.example.com/"
+    redirects = net._Redirects(frozenset({"tv.example.com"}))
+    moved = redirects.redirect_request(named, None, 302, "Found", {}, "https://cdn.example.com/b")
+    assert moved is not None
+    assert moved.get_header("Authorization") is None
+    assert moved.get_header("Cookie") is None
+    assert moved.get_header("Referer") == "https://r.example.com/"
+    stayed = redirects.redirect_request(named, None, 302, "Found", {}, "https://tv.example.com/b")
+    assert stayed is not None
+    assert stayed.get_header("Authorization") == "Bearer x"
+
+
+def test_download_has_a_total_deadline(base: str, tmp_path: Path) -> None:
+    started = time.monotonic()
+    with pytest.raises(FetchError, match="took longer than 1 s"):
+        net.download(f"{base}/slow", tmp_path / "guide.xml", LOCAL, deadline=1.0)
+    assert time.monotonic() - started < 2
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_errors_and_logs_show_only_the_host() -> None:
+    with pytest.raises(FetchError) as caught:
+        net.fetch_text("http://user:secret@127.0.0.1:1/live?token=abc", trusted=LOCAL)
+    assert str(caught.value).startswith("127.0.0.1:1: ")
+    assert "secret" not in str(caught.value)
+    assert "abc" not in str(caught.value)
+    assert net.safe_url("https://u:p@[::1]:8443/x?y=z") == "[::1]:8443"
+    assert net.safe_url("http://[bad") == "an invalid address"
+    assert net.redact("open https://u:p@cdn.example.com/a/b?t=1 failed") == "open https://cdn.example.com failed"
+
+
+@pytest.mark.parametrize(
+    ("address", "public"),
+    [
+        ("93.184.215.14", True),
+        ("2606:4700::1111", True),
+        ("127.0.0.1", False),
+        ("10.1.2.3", False),
+        ("192.168.1.2", False),
+        ("169.254.169.254", False),
+        ("100.64.0.1", False),
+        ("::1", False),
+        ("fd00::1", False),
+        ("fe80::1%en0", False),
+        ("::ffff:10.1.2.3", False),
+        ("224.0.0.1", False),
+        ("not an address", False),
+    ],
+)
+def test_is_public(address: str, public: bool) -> None:
+    assert net.is_public(address) is public

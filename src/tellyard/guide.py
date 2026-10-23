@@ -1,4 +1,5 @@
 import copy
+import io
 import logging
 import tempfile
 import xml.etree.ElementTree as ET
@@ -9,11 +10,15 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from tellyard.channels import Channel, Lineup
-from tellyard.net import FetchError, download, open_maybe_gzip
+from tellyard.net import FetchError, download, hosts_of, open_maybe_gzip, safe_url
 
 log = logging.getLogger(__name__)
 XMLTV_TIME = "%Y%m%d%H%M%S %z"
 HISTORY = timedelta(hours=2)
+FEED_LIMIT = 1024 * 1024 * 1024
+ENTRY_LIMIT = 64 * 1024
+ENTRY_ELEMENTS = 1000
+KEPT_LIMIT = 32 * 1024 * 1024
 
 type Downloader = Callable[[str, Path], None]
 # Strict XMLTV readers need this element order.
@@ -23,6 +28,10 @@ PROGRAMME_ORDER = (
     "subtitles", "rating", "star-rating", "review", "image",
 )  # fmt: skip
 MOVIE_CATEGORIES = frozenset({"movie", "movies", "film", "films", "sinema", "feature film"})
+
+
+class FeedError(Exception):
+    pass
 
 
 @dataclass(frozen=True)
@@ -55,7 +64,11 @@ def parse_time(text: str) -> datetime | None:
         return None
 
 
-def build(lineup: Lineup, now: datetime, days: int, downloader: Downloader = download) -> bytes:
+def fetch_feed(url: str, destination: Path) -> None:
+    download(url, destination, hosts_of([url]))
+
+
+def build(lineup: Lineup, now: datetime, days: int, downloader: Downloader = fetch_feed) -> bytes:
     start = now - HISTORY
     end = now + timedelta(days=days)
     schedules = _external(lineup.channels, start, end, downloader)
@@ -87,37 +100,83 @@ def _external(
             try:
                 downloader(url, path)
                 found = _read(path, ids, start, end)
-            except (FetchError, ET.ParseError, OSError, EOFError) as error:
-                log.warning("guide source failed, using placeholders", extra={"url": url, "reason": str(error)})
+            except (FetchError, FeedError, ET.ParseError, OSError, EOFError) as error:
+                log.warning(
+                    "guide source failed, using placeholders", extra={"url": safe_url(url), "reason": str(error)}
+                )
                 continue
             for number, slots in found.items():
                 schedules[number].extend(slots)
             missing = sorted(source_id for source_id, numbers in ids.items() if not any(n in found for n in numbers))
             if missing:
-                log.warning("guide source has no current listings", extra={"url": url, "ids": ",".join(missing)})
+                log.warning(
+                    "guide source has no current listings", extra={"url": safe_url(url), "ids": ",".join(missing)}
+                )
     return schedules
 
 
 def _read(path: Path, ids: dict[str, list[str]], start: datetime, end: datetime) -> dict[str, list[Slot]]:
+    # Feeds are untrusted and may be compressed. Every limit here bounds memory, not only time.
     found: dict[str, list[Slot]] = defaultdict(list)
-    with open_maybe_gzip(path) as stream:
-        context = ET.iterparse(stream, events=("start", "end"))
+    with open_maybe_gzip(path) as raw:
+        stream = _Counted(raw)
         root: ET.Element | None = None
-        for event, element in context:
-            if root is None and event == "start":
-                root = element
-            if event != "end" or element.tag not in {"programme", "channel"}:
+        depth = elements = began = kept = 0
+        for event, element in ET.iterparse(stream, events=("start", "end")):
+            stream.mark = stream.count
+            if event == "start":
+                depth += 1
+                if root is None:
+                    root = element
+                elif depth == 2:
+                    elements, began = 0, stream.count
+                elif (elements := elements + 1) > ENTRY_ELEMENTS:
+                    raise FeedError(f"a guide entry has more than {ENTRY_ELEMENTS} parts")
                 continue
+            depth -= 1
+            if depth != 1 or root is None:
+                continue
+            size = stream.count - began
+            if size > ENTRY_LIMIT:
+                raise FeedError(f"a guide entry is larger than {ENTRY_LIMIT // 1024} KB")
             numbers = ids.get(element.get("channel", "")) if element.tag == "programme" else None
-            if numbers:
-                begin = parse_time(element.get("start", ""))
-                stop = parse_time(element.get("stop", ""))
-                if begin and stop and begin < stop and stop > start and begin < end:
-                    for number in numbers:
-                        found[number].append(Slot(begin, stop, copy.deepcopy(element)))
-            if root is not None:
-                root.clear()
+            if numbers and _keep(element, numbers, start, end, found):
+                kept += len(ET.tostring(element)) * len(numbers)
+                if kept > KEPT_LIMIT:
+                    raise FeedError(f"the listings for these channels are larger than {KEPT_LIMIT // 1024 // 1024} MB")
+            root.clear()
     return found
+
+
+def _keep(
+    element: ET.Element, numbers: list[str], start: datetime, end: datetime, found: dict[str, list[Slot]]
+) -> bool:
+    begin = parse_time(element.get("start", ""))
+    stop = parse_time(element.get("stop", ""))
+    if not (begin and stop and begin < stop and stop > start and begin < end):
+        return False
+    for number in numbers:
+        found[number].append(Slot(begin, stop, copy.deepcopy(element)))
+    return True
+
+
+class _Counted(io.RawIOBase):
+    def __init__(self, stream: io.BufferedIOBase) -> None:
+        self._stream = stream
+        self.count = 0
+        self.mark = 0
+
+    def readable(self) -> bool:
+        return True
+
+    def read(self, size: int = -1) -> bytes:
+        data = self._stream.read(size)
+        self.count += len(data)
+        if self.count > FEED_LIMIT:
+            raise FeedError(f"the guide source is larger than {FEED_LIMIT // 1024 // 1024} MB unpacked")
+        if self.count - self.mark > ENTRY_LIMIT + len(data):
+            raise FeedError(f"a guide entry is larger than {ENTRY_LIMIT // 1024} KB")
+        return data
 
 
 def _fill(channel: Channel, slots: list[Slot], start: datetime, end: datetime) -> list[Slot]:
@@ -184,12 +243,13 @@ def _decorate(element: ET.Element, channel: Channel, slot: Slot) -> None:
 
 
 class Guide:
-    def __init__(self, path: Path, days: int, downloader: Downloader = download) -> None:
+    def __init__(self, path: Path, days: int, downloader: Downloader = fetch_feed) -> None:
         self._path = path
         self._days = days
         self._downloader = downloader
         self._data: bytes | None = None
         self.built_at: datetime | None = None
+        self.write_error: str | None = None
         if path.is_file():
             self._data = path.read_bytes()
             self.built_at = datetime.fromtimestamp(path.stat().st_mtime, UTC)
@@ -201,10 +261,16 @@ class Guide:
     def rebuild(self, lineup: Lineup, now: datetime | None = None) -> None:
         moment = now or datetime.now(UTC)
         data = build(lineup, moment, self._days, self._downloader)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        partial = self._path.with_name(self._path.name + ".part")
-        partial.write_bytes(data)
-        partial.replace(self._path)
         self._data = data
         self.built_at = moment
+        partial = self._path.with_name(self._path.name + ".part")
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            partial.write_bytes(data)
+            partial.replace(self._path)
+        except OSError as error:
+            self.write_error = f"cannot write the guide to {self._path.parent}: {error.strerror or error}"
+            log.error("guide not saved", extra={"reason": self.write_error})
+        else:
+            self.write_error = None
         log.info("guide rebuilt", extra={"channels": len(lineup.channels), "size_kb": len(data) // 1024})

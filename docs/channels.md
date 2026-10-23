@@ -25,12 +25,14 @@ category = "News"
 | `page` | A web page that contains the stream's `.m3u8` address. |
 | `hls` | The stream's `.m3u8` playlist address. |
 | `match` | For `live` on YouTube: part of the title of the live stream to play, when the channel runs several. For `page`: part of the `.m3u8` address to pick. |
-| `headers` | For `page` and `hls`: extra request headers, such as `{ Referer = "https://example.com/" }`. |
+| `headers` | For `page` and `hls`: extra request headers, such as `{ Referer = "https://example.com/" }`. `Authorization` and `Cookie` go only to the hosts written in `page`, `hls` or `token`. |
 | `token` | For `hls`: a token service that returns a fresh signed address before every tune. `{url}` in it becomes the `hls` address. The reply must be JSON. |
 | `token_field` | The JSON key holding the signed address. Default `url`. |
 | `min_height` | Lowest resolution `tellyard check` accepts for this channel, such as `720`. Overrides `MIN_HEIGHT`. |
 
 Set exactly one of `live`, `page` or `hls`.
+
+A source on your home network works when its address is the one written in `page`, `hls` or `token`. Tellyard refuses other private addresses, see [Addresses Tellyard reaches](how-it-works.md#addresses-tellyard-reaches).
 
 ## The guide
 
