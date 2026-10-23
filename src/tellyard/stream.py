@@ -22,6 +22,7 @@ STALL_TIMEOUT = 20.0
 QUICK_DROP = 30.0
 MAX_ATTEMPTS = 3
 BACKOFF = 2.0
+SECOND_SIGNAL = 0.2
 STOP_GRACE = 5.0
 CANCEL_POLL = 1.0
 READ_TIMEOUT_US = "15000000"
@@ -85,12 +86,16 @@ class Process:
     def close(self) -> None:
         self._closed.set()
         if self._process.poll() is None:
-            self._process.terminate()
-            try:
-                self._process.wait(STOP_GRACE)
-            except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait()
+            # On the first signal ffmpeg waits for its current read, up to a segment. The second interrupts the read.
+            for grace in (SECOND_SIGNAL, STOP_GRACE):
+                self._process.terminate()
+                try:
+                    self._process.wait(grace)
+                except subprocess.TimeoutExpired:
+                    continue
+                return
+            self._process.kill()
+            self._process.wait()
 
     def _pump(self) -> None:
         stdout = self._process.stdout
