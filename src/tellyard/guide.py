@@ -61,15 +61,15 @@ def is_movie(categories: list[str]) -> bool:
 
 def parse_time(text: str) -> datetime | None:
     text = text.strip()
-    digits, _, zone = text.partition(" ")
+    digits, zone = text[:14], text[14:].strip()
     try:
-        moment = datetime.strptime(digits[:14], "%Y%m%d%H%M%S")
+        moment = datetime.strptime(digits, "%Y%m%d%H%M%S")
     except ValueError:
         return None
     if not zone:
         return moment.replace(tzinfo=UTC)
     try:
-        moment = datetime.strptime(f"{digits[:14]} {zone}", XMLTV_TIME)
+        moment = datetime.strptime(f"{digits} {zone}", XMLTV_TIME)
         moment.astimezone(UTC)
     except (ValueError, OverflowError):
         return None
@@ -156,7 +156,7 @@ def _reusing(downloader: Downloader, saved: Path, reuse: frozenset[str]) -> Down
     def fetch(url: str, destination: Path) -> None:
         kept = saved / _saved_name(url)
         if url in reuse and kept.is_file():
-            shutil.copyfile(kept, destination)
+            shutil.copy2(kept, destination)
         else:
             downloader(url, destination)
 
@@ -194,7 +194,7 @@ def _save(path: Path, kept: Path) -> None:
     partial = kept.with_name(kept.name + ".part")
     try:
         kept.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(path, partial)
+        shutil.copy2(path, partial)
         partial.replace(kept)
     except OSError as error:
         with contextlib.suppress(OSError):
@@ -286,8 +286,6 @@ def _fill(channel: Channel, slots: list[Slot], start: datetime, end: datetime) -
     ordered: list[Slot] = []
     cursor = start
     for slot in sorted(slots, key=lambda item: item.start):
-        if slot.stop <= start:
-            continue
         if ordered and slot.start < cursor:
             # Plex shows overlaps badly. End each show when the next show starts.
             previous = ordered.pop()

@@ -1,5 +1,6 @@
 import gzip
 import itertools
+import os
 import tracemalloc
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
@@ -174,6 +175,7 @@ def test_unparseable_source_falls_back() -> None:
 
 def test_parse_time_variants() -> None:
     assert guide.parse_time("20261011150000 +0300") == datetime(2026, 10, 11, 12, tzinfo=UTC)
+    assert guide.parse_time("20261011150000+0300") == datetime(2026, 10, 11, 12, tzinfo=UTC)
     assert guide.parse_time("20261011150000") == datetime(2026, 10, 11, 15, tzinfo=UTC)
     assert guide.parse_time("2026") is None
     assert guide.parse_time("20261011150000 nonsense") is None
@@ -319,6 +321,14 @@ def test_huge_entry_is_stopped_while_reading(tmp_path: Path) -> None:
     assert peak < 5 * 1024 * 1024
 
 
+def test_entry_of_many_small_parts_is_stopped(tmp_path: Path) -> None:
+    path = tmp_path / "feed.xml.gz"
+    parts = b"<desc>" + b"x" * 80 + b"</desc>"
+    bulk(path, [b"<tv>", ENTRY.replace(b"</programme>", parts * 900 + b"</programme>"), b"</tv>"])
+    with pytest.raises(guide.FeedError, match="larger than 64 KB"):
+        read_feed(path)
+
+
 def test_entity_declarations_stop_the_feed(tmp_path: Path) -> None:
     path = tmp_path / "feed.xml.gz"
     declared = b'<?xml version="1.0"?>\n<!DOCTYPE tv [\n<!ENTITY a "' + b"A" * 100 + b'">\n]>\n<tv>'
@@ -417,7 +427,12 @@ def test_retry_downloads_only_the_failed_sources(tmp_path: Path) -> None:
     assert cache.failed_sources == 0
     assert cache.data != first
     calls.clear()
+    reused = next(
+        path for path in (tmp_path / "feeds").iterdir() if path.name == guide._saved_name("https://a.example.com/x")
+    )
+    os.utime(reused, (1_000_000_000, 1_000_000_000))
     cache.rebuild(both, NOW, retry=True)
     assert calls == []
+    assert reused.stat().st_mtime == 1_000_000_000
     cache.rebuild(both, NOW)
     assert sorted(calls) == ["https://a.example.com/x", "https://b.example.com/x"]
