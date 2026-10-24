@@ -7,7 +7,7 @@ updates:
     cooldown:
       default-days: 7
       # YouTube changes break older yt-dlp releases quickly, so take its fixes at once.
-      exclude: ["yt-dlp", "yt-dlp-ejs"]
+      exclude: ["yt-dlp*"]
     groups:
       python:
         update-types: [minor, patch]
