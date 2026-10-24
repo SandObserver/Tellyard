@@ -164,6 +164,47 @@ def test_feed_forgets_old_addresses(relay: Relay, monkeypatch: pytest.MonkeyPatc
     assert feed.address("https://cdn.example.com/s4.ts", False).endswith("/5/s4.ts")
 
 
+def test_feed_keeps_a_playlist_that_is_still_read(relay: Relay, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(relay_module, "ENTRIES", 3)
+    feed = feed_for(relay, "https://cdn.example.com/live/media.m3u8")
+    for number in range(10):
+        assert feed.entry(0) == ("https://cdn.example.com/live/media.m3u8", True)
+        feed.address(f"https://cdn.example.com/s{number}.ts", False)
+    assert feed.entry(0) is not None
+    assert feed.entry(1) is None
+
+
+def test_relay_serves_a_live_playlist_past_the_address_limit(relay: Relay, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(relay_module, "ENTRIES", 8)
+    sequence = 0
+
+    class Sliding(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            lines = ["#EXTM3U", "#EXT-X-TARGETDURATION:2", f"#EXT-X-MEDIA-SEQUENCE:{sequence}"]
+            for number in range(sequence, sequence + 3):
+                lines += ["#EXTINF:2.0,", f"seg{number}.ts"]
+            body = ("\n".join(lines) + "\n").encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Sliding)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        feed = feed_for(relay, f"http://127.0.0.1:{server.server_address[1]}/live/media.m3u8")
+        for _ in range(30):
+            status, _, _ = get(feed.video)
+            assert status == 200
+            sequence += 1
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_relay_serves_rewritten_playlists_and_segments(relay: Relay, upstream: str) -> None:
     feed = feed_for(relay, f"{upstream}/live/media.m3u8")
     status, headers, body = get(feed.video)
