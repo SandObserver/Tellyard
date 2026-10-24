@@ -20,6 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
@@ -39,7 +40,13 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
-          version=$(python3 tools/release.py prepare --note "$NOTE")
+          published=$(gh api "repos/$REPO/releases/latest" --jq .tag_name)
+          if ! grep -qE "^## \[${published#v}\] - " CHANGELOG.md; then
+            echo "::error::$published is published but not recorded on main yet. Merge its Release pull request first."
+            exit 1
+          fi
+          highest=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          version=$(python3 tools/release.py prepare --note "$NOTE" --above "${highest#v}")
           python3 tools/unraid_template.py
           uv lock
           branch="release/v$version"

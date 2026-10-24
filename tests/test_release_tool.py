@@ -149,6 +149,10 @@ OLD = timedelta(days=3)
 def test_newest_skips_yanked_and_pre_releases() -> None:
     project = pypi(yt_dlp={"2026.9.1": OLD, "2026.10.21": OLD, "2026.10.22": None, "2026.10.23.1.dev0": OLD})("yt-dlp")
     assert release.newest(project) == ("2026.10.21", NOW - OLD)
+    project = pypi(yt_dlp={"2026.10.9": OLD, "2026.10.21": OLD, "2026.10.21.post1": OLD})("yt-dlp")
+    assert release.newest(project) == ("2026.10.21.post1", NOW - OLD)
+    with pytest.raises(ValueError, match="not a stable version"):
+        release.stable_order("2026.10.23.1.dev0")
     assert release.newest({"releases": {"1.0": []}}) is None
 
 
@@ -171,29 +175,60 @@ def test_refuses_a_lock_with_a_young_or_unknown_version() -> None:
     ]
 
 
-def test_record_adds_the_release_below_unreleased(tmp_path: Path) -> None:
+SECTION = "## [0.1.1] - 2026-10-25\n\n### Changed\n\n- Update yt-dlp to 2026.10.21.\n\n"
+RELEASED = "## [Unreleased]\n\n" + SECTION + "## [0.1.0] - 2026-10-11\n"
+
+
+def test_record_adds_the_released_section_below_unreleased(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8")
     (tmp_path / "CHANGELOG.md").write_text(CHANGELOG.replace("0.1.0-beta.1", "0.1.0"), encoding="utf-8")
-    release.record(tmp_path, "0.1.1", "Update yt-dlp to 2026.10.21.", "2026-10-25")
-    text = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert (
-        "- Add another thing.\n\n## [0.1.1] - 2026-10-25\n\n### Changed\n\n- Update yt-dlp to 2026.10.21.\n\n## [0.1.0]"
-        in text
+    assert release.record(tmp_path, "0.1.1", RELEASED)
+    assert "- Add another thing.\n\n" + SECTION + "## [0.1.0]" in (tmp_path / "CHANGELOG.md").read_text(
+        encoding="utf-8"
     )
     assert 'version = "0.1.1"' in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+    assert not release.record(tmp_path, "0.1.1", RELEASED)
 
 
-def test_record_with_an_empty_unreleased(tmp_path: Path) -> None:
+def test_record_keeps_a_higher_version_on_main(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('version = "0.2.0b1"\n', encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.2.0-beta.1] - 2026-10-24\n", encoding="utf-8")
+    assert release.record(tmp_path, "0.1.1", RELEASED)
+    assert (tmp_path / "pyproject.toml").read_text(encoding="utf-8") == 'version = "0.2.0b1"\n'
+    assert (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8").startswith("## [Unreleased]\n\n" + SECTION)
+    assert release.prepare(tmp_path, "Update yt-dlp.", "2026-10-26") == "0.2.0-beta.2"
+
+
+def test_record_refuses_a_release_without_a_section(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text('version = "0.1.0"\n', encoding="utf-8")
-    (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.1.0] - 2026-10-11\n\nFirst.\n", encoding="utf-8")
-    release.record(tmp_path, "0.1.1", "Update yt-dlp to 2026.10.21.", "2026-10-25")
-    assert (
-        (tmp_path / "CHANGELOG.md")
-        .read_text(encoding="utf-8")
-        .startswith(
-            "## [Unreleased]\n\n## [0.1.1] - 2026-10-25\n\n### Changed\n\n- Update yt-dlp to 2026.10.21.\n\n## [0.1.0]"
-        )
+    (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.1.0] - 2026-10-11\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"no dated section for 0\.1\.2"):
+        release.record(tmp_path, "0.1.2", RELEASED)
+
+
+@pytest.mark.parametrize(
+    ("current", "above", "changelog", "expected"),
+    [
+        ("0.1.1", "0.1.2", "### Fixed\n\n- Fix.\n", "0.1.3"),
+        ("0.1.1", "0.1.2", "### Added\n\n- Add.\n", "0.2.0"),
+        ("0.1.1", "0.1.1", "### Fixed\n\n- Fix.\n", "0.1.2"),
+        ("0.2.0b1", "0.1.2", "### Fixed\n\n- Fix.\n", "0.2.0-beta.2"),
+    ],
+)
+def test_prepare_takes_a_number_above_existing_tags(
+    tmp_path: Path, current: str, above: str, changelog: str, expected: str
+) -> None:
+    (tmp_path / "pyproject.toml").write_text(f'version = "{current}"\n', encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text(
+        f"## [Unreleased]\n\n{changelog}\n## [0.1.0] - 2026-10-11\n", encoding="utf-8"
     )
+    assert release.prepare(tmp_path, None, "2026-10-26", above) == expected
+
+
+def test_order_puts_betas_before_their_release() -> None:
+    assert release.order("0.2.0b1") < release.order("0.2.0-beta.2") < release.order("0.2.0") < release.order("0.2.1")
+    with pytest.raises(ValueError, match="cannot compare"):
+        release.order("1.0.0rc1")
 
 
 def test_age_commands(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -213,8 +248,14 @@ def test_age_commands(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
     assert "Refused: yt-dlp 2026.10.24" in capsys.readouterr().err
 
 
-def test_record_command(tmp_path: Path) -> None:
+def test_record_and_pins_commands(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (tmp_path / "pyproject.toml").write_text('version = "0.1.0"\n', encoding="utf-8")
     (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.1.0] - 2026-10-11\n", encoding="utf-8")
-    assert release.main(["record", "--root", str(tmp_path), "--version", "0.1.1", "--note", "Update yt-dlp."]) == 0
-    assert "## [0.1.1] - " in (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    (tmp_path / "released.md").write_text(RELEASED, encoding="utf-8")
+    command = ["record", "--root", str(tmp_path), "--version", "0.1.1", "--released", str(tmp_path / "released.md")]
+    assert release.main(command) == 0
+    assert release.main(command) == 0
+    assert capsys.readouterr().out == "true\nfalse\n"
+    (tmp_path / "uv.lock").write_text(lock(ytdlp="2026.10.21"), encoding="utf-8")
+    assert release.main(["pins", str(tmp_path / "uv.lock")]) == 0
+    assert capsys.readouterr().out == "yt-dlp==2026.10.21\nyt-dlp-ejs==0.8.0\n"

@@ -86,12 +86,14 @@ Semantic versioning. Move the `Unreleased` entries in [CHANGELOG.md](CHANGELOG.m
 YouTube changes break older yt-dlp releases, so new yt-dlp versions ship on their own. They never ship unreleased work from `main`.
 
 1. Every 6 hours, `yt-dlp-release.yml` looks for a newer stable `yt-dlp` or `yt-dlp-ejs` on PyPI. Yanked and pre-release versions do not count. It waits until the newest version is 24 hours old, so a release that is pulled or fixed again the same day never ships.
-2. It takes the last release tag, updates yt-dlp in `uv.lock`, and dates a patch release with an "Update yt-dlp to ..." line. Pushing that tag runs `release.yml`, which runs every CI job before it publishes.
-3. It opens an auto-merging `Release: X.Y.Z` pull request that records the same version, CHANGELOG section and yt-dlp update on `main`.
+2. It takes the newest published release, updates yt-dlp in `uv.lock`, and dates a patch release with an "Update yt-dlp to ..." line. The number is above every existing tag. Pushing that tag runs `release.yml`, which runs every CI job before it publishes.
+3. When `release.yml` succeeds, the workflow opens an auto-merging `Release: X.Y.Z` pull request that copies the release's CHANGELOG section and yt-dlp versions to `main`. It sets the version on `main` only when that is lower, so a beta in progress keeps its version.
 
-Dependabot ignores yt-dlp. Run the workflow by hand with `dry-run` to see what it would release.
+The workflow waits while a hand release is open or not yet tagged, while a release run is not finished, and while the newest published release is not recorded on `main`. Each run first records the newest published release if `main` does not have it. A release that failed is not built again with the same yt-dlp. Check its Release run.
 
-Other releases are made by hand. Run **Release prep** from the Actions tab to open a release pull request for whatever is in Unreleased. When `pyproject.toml` on `main` holds a new version with a dated CHANGELOG section, `release-tag.yml` pushes the tag, which runs `release.yml`.
+Dependabot ignores yt-dlp. Run the workflow by hand from `main` with `dry-run` to see what it would record and release.
+
+Other releases are made by hand. Run **Release prep** from the Actions tab to open a release pull request for whatever is in Unreleased. It refuses while the newest published release is not recorded on `main`. When `pyproject.toml` on `main` holds a new version with a dated CHANGELOG section, `release-tag.yml` pushes the tag, which runs `release.yml`.
 
 The workflows act through a GitHub App, because pushes, merges and tags made with `GITHUB_TOKEN` start no further workflows. Its client ID and private key are stored as `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY` Actions secrets.
 
