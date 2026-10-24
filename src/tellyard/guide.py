@@ -289,7 +289,7 @@ def _fill(channel: Channel, slots: list[Slot], start: datetime, end: datetime) -
         if slot.stop <= start:
             continue
         if ordered and slot.start < cursor:
-            # Plex shows overlaps badly. End each show when the next show starts.
+            # Plex shows overlapping programmes badly.
             previous = ordered.pop()
             if previous.start < slot.start:
                 ordered.append(replace(previous, stop=slot.start))
