@@ -6,7 +6,7 @@
 uv sync
 ```
 
-Python 3.13. Running the service needs `ffmpeg` and `ffprobe`, and for YouTube channels `deno`, on the `PATH`.
+Python 3.13. Running the service needs `ffmpeg`, and for YouTube channels `deno`, on the `PATH`.
 
 ## Run it locally
 
@@ -34,7 +34,7 @@ uvx pre-commit install --hook-type pre-commit --hook-type pre-push
 | `hls.py` | Reads HLS master playlists and picks the highest resolution and its audio. |
 | `stream.py` | Runs ffmpeg for one viewer, watches for stalls and reconnects. |
 | `guide.py` | Builds the XMLTV guide from XMLTV sources and placeholder blocks. |
-| `check.py` | The `check` command: measures each channel's real resolution with ffprobe. |
+| `check.py` | The `check` command: measures each channel's real resolution with ffmpeg. |
 | `net.py` | Every HTTP request, with size limits. |
 
 ## Before opening a PR
@@ -47,7 +47,7 @@ uv run ruff format . && uv run ruff check . && uv run mypy && uv run pytest
 
 The tests need no internet connection and no ffmpeg. `pytest` measures coverage and fails below 85% or on any warning. CI also lints the workflows with actionlint and zizmor, builds the image, checks that it becomes healthy, plays a test stream through it, and scans it with Grype; a fixable critical vulnerability fails the build. It also builds the arm64 image under emulation and runs its tools once.
 
-`tests/e2e.sh` is the test stream check. It builds a 1080p live stream with the image's own ffmpeg, serves it on a private Docker network, and checks that `tellyard check`, the line-up, the guide and `/stream/101` work, and that ffmpeg stops when the viewer leaves. It needs Docker but not the internet:
+`tests/e2e.sh` is the test stream check. It builds a 1080p live stream with the full ffmpeg image from the Dockerfile's `ffmpeg-full` stage, serves it on a private Docker network, and checks that `tellyard check`, the line-up, the guide and `/stream/101` work, and that ffmpeg stops when the viewer leaves. It needs Docker, and the internet only to pull that ffmpeg image:
 
 ```sh
 docker build -t tellyard:ci . && tests/e2e.sh tellyard:ci

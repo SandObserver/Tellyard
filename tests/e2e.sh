@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Plays a generated live stream through the image. Needs Docker, not the internet.
+# Plays a generated live stream through the image. Needs Docker, and the internet to pull the encoder image.
 # Usage: tests/e2e.sh [IMAGE]
 set -euo pipefail
 

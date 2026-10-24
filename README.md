@@ -168,7 +168,7 @@ docker exec tellyard tellyard check
 | `validate` | Read `channels.toml` and list the channels. |
 | `check [NUMBER...]` | Tune each channel and report the resolution it sends. Exits 1 if any fails. |
 | `guide [-o FILE]` | Build the guide once. |
-| `health` | Exit 0 when the running service is healthy, or print why it is not. Used by the container health check. |
+| `health` | Exit 0 when the running service is healthy, or print why it is not. The container health check runs the same check. |
 
 ## Settings
 
