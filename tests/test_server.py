@@ -373,13 +373,20 @@ def test_connections_are_capped(app: App, monkeypatch: pytest.MonkeyPatch, caplo
     capped = Server(("127.0.0.1", 0), app)
     threading.Thread(target=capped.serve_forever, daemon=True).start()
     address = ("127.0.0.1", capped.server_address[1])
+
+    def answers() -> bool:
+        try:
+            return get(f"http://127.0.0.1:{address[1]}/lineup_status.json")[0] == 200
+        except OSError:
+            return False
+
     try:
         with socket.create_connection(address) as held:
             with socket.create_connection(address) as refused:
                 assert closed_within(refused, 2)
             assert not closed_within(held, 0.3)
         assert "too many connections" in caplog.text
-        assert wait_for(lambda: get(f"http://127.0.0.1:{address[1]}/lineup_status.json")[0] == 200, 3)
+        assert wait_for(answers, 3)
     finally:
         capped.shutdown()
         capped.server_close()

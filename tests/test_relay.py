@@ -120,7 +120,25 @@ def test_rewrite_sends_every_address_through_the_relay() -> None:
     ]
 
 
-@pytest.mark.parametrize("line", ["file:///etc/passwd", '#EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://key"', "data:,x"])
+def test_rewrite_sends_unquoted_addresses_through_the_relay() -> None:
+    text = "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=http://192.168.1.1/k.bin,IV=0x1\n#EXT-X-MAP:URI=init.mp4\ns1.ts\n"
+    assert rewrite(text, "https://cdn.example.com/live/media.m3u8", lambda url, playlist: f"r/{url}").splitlines() == [
+        "#EXTM3U",
+        '#EXT-X-KEY:METHOD=AES-128,URI="r/http://192.168.1.1/k.bin",IV=0x1',
+        '#EXT-X-MAP:URI="r/https://cdn.example.com/live/init.mp4"',
+        "r/https://cdn.example.com/live/s1.ts",
+    ]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "file:///etc/passwd",
+        '#EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://key"',
+        "#EXT-X-KEY:METHOD=AES-128,URI=file:///etc/passwd",
+        "data:,x",
+    ],
+)
 def test_rewrite_refuses_other_schemes(line: str) -> None:
     with pytest.raises(PlaylistError, match="the playlist has a"):
         rewrite(f"#EXTM3U\n{line}\n", "https://cdn.example.com/live/media.m3u8", lambda url, playlist: url)

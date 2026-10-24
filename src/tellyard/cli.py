@@ -1,20 +1,17 @@
 import argparse
 import functools
-import json
 import logging
 import os
 import platform
 import signal
 import sys
 import threading
-import urllib.error
-import urllib.request
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from types import FrameType
 
-from tellyard import __version__, channels, check, logfmt
+from tellyard import __version__, channels, check, health, logfmt
 from tellyard.channels import ChannelError, Lineup
 from tellyard.guide import Guide, build
 from tellyard.relay import Relay
@@ -49,7 +46,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     logfmt.setup(settings.log_level)
     if args.command == "health":
-        return _health(settings)
+        return health.probe(settings.port)
     if args.command == "serve":
         return _serve(settings)
     try:
@@ -70,7 +67,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
         relay = Relay()
         try:
-            measure = functools.partial(check.probe_height, settings.ffprobe, relay)
+            measure = functools.partial(check.probe_height, settings.ffmpeg, relay)
             results = check.check(chosen, Resolver(settings), measure, settings.min_height)
         finally:
             relay.close()
@@ -131,21 +128,3 @@ def _banner(settings: Settings, lineup: Lineup) -> str:
         ("Data", str(settings.data_dir)),
     ]
     return logfmt.banner(f"Tellyard {__version__} · Python {platform.python_version()}", rows)
-
-
-def _health(settings: Settings) -> int:
-    url = f"http://127.0.0.1:{settings.port}/healthz"
-    try:
-        with urllib.request.urlopen(url, timeout=5) as response:
-            status = json.load(response).get("status")
-    except urllib.error.HTTPError as error:
-        try:
-            reason = json.load(error).get("reason") or f"HTTP {error.code}"
-        except ValueError:
-            reason = f"HTTP {error.code}"
-        print(f"tellyard: unhealthy: {reason}", file=sys.stderr)
-        return 1
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as error:
-        print(f"tellyard: unhealthy: {error}", file=sys.stderr)
-        return 1
-    return 0 if status == "ok" else 1

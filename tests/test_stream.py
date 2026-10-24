@@ -1,5 +1,6 @@
 import logging
 import queue
+import subprocess
 import threading
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import closing
@@ -228,6 +229,35 @@ def test_ffmpeg_output_is_logged_without_url_paths(caplog: pytest.LogCaptureFixt
     assert "Error opening input file https://cdn.example.com" in outputs
     assert "SECRET" not in caplog.text
     assert "PASSWORD" not in caplog.text
+
+
+class SecondSignalStops:
+    def __init__(self) -> None:
+        self.waits: list[float] = []
+
+    def poll(self) -> int | None:
+        return None
+
+    def terminate(self) -> None:
+        pass
+
+    def wait(self, timeout: float) -> int:
+        self.waits.append(timeout)
+        if len(self.waits) == 1:
+            raise subprocess.TimeoutExpired("ffmpeg", timeout)
+        return 0
+
+    def kill(self) -> None:
+        raise AssertionError("killed")
+
+
+def test_close_signals_twice_when_ffmpeg_finishes_its_read_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = Process(["true"], "7 Seven")
+    process._process.wait()
+    fake = SecondSignalStops()
+    monkeypatch.setattr(process, "_process", fake)
+    process.close()
+    assert fake.waits == [stream.SECOND_SIGNAL, stream.STOP_GRACE]
 
 
 def test_leaving_during_the_first_data_wait_stops_ffmpeg(

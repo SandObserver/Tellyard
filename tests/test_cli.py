@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tellyard import channels, check, cli
+from tellyard import channels, check, cli, health
 from tellyard.check import Result
 from tellyard.server import App
 from tellyard.settings import Settings
@@ -161,3 +161,11 @@ def test_health_command_when_down(monkeypatch: pytest.MonkeyPatch, capsys: pytes
     monkeypatch.setenv("LISTEN_PORT", "1")
     assert cli.main(["health"]) == 1
     assert "unhealthy" in capsys.readouterr().err
+
+
+def test_health_module(monkeypatch: pytest.MonkeyPatch, health_port: int, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setenv("LISTEN_PORT", str(health_port))
+    assert health.main() == 0
+    monkeypatch.setenv("LISTEN_PORT", "0")
+    assert health.main() == 2
+    assert "LISTEN_PORT" in capsys.readouterr().err

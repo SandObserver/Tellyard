@@ -2,6 +2,8 @@ import gzip
 import socket
 import threading
 import time
+import tracemalloc
+import urllib.request
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -13,6 +15,8 @@ from tellyard.net import FetchError
 
 REDIRECTS = {"/redirect": "/page", "/to-ftp": "ftp://127.0.0.1:1/x.m3u8", "/to-localhost": "http://localhost:PORT/page"}
 PAGES = {"/page": b"<html>hello</html>", "/guide.xml.gz": gzip.compress(b"<tv/>"), "/big": b"x" * 2048}
+PIECES = 100_000
+TINY_CHUNKS = b"1\r\n#\r\n" * PIECES + b"0\r\n\r\n"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -29,6 +33,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(b"x")
                 self.wfile.flush()
                 time.sleep(0.2)
+            return
+        if self.path == "/pieces":
+            self.send_response(200)
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+            self.wfile.write(TINY_CHUNKS)
             return
         body = PAGES.get(self.path)
         if body is None:
@@ -61,6 +71,17 @@ def test_fetch_text_follows_redirects(base: str) -> None:
     final, text = net.fetch_text(f"{base}/redirect", (("Referer", "https://r.example.com/"),), LOCAL)
     assert final == f"{base}/page"
     assert text == "<html>hello</html>"
+
+
+def test_fetch_text_keeps_memory_low_for_tiny_chunks(base: str) -> None:
+    tracemalloc.start()
+    try:
+        _, text = net.fetch_text(f"{base}/pieces", trusted=LOCAL)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert text == "#" * PIECES
+    assert peak < 30 * PIECES
 
 
 def test_request_sends_a_browser_agent_and_headers() -> None:
@@ -203,3 +224,17 @@ def test_errors_and_logs_show_only_the_host() -> None:
 )
 def test_is_public(address: str, public: bool) -> None:
     assert net.is_public(address) is public
+
+
+def test_https_requests_share_one_tls_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    contexts: list[object] = []
+
+    def do_open(self: object, connection: object, req: object, **kwargs: object) -> None:
+        contexts.append(kwargs.get("context"))
+        raise OSError("stop")
+
+    monkeypatch.setattr(urllib.request.AbstractHTTPHandler, "do_open", do_open)
+    for _ in range(2):
+        with pytest.raises(FetchError):
+            net.fetch_text("https://v.example.com/a.m3u8")
+    assert contexts == [net.TLS, net.TLS]

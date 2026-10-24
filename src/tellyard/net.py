@@ -30,6 +30,8 @@ SCHEMES = frozenset({"http", "https"})
 CREDENTIAL_HEADERS = frozenset({"authorization", "cookie", "proxy-authorization"})
 # A new context per request reloads every CA certificate. The relay makes a request per video segment.
 TLS = ssl.create_default_context()
+TLS.set_alpn_protocols(["http/1.1"])
+TLS.post_handshake_auth = True
 
 # Stream URLs carry credentials, and signed ones carry tokens in the path and the query.
 URL = re.compile(r"(?P<scheme>\b[a-z][a-z0-9+.-]*://)(?:[^/\s?#@'\"]*@)?(?P<host>[^/\s?#'\"]+)[^\s'\"]*", re.IGNORECASE)
@@ -102,11 +104,16 @@ def fetch_text(
     body = bytearray()
     with open_url(url, headers, trusted, timeout, deadline) as response:
         final = response.geturl()
-        while len(body) <= TEXT_LIMIT and (chunk := response.read1(CHUNK)):
-            body += chunk
+        while len(body) <= TEXT_LIMIT and (block := read_block(response, TEXT_LIMIT + 1 - len(body))):
+            body += block
     if len(body) > TEXT_LIMIT:
         raise FetchError(f"{safe_url(url)}: response is larger than {TEXT_LIMIT // 1024 // 1024} MB")
     return final, body.decode("utf-8", errors="replace")
+
+
+def read_block(response: http.client.HTTPResponse, size: int) -> bytes:
+    # read() keeps each piece of a chunked body as its own object. Tiny pieces then use about 90 times their size.
+    return response.read1(size) if response.chunked else response.read(size)
 
 
 def download(
@@ -246,7 +253,7 @@ class _HttpsHandler(urllib.request.HTTPSHandler):
         self._connection = watch.connection(http.client.HTTPSConnection, trusted)
 
     def https_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
-        return self.do_open(self._connection, req)
+        return self.do_open(self._connection, req, context=TLS)
 
 
 class _Redirects(urllib.request.HTTPRedirectHandler):

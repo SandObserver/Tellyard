@@ -23,7 +23,8 @@ LIVE_SEGMENTS = 30
 CHUNK = 64 * 1024
 NAME_LENGTH = 100
 PATH = re.compile(r"^/([A-Za-z0-9_-]{22})/(\d{1,9})/[^/]*$")
-URI_ATTRIBUTE = re.compile(r'URI="([^"]*)"')
+# ffmpeg also follows unquoted values, so both forms go through the relay.
+URI_ATTRIBUTE = re.compile(r'(?<![\w-])URI=(?:"([^"]*)"|([^",\s]*))')
 VARIANT_TAG = "#EXT-X-STREAM-INF"
 PLAYLIST_TAGS = ("#EXT-X-MEDIA:", "#EXT-X-I-FRAME-STREAM-INF:", "#EXT-X-RENDITION-REPORT:")
 PASSED_HEADERS = ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges")
@@ -53,7 +54,7 @@ def rewrite(text: str, base: str, address: Address) -> str:
             lines.append(address(_join(base, line), variant))
             variant = False
             continue
-        if 'URI="' in line:
+        if "URI=" in line:
             line = _rewrite_attribute(line, base, address)
         if line.startswith(VARIANT_TAG):
             variant = True
@@ -90,7 +91,8 @@ def _rewrite_attribute(line: str, base: str, address: Address) -> str:
     playlist = line.startswith(PLAYLIST_TAGS)
 
     def replace(found: re.Match[str]) -> str:
-        return f'URI="{address(_join(base, found.group(1)), playlist)}"'
+        reference = found[1] if found[1] is not None else found[2]
+        return f'URI="{address(_join(base, reference), playlist)}"'
 
     return URI_ATTRIBUTE.sub(replace, line)
 
@@ -233,7 +235,7 @@ class _Handler(BaseHTTPRequestHandler):
                 self.send_header("Connection", "close")
                 self.end_headers()
                 started = True
-                while not feed.closed.is_set() and (chunk := response.read1(CHUNK)):
+                while not feed.closed.is_set() and (chunk := net.read_block(response, CHUNK)):
                     if not self._write(b"%x\r\n%b\r\n" % (len(chunk), chunk) if chunked else chunk):
                         return
                 if chunked and not feed.closed.is_set():
