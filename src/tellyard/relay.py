@@ -142,7 +142,10 @@ class Feed:
 
     def entry(self, number: int) -> tuple[str, bool] | None:
         with self._lock:
-            return self._entries.get(number)
+            found = self._entries.get(number)
+            if found is not None:
+                self._entries.move_to_end(number)
+            return found
 
     def close(self) -> None:
         self.closed.set()
