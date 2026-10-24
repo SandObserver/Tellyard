@@ -34,6 +34,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Show only the host of an address in logs and error messages.
 - Limit the server to 64 connections and each request to 10 seconds and 128 KB.
 - Update certifi to 2026.10.23, which removes the emSign root certificates with compromised intermediate keys (GHSA-6q48-6c7w-9gw2).
+- Update the system CA certificates to Debian 20250419+deb13u1, which removes the same emSign root for Tellyard's own requests (DSA-6572-1).
+- Update Brotli to 1.2.1, which fixes an out-of-bounds write when yt-dlp decodes a crafted response (CVE-2026-111497).
 
 ## [0.1.0] - 2026-10-17
 
