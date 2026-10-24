@@ -67,6 +67,7 @@ class App:
         self._streams = 0
         self._guide_version = 0
         self._guide_failed_at: datetime | None = None
+        self._guide_full_at: datetime | None = None
         self._started_at = datetime.now(UTC)
         self._guide_thread: threading.Thread | None = None
         self._last_heartbeat = float("-inf")
@@ -180,15 +181,18 @@ class App:
     def refresh_guide(self, now: datetime | None = None) -> None:
         moment = now or datetime.now(UTC)
         lineup = self.store.current()
-        if not self._guide_due(moment):
+        due, retry = self._guide_due(moment)
+        if not due:
             return
         try:
-            self.guide.rebuild(lineup, moment)
+            self.guide.rebuild(lineup, moment, retry)
         except Exception:
             log.exception("guide rebuild failed", extra={"retry_min": GUIDE_RETRY.seconds // 60})
             self._guide_failed_at = moment
         else:
             self._guide_failed_at = None
+            if not retry:
+                self._guide_full_at = moment
         self._guide_version = self.store.version
 
     def start(self, stop: threading.Event) -> None:
@@ -215,15 +219,16 @@ class App:
         except FetchError as error:
             log.warning("HEARTBEAT_URL call failed", extra={"reason": str(error)})
 
-    def _guide_due(self, now: datetime) -> bool:
+    def _guide_due(self, now: datetime) -> tuple[bool, bool]:
         if self._guide_failed_at and now - self._guide_failed_at < GUIDE_RETRY:
-            return False
+            return False, False
         built = self.guide.built_at
-        if built is None or self._guide_version != self.store.version:
-            return True
-        if self.guide.failed_sources and now - built >= GUIDE_RETRY:
-            return True
-        return now - built >= timedelta(hours=self.settings.guide_refresh_hours)
+        full = self._guide_full_at or built
+        if built is None or full is None or self._guide_version != self.store.version:
+            return True, False
+        if now - full >= timedelta(hours=self.settings.guide_refresh_hours):
+            return True, False
+        return bool(self.guide.failed_sources) and now - built >= GUIDE_RETRY, True
 
 
 class Server(ThreadingHTTPServer):

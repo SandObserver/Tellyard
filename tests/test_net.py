@@ -1,4 +1,5 @@
 import gzip
+import http.client
 import socket
 import threading
 import time
@@ -40,7 +41,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(TINY_CHUNKS)
             return
-        body = PAGES.get(self.path)
+        body = self.path.encode() if self.path.startswith("/echo/") else PAGES.get(self.path)
         if body is None:
             self.send_error(404)
             return
@@ -238,3 +239,26 @@ def test_https_requests_share_one_tls_context(monkeypatch: pytest.MonkeyPatch) -
         with pytest.raises(FetchError):
             net.fetch_text("https://v.example.com/a.m3u8")
     assert contexts == [net.TLS, net.TLS]
+
+
+def test_unusual_characters_in_addresses_are_encoded(base: str) -> None:
+    _, text = net.fetch_text(f"{base}/echo/seg 1-\u062e\u0628\u0631.ts?q=a b&t=%41", trusted=LOCAL)
+    assert text == "/echo/seg%201-%D8%AE%D8%A8%D8%B1.ts?q=a%20b&t=%41"
+
+
+def test_invalid_addresses_are_not_repeated_in_errors() -> None:
+    with pytest.raises(FetchError) as caught:
+        net.fetch_text("http://[::1/live/seg.ts?sig=SECRET", trusted=LOCAL)
+    assert "SECRET" not in str(caught.value)
+    assert str(caught.value).endswith("the address has characters that are not allowed")
+    invalid = http.client.InvalidURL("URL can't contain control characters. '/live/seg 1.ts?sig=SECRET'")
+    assert net._reason(invalid) == "the address has characters that are not allowed"
+
+
+def test_private_addresses_are_refused_behind_a_proxy(base: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("http_proxy", base)
+    monkeypatch.delenv("no_proxy", raising=False)
+    with pytest.raises(FetchError, match=r"refused 192\.168\.1\.1: private addresses need a host named"):
+        net.fetch_text("http://192.168.1.1/page", trusted=frozenset({"cdn.example.com"}))
+    with pytest.raises(FetchError, match="HTTP 404"):
+        net.fetch_text("http://192.168.1.1/page", trusted=frozenset({"192.168.1.1"}))

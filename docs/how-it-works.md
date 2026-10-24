@@ -31,7 +31,8 @@ Tellyard fetches every page, playlist, key and video segment itself. ffmpeg rece
 - Only `http` and `https` addresses are used, also after a redirect.
 - An address on your home network, on the host itself or in another private range is reached only when its host is written in that channel's `live`, `page`, `hls` or `token`, is a guide source, or is `HEARTBEAT_URL`. A stream, page or redirect that points at any other private address fails. The log then says `refused <address>: private addresses need a host named in the configuration`.
 - `Authorization` and `Cookie` headers go only to the hosts written in the channel. Other `headers` go to every host the stream uses.
-- Each request has a time limit: 30 seconds for a page, playlist or token answer, 60 seconds for a video segment and 10 minutes for a guide download.
+- Each request has a time limit: 30 seconds for a page, playlist or token answer when a stream starts, 15 seconds for a playlist during playback, 60 seconds for a video segment and 10 minutes for a guide download.
+- With `http_proxy` or `https_proxy` set, requests go through the proxy. Tellyard then refuses private addresses written as numbers, such as `192.168.1.1`. A name that points to a private address is up to the proxy.
 
 yt-dlp opens `live` channels on its own.
 
@@ -45,9 +46,11 @@ Tellyard publishes an XMLTV guide at `/guide.xml` for `GUIDE_DAYS` days, startin
 - Every entry gets a category, and every entry that is not a movie gets an episode number with its air date, so Plex files it as a TV episode.
 - The channel logo is the `logo` URL as written. Shows keep the pictures their source guide gives them; placeholder blocks have none.
 
-A guide source is skipped, and its channels get placeholder blocks, when it is larger than 256 MB to download or 1 GB unpacked, has an entry larger than 64 KB, or has more than 32 MB of shows for your channels.
+The guide is rebuilt every `GUIDE_REFRESH_HOURS` hours and within a minute of a change to `channels.toml`. If a rebuild fails, Tellyard keeps the last guide and tries again 15 minutes later.
 
-The guide is rebuilt every `GUIDE_REFRESH_HOURS` hours and within a minute of a change to `channels.toml`. If a rebuild fails, Tellyard keeps the last guide and tries again 15 minutes later. Tellyard keeps the last good copy of each guide source in `/data`. If a source fails, its channels use that copy, or placeholder blocks when there is none, and Tellyard tries the source again 15 minutes later.
+Tellyard keeps the last good copy of each guide source in `/data/feeds`. When a source fails, its channels use that copy, or placeholder blocks when there is none. A source fails when it cannot be downloaded, is not valid XMLTV, is larger than 256 MB to download or 1 GB unpacked, declares its own XML entities, has an entry larger than 64 KB, or has more than 32 MB of shows for your channels. A source with no current shows for any of your channels also keeps the last good copy.
+
+After a failed download or unreadable file, Tellyard downloads only that source again 15 minutes later, and keeps doing so until it works. The other sources are downloaded at the next scheduled rebuild. A source that is too large or declares entities is not tried again before the next scheduled rebuild.
 
 Tellyard serves no images itself. Tools such as [Posteryard](https://github.com/SandObserver/Posteryard) can add posters to the Plex guide.
 
@@ -71,4 +74,4 @@ Tellyard does not answer HDHomeRun network discovery, so Plex never finds it on 
 
 ## What it stores
 
-`/data` holds the last guide, `guide.xml`, and the caches of yt-dlp and Deno under `cache/`. All of it is rebuilt when missing. `/config/channels.toml` is only read.
+`/data` holds the last guide, `guide.xml`, the last good copy of each guide source under `feeds/` (up to 256 MB each), and the caches of yt-dlp and Deno under `cache/`. All of it is rebuilt when missing. `/config/channels.toml` is only read.

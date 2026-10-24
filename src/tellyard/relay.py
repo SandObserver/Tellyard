@@ -46,7 +46,8 @@ class PlaylistError(Exception):
 def rewrite(text: str, base: str, address: Address) -> str:
     lines: list[str] = []
     variant = False
-    for raw in text.splitlines():
+    # ffmpeg also ends a line at NUL. A line it splits there must not reach it unchecked.
+    for raw in text.replace("\0", "\n").splitlines():
         line = raw.strip()
         if not line:
             continue
@@ -98,8 +99,11 @@ def _rewrite_attribute(line: str, base: str, address: Address) -> str:
 
 
 def _join(base: str, reference: str) -> str:
-    uri = urllib.parse.urljoin(base, reference)
-    scheme = urllib.parse.urlsplit(uri).scheme.lower()
+    try:
+        uri = urllib.parse.urljoin(base, reference)
+        scheme = urllib.parse.urlsplit(uri).scheme.lower()
+    except ValueError:
+        raise PlaylistError("the playlist has an invalid address") from None
     if scheme not in net.SCHEMES:
         raise PlaylistError(f"the playlist has a {scheme or 'relative'} address")
     return uri
