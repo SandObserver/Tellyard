@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Keep real shows in the guide when a guide source cannot be downloaded: use the last good copy of that source, and try it again after 15 minutes instead of at the next scheduled rebuild.
 - Free the tuner within about a second when the viewer leaves. ffmpeg could hold it for up to 5 seconds.
 
 ### Security

@@ -73,7 +73,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             relay.close()
         print(check.report(results))
         return 0 if all(result.ok for result in results) else 1
-    data = build(lineup, datetime.now(UTC), settings.guide_days)
+    data = build(lineup, datetime.now(UTC), settings.guide_days).data
     if args.output:
         args.output.write_bytes(data)
     else:

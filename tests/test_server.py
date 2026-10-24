@@ -242,6 +242,23 @@ def test_guide_refresh_schedule(app: App, channels_file: Path) -> None:
     assert app.guide.built_at == now + timedelta(hours=7, minutes=1)
 
 
+def test_failed_guide_source_is_retried_soon(app: App, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[datetime] = []
+
+    def partly_failed(lineup: object, now: datetime) -> None:
+        calls.append(now)
+        app.guide.built_at = now
+        app.guide.failed_sources = 1 if len(calls) == 1 else 0
+
+    monkeypatch.setattr(app.guide, "rebuild", partly_failed)
+    now = datetime(2026, 10, 11, 12, tzinfo=UTC)
+    app.refresh_guide(now)
+    app.refresh_guide(now + timedelta(minutes=10))
+    app.refresh_guide(now + timedelta(minutes=15))
+    app.refresh_guide(now + timedelta(minutes=30))
+    assert calls == [now, now + timedelta(minutes=15)]
+
+
 def test_failed_guide_rebuild_waits_before_retrying(
     app: App, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

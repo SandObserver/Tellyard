@@ -1,6 +1,9 @@
+import contextlib
 import copy
+import hashlib
 import io
 import logging
+import shutil
 import tempfile
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -32,6 +35,9 @@ MOVIE_CATEGORIES = frozenset({"movie", "movies", "film", "films", "sinema", "fea
 
 class FeedError(Exception):
     pass
+
+
+FEED_ERRORS = (FetchError, FeedError, ET.ParseError, OSError, EOFError)
 
 
 @dataclass(frozen=True)
@@ -68,10 +74,18 @@ def fetch_feed(url: str, destination: Path) -> None:
     download(url, destination, hosts_of([url]))
 
 
-def build(lineup: Lineup, now: datetime, days: int, downloader: Downloader = fetch_feed) -> bytes:
+@dataclass(frozen=True)
+class Built:
+    data: bytes
+    failed: int
+
+
+def build(
+    lineup: Lineup, now: datetime, days: int, downloader: Downloader = fetch_feed, saved: Path | None = None
+) -> Built:
     start = now - HISTORY
     end = now + timedelta(days=days)
-    schedules = _external(lineup.channels, start, end, downloader)
+    schedules, failed = _external(lineup.channels, start, end, downloader, saved)
     root = ET.Element("tv", {"generator-info-name": "Tellyard"})
     for channel in lineup.channels:
         element = ET.SubElement(root, "channel", {"id": channel.guide_id})
@@ -82,37 +96,87 @@ def build(lineup: Lineup, now: datetime, days: int, downloader: Downloader = fet
         for slot in _fill(channel, schedules.get(channel.number, []), start, end):
             root.append(_programme(channel, slot))
     ET.indent(root)
-    data: bytes = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-    return data
+    return Built(ET.tostring(root, encoding="utf-8", xml_declaration=True), failed)
 
 
 def _external(
-    channels: Iterable[Channel], start: datetime, end: datetime, downloader: Downloader
-) -> dict[str, list[Slot]]:
+    channels: Iterable[Channel], start: datetime, end: datetime, downloader: Downloader, saved: Path | None
+) -> tuple[dict[str, list[Slot]], int]:
     wanted: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
     for channel in channels:
         if channel.xmltv:
             wanted[channel.xmltv.url][channel.xmltv.channel_id].append(channel.number)
     schedules: dict[str, list[Slot]] = defaultdict(list)
+    failed = 0
+    for url, ids in wanted.items():
+        kept = saved / _saved_name(url) if saved else None
+        found, ok = _load(url, ids, (start, end), downloader, kept)
+        failed += not ok
+        if found is None:
+            continue
+        for number, slots in found.items():
+            schedules[number].extend(slots)
+        missing = sorted(source_id for source_id, numbers in ids.items() if not any(n in found for n in numbers))
+        if missing:
+            log.warning("guide source has no current listings", extra={"url": safe_url(url), "ids": ",".join(missing)})
+    if saved:
+        _forget_saved(saved, {_saved_name(url) for url in wanted})
+    return schedules, failed
+
+
+def _load(
+    url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime], downloader: Downloader, kept: Path | None
+) -> tuple[dict[str, list[Slot]] | None, bool]:
     with tempfile.TemporaryDirectory(prefix="tellyard-guide-") as scratch:
-        for index, (url, ids) in enumerate(wanted.items()):
-            path = Path(scratch) / f"source-{index}.xml"
-            try:
-                downloader(url, path)
-                found = _read(path, ids, start, end)
-            except (FetchError, FeedError, ET.ParseError, OSError, EOFError) as error:
-                log.warning(
-                    "guide source failed, using placeholders", extra={"url": safe_url(url), "reason": str(error)}
-                )
-                continue
-            for number, slots in found.items():
-                schedules[number].extend(slots)
-            missing = sorted(source_id for source_id, numbers in ids.items() if not any(n in found for n in numbers))
-            if missing:
-                log.warning(
-                    "guide source has no current listings", extra={"url": safe_url(url), "ids": ",".join(missing)}
-                )
-    return schedules
+        path = Path(scratch) / "source.xml"
+        try:
+            downloader(url, path)
+            found = _read(path, ids, *span)
+        except FEED_ERRORS as error:
+            return _read_saved(kept, url, ids, span, error), False
+        if kept:
+            _save(path, kept)
+        return found, True
+
+
+def _saved_name(url: str) -> str:
+    return hashlib.sha256(url.encode()).hexdigest()[:32] + ".xml"
+
+
+def _read_saved(
+    kept: Path | None, url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime], error: Exception
+) -> dict[str, list[Slot]] | None:
+    extra = {"url": safe_url(url), "reason": str(error)}
+    if kept and kept.is_file():
+        try:
+            found = _read(kept, ids, *span)
+        except FEED_ERRORS:
+            pass
+        else:
+            saved_at = datetime.fromtimestamp(kept.stat().st_mtime, UTC).isoformat(timespec="seconds")
+            log.warning("guide source failed, using the last good copy", extra={**extra, "saved_at": saved_at})
+            return found
+    log.warning("guide source failed, using placeholders", extra=extra)
+    return None
+
+
+def _save(path: Path, kept: Path) -> None:
+    partial = kept.with_name(kept.name + ".part")
+    try:
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, partial)
+        partial.replace(kept)
+    except OSError as error:
+        with contextlib.suppress(OSError):
+            partial.unlink(missing_ok=True)
+        log.warning("guide source copy not saved", extra={"reason": error.strerror or str(error)})
+
+
+def _forget_saved(saved: Path, keep: set[str]) -> None:
+    with contextlib.suppress(OSError):
+        for old in saved.iterdir():
+            if old.name not in keep:
+                old.unlink(missing_ok=True)
 
 
 def _read(path: Path, ids: dict[str, list[str]], start: datetime, end: datetime) -> dict[str, list[Slot]]:
@@ -250,6 +314,7 @@ class Guide:
         self._data: bytes | None = None
         self.built_at: datetime | None = None
         self.write_error: str | None = None
+        self.failed_sources = 0
         if path.is_file():
             self._data = path.read_bytes()
             self.built_at = datetime.fromtimestamp(path.stat().st_mtime, UTC)
@@ -260,9 +325,11 @@ class Guide:
 
     def rebuild(self, lineup: Lineup, now: datetime | None = None) -> None:
         moment = now or datetime.now(UTC)
-        data = build(lineup, moment, self._days, self._downloader)
+        built = build(lineup, moment, self._days, self._downloader, self._path.parent / "feeds")
+        data = built.data
         self._data = data
         self.built_at = moment
+        self.failed_sources = built.failed
         partial = self._path.with_name(self._path.name + ".part")
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
