@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-24
+
 ### Changed
 
 - Let landing page visitors pick Plex or Jellyfin and Docker Compose, docker run or Unraid, and show the matching install steps.
@@ -15,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Use less CPU and memory while streaming: all HTTPS requests share one TLS setup instead of loading every CA certificate again, and stream data is read in larger blocks.
 - Ship the Python standard library compiled, and let the container health check load only what it needs. Idle CPU and start-up time go down.
 - Build ffmpeg from source with only the parts Tellyard uses, under the LGPL instead of the GPL. The image is about a third smaller.
+- Update yt-dlp to 2026.10.21.
 
 ### Removed
 
