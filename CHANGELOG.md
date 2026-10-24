@@ -14,10 +14,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Report on `/healthz` when the guide cannot be saved to `/data`, and keep serving the guide that was built.
 - Use less CPU and memory while streaming: all HTTPS requests share one TLS setup instead of loading every CA certificate again, and stream data is read in larger blocks.
 - Ship the Python standard library compiled, and let the container health check load only what it needs. Idle CPU and start-up time go down.
+- Build ffmpeg from source with only the parts Tellyard uses, under the LGPL instead of the GPL. The image is about a third smaller.
 
 ### Removed
 
 - ffprobe from the image, and the undocumented `FFPROBE` setting. `tellyard check` reads the resolution from ffmpeg. The image is about a quarter smaller.
+
+### Fixed
+
+- Free the tuner within about a second when the viewer leaves. ffmpeg could hold it for up to 5 seconds.
 
 ### Security
 
