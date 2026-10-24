@@ -140,7 +140,6 @@ def download(
 
 
 def safe_url(url: str) -> str:
-    # URLs can carry passwords, tokens and signatures. Logs and error messages show only the host.
     try:
         parts = urllib.parse.urlsplit(url)
         host = parts.hostname or ""

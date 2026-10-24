@@ -46,7 +46,6 @@ ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 MALLOC_ARENA_MAX=2 \
 COPY --from=ffmpeg /ffmpeg /usr/local/bin/
 COPY --from=deno /deno /usr/local/bin/deno
 COPY --from=build /app/.venv /app/.venv
-# The base image has no standard library bytecode, and user 1000 cannot write it.
 RUN python -m compileall -q -j0 -x '/(site-packages|idlelib|tkinter|turtledemo|ensurepip|pydoc_data)/' \
       "$(python -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')" \
     && mkdir /config /data && chown 1000:1000 /data
