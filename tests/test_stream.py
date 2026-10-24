@@ -230,6 +230,14 @@ def test_ffmpeg_output_is_logged_without_url_paths(caplog: pytest.LogCaptureFixt
     assert "PASSWORD" not in caplog.text
 
 
+def test_close_signals_twice_when_ffmpeg_finishes_its_read_first() -> None:
+    process = Process(["sh", "-c", "trap 'trap - TERM' TERM; echo ready; while :; do sleep 0.05; done"], "7 Seven")
+    assert process.read(5) == b"ready\n"
+    began = monotonic()
+    process.close()
+    assert monotonic() - began < stream.STOP_GRACE / 2
+
+
 def test_leaving_during_the_first_data_wait_stops_ffmpeg(
     relay: Relay,
     make_settings: Callable[..., Settings],

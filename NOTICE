@@ -13,11 +13,9 @@ owners. Tellyard is not affiliated with or endorsed by them.
 
 The container image bundles these programs, each under its own license:
 
-- FFmpeg and FFprobe, static builds from https://github.com/wader/static-ffmpeg.
-  They are built with --enable-gpl and --enable-version3 and are licensed under
-  the GNU General Public License, version 3. The build recipe, with every
-  library version and source URL, is in that repository at the tag named in this
-  repository's Dockerfile. FFmpeg source: https://ffmpeg.org/download.html
+- FFmpeg, a static build without GPL parts, under the GNU Lesser General Public
+  License, version 2.1 or later. The source URL, checksum and build options are
+  in this repository's Dockerfile. FFmpeg source: https://ffmpeg.org/download.html
 - Deno, from https://github.com/denoland/deno, under the MIT License.
 - yt-dlp, from https://github.com/yt-dlp/yt-dlp, under the Unlicense, with the
   Python packages it uses. uv.lock pins their versions. Each keeps its own

@@ -4,6 +4,7 @@
 set -euo pipefail
 
 image=${1:-tellyard:ci}
+encoder=$(sed -n 's/^FROM \(.*\) AS ffmpeg-full$/\1/p' Dockerfile)
 name=tellyard-e2e-$$
 work=$(mktemp -d)
 chmod 755 "$work"
@@ -25,7 +26,7 @@ fail() {
 docker network create "$name" >/dev/null
 
 docker run -d --name "$name-source" --network "$name" --user "$(id -u):$(id -g)" \
-  -v "$work/media:/media" --entrypoint ffmpeg "$image" -hide_banner -loglevel error -re \
+  -v "$work/media:/media" "$encoder" -hide_banner -loglevel error -re \
   -f lavfi -i testsrc2=size=1920x1080:rate=25 -f lavfi -i sine=frequency=440:sample_rate=48000 \
   -c:v libx264 -preset ultrafast -g 50 -c:a aac \
   -f hls -hls_time 2 -hls_list_size 6 -hls_flags delete_segments /media/video.m3u8 >/dev/null
@@ -86,10 +87,10 @@ grep -q '<programme ' "$work/guide.xml" || fail "the guide has no programmes"
 
 echo "== stream"
 curl -s --max-time 8 "$base/stream/101" -o "$work/out.ts" || [ $? -eq 28 ] || fail "the stream request failed"
-docker run --rm -v "$work:/work:ro" --entrypoint ffprobe "$image" -v error \
-  -show_entries stream=codec_type,width,height -of csv=p=0 /work/out.ts | sort -u | tee "$work/probe.txt"
-grep -q '^video,1920,1080' "$work/probe.txt" || fail "the stream has no 1080p video"
-grep -q '^audio' "$work/probe.txt" || fail "the stream has no audio"
+{ docker run --rm -v "$work:/work:ro" --entrypoint ffmpeg "$image" -hide_banner -i /work/out.ts 2>&1 || true; } \
+  | grep 'Stream #' | tee "$work/probe.txt"
+grep -q 'Video: .*, 1920x1080' "$work/probe.txt" || fail "the stream has no 1080p video"
+grep -q 'Audio: ' "$work/probe.txt" || fail "the stream has no audio"
 
 echo "== stop"
 running_ffmpeg() {

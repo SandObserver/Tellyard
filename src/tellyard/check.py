@@ -1,13 +1,18 @@
-import json
+import re
+import subprocess
+import threading
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
 from tellyard.channels import Channel
+from tellyard.net import redact
 from tellyard.relay import Relay
-from tellyard.resolve import Resolved, ResolveError, Resolver, Runner, run_command
+from tellyard.resolve import Resolved, ResolveError, Resolver, Runner
 from tellyard.stream import input_options, local
 
 PROBE_TIMEOUT = 45.0
+VIDEO_SIZE = re.compile(r"^\s*Stream #\d+:\d+.*?: Video: .*?, (\d{1,5})x(\d{1,5})\b", re.MULTILINE)
+OPEN_ERROR = "Error opening input"
 
 
 @dataclass(frozen=True)
@@ -21,17 +26,39 @@ class Result:
         return self.problem is None
 
 
-def probe_height(ffprobe: str, relay: Relay, resolved: Resolved, runner: Runner = run_command) -> int | None:
+def run_probe(args: Sequence[str], timeout: float, cancel: threading.Event | None = None) -> str:
+    # ffmpeg with only an input prints the stream details to stderr and exits with an error.
+    try:
+        done = subprocess.run(
+            args,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+        )
+    except FileNotFoundError as error:
+        raise ResolveError(f"{args[0]} is not installed") from error
+    except subprocess.TimeoutExpired:
+        raise ResolveError(f"{args[0]} took longer than {timeout:.0f} s") from None
+    return done.stderr.decode("utf-8", errors="replace")
+
+
+def probe_height(ffmpeg: str, relay: Relay, resolved: Resolved, runner: Runner = run_probe) -> int | None:
     feed = relay.open(resolved, "check")
     try:
-        args = [ffprobe, "-v", "error", *input_options()]
-        args += ["-select_streams", "v", "-show_entries", "stream=height", "-of", "json", local(resolved, feed).video]
-        data = json.loads(runner(args, PROBE_TIMEOUT, None) or "{}")
+        args = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "info", *input_options()]
+        args += ["-i", local(resolved, feed).video]
+        output = runner(args, PROBE_TIMEOUT, None)
     finally:
         feed.close()
-    heights = [stream.get("height") for stream in data.get("streams", []) if isinstance(stream, dict)]
-    numbers = [height for height in heights if isinstance(height, int)]
-    return max(numbers) if numbers else None
+    heights = [int(found.group(2)) for found in VIDEO_SIZE.finditer(output)]
+    if heights:
+        return max(heights)
+    if OPEN_ERROR in output:
+        lines = [line.strip() for line in output.splitlines() if line.strip()]
+        raise ResolveError(redact(lines[-1]))
+    return None
 
 
 def check(

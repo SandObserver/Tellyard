@@ -2,6 +2,7 @@ import gzip
 import socket
 import threading
 import time
+import urllib.request
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -203,3 +204,17 @@ def test_errors_and_logs_show_only_the_host() -> None:
 )
 def test_is_public(address: str, public: bool) -> None:
     assert net.is_public(address) is public
+
+
+def test_https_requests_share_one_tls_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    contexts: list[object] = []
+
+    def do_open(self: object, connection: object, req: object, **kwargs: object) -> None:
+        contexts.append(kwargs.get("context"))
+        raise OSError("stop")
+
+    monkeypatch.setattr(urllib.request.AbstractHTTPHandler, "do_open", do_open)
+    for _ in range(2):
+        with pytest.raises(FetchError):
+            net.fetch_text("https://v.example.com/a.m3u8")
+    assert contexts == [net.TLS, net.TLS]
