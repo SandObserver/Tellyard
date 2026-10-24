@@ -277,3 +277,18 @@ def test_live_edge_keeps_the_newest_segments() -> None:
 @pytest.mark.parametrize("text", [live(30), live(40, "#EXT-X-ENDLIST"), live(40, "#EXT-X-BYTERANGE:100@0")])
 def test_live_edge_leaves_other_playlists_alone(text: str) -> None:
     assert relay_module.live_edge(text) == text
+
+
+def test_rewrite_splits_lines_at_nul_like_ffmpeg() -> None:
+    text = "#EXTM3U\n#EXTINF:2.0,\0http://192.168.1.1/admin.ts\n#EXTINF:2.0,\nseg1.ts\n"
+    body = rewrite(text, "https://cdn.example.com/live/media.m3u8", lambda url, playlist: f"relay:{url}")
+    assert "\0" not in body
+    assert [line for line in body.splitlines() if not line.startswith("#")] == [
+        "relay:http://192.168.1.1/admin.ts",
+        "relay:https://cdn.example.com/live/seg1.ts",
+    ]
+
+
+def test_rewrite_refuses_invalid_addresses() -> None:
+    with pytest.raises(PlaylistError, match="invalid address"):
+        rewrite("#EXTM3U\nhttp://[::1/seg.ts\n", "https://cdn.example.com/live/media.m3u8", lambda url, playlist: url)

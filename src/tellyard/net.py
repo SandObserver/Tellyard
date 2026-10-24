@@ -44,6 +44,10 @@ class FetchError(Exception):
     pass
 
 
+class TooLargeError(FetchError):
+    pass
+
+
 class BlockedAddressError(OSError):
     pass
 
@@ -64,7 +68,14 @@ def request(url: str, headers: Headers = (), trusted: Hosts = frozenset()) -> ur
     merged.update(dict(headers))
     if host_of(url) not in trusted:
         merged = {key: value for key, value in merged.items() if key.lower() not in CREDENTIAL_HEADERS}
-    return urllib.request.Request(url, headers=merged)
+    return urllib.request.Request(_encoded(url), headers=merged)
+
+
+def _encoded(url: str) -> str:
+    parts = urllib.parse.urlsplit(url)
+    path = urllib.parse.quote(parts.path, safe="/%:@!$&'()*+,;=~")
+    query = urllib.parse.quote(parts.query, safe="/%:@!$&'()*+,;=~?")
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, path, query, ""))
 
 
 @contextlib.contextmanager
@@ -76,7 +87,11 @@ def open_url(
     deadline: float = TEXT_DEADLINE,
 ) -> Iterator[http.client.HTTPResponse]:
     # The socket timeout applies to each read. The deadline closes the connection to bound the whole request.
-    if urllib.parse.urlsplit(url).scheme.lower() not in SCHEMES:
+    try:
+        scheme = urllib.parse.urlsplit(url).scheme.lower()
+    except ValueError:
+        raise FetchError(f"{safe_url(url)}: the address has characters that are not allowed") from None
+    if scheme not in SCHEMES:
         raise FetchError(f"{safe_url(url)}: only http and https addresses are allowed")
     watch = _Deadline()
     timer = threading.Timer(deadline, watch.expire)
@@ -84,7 +99,7 @@ def open_url(
     try:
         with _opener(watch, trusted).open(request(url, headers, trusted), timeout=timeout) as response:
             yield response
-    except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as error:
+    except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException, ValueError) as error:
         if watch.expired:
             raise FetchError(f"{safe_url(url)}: response took longer than {deadline:.0f} s") from error
         raise FetchError(f"{safe_url(url)}: {_reason(error)}") from error
@@ -107,7 +122,7 @@ def fetch_text(
         while len(body) <= TEXT_LIMIT and (block := read_block(response, TEXT_LIMIT + 1 - len(body))):
             body += block
     if len(body) > TEXT_LIMIT:
-        raise FetchError(f"{safe_url(url)}: response is larger than {TEXT_LIMIT // 1024 // 1024} MB")
+        raise TooLargeError(f"{safe_url(url)}: response is larger than {TEXT_LIMIT // 1024 // 1024} MB")
     return final, body.decode("utf-8", errors="replace")
 
 
@@ -130,7 +145,7 @@ def download(
             while chunk := response.read1(CHUNK):
                 total += len(chunk)
                 if total > DOWNLOAD_LIMIT:
-                    raise FetchError(f"{safe_url(url)}: file is larger than {DOWNLOAD_LIMIT // 1024 // 1024} MB")
+                    raise TooLargeError(f"{safe_url(url)}: file is larger than {DOWNLOAD_LIMIT // 1024 // 1024} MB")
                 out.write(chunk)
         partial.replace(destination)
     except OSError as error:
@@ -178,6 +193,17 @@ def _opener(watch: "_Deadline", trusted: Hosts) -> urllib.request.OpenerDirector
     ):
         opener.add_handler(handler)
     return opener
+
+
+def _refuse_private_literal(url: str, trusted: Hosts) -> None:
+    # Behind a proxy the connection goes to the proxy, so the connector never sees this address.
+    host = host_of(url)
+    try:
+        ipaddress.ip_address(host.partition("%")[0])
+    except ValueError:
+        return
+    if host not in trusted and not is_public(host):
+        raise BlockedAddressError(f"refused {host}: private addresses need a host named in the configuration")
 
 
 def _connector(trusted: Hosts) -> Connect:
@@ -240,18 +266,22 @@ class _Deadline:
 class _HttpHandler(urllib.request.HTTPHandler):
     def __init__(self, watch: _Deadline, trusted: Hosts) -> None:
         super().__init__()
+        self._trusted = trusted
         self._connection = watch.connection(http.client.HTTPConnection, trusted)
 
     def http_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
+        _refuse_private_literal(req.full_url, self._trusted)
         return self.do_open(self._connection, req)
 
 
 class _HttpsHandler(urllib.request.HTTPSHandler):
     def __init__(self, watch: _Deadline, trusted: Hosts) -> None:
         super().__init__(context=TLS)
+        self._trusted = trusted
         self._connection = watch.connection(http.client.HTTPSConnection, trusted)
 
     def https_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
+        _refuse_private_literal(req.full_url, self._trusted)
         return self.do_open(self._connection, req, context=TLS)
 
 
@@ -295,4 +325,6 @@ def _reason(error: BaseException) -> str:
         return f"HTTP {error.code}"
     if isinstance(error, urllib.error.URLError):
         return str(error.reason)
+    if isinstance(error, (http.client.InvalidURL, ValueError)):
+        return "the address has characters that are not allowed"
     return str(error) or type(error).__name__

@@ -22,7 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- Keep real shows in the guide when a guide source cannot be downloaded: use the last good copy of that source, and try it again after 15 minutes instead of at the next scheduled rebuild.
+- Keep real shows in the guide when a guide source cannot be downloaded or has no current shows: use the last good copy of that source, and download only that source again after 15 minutes instead of at the next scheduled rebuild.
+- Keep building the guide when a source has a show time out of range or a damaged gzip file.
 - Name Jellyfin next to Plex in `tellyard --help`.
 - Free the tuner within about a second when the viewer leaves. ffmpeg could hold it for up to 5 seconds.
 
@@ -31,7 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Refuse private and local addresses unless the channel, guide source or `HEARTBEAT_URL` names that host, also after a redirect and inside playlists.
 - Refuse redirects to addresses other than http and https.
 - Limit every download, including guide sources, to a total time.
-- Bound the memory a guide source can use, including compressed sources.
+- Bound the memory a guide source can use, including compressed sources, and refuse sources that declare their own XML entities.
 - Send `Authorization` and `Cookie` headers only to the hosts the channel names.
 - Show only the host of an address in logs and error messages.
 - Limit the server to 64 connections and each request to 10 seconds and 128 KB.

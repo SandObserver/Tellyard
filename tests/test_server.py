@@ -243,10 +243,10 @@ def test_guide_refresh_schedule(app: App, channels_file: Path) -> None:
 
 
 def test_failed_guide_source_is_retried_soon(app: App, monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[datetime] = []
+    calls: list[tuple[datetime, bool]] = []
 
-    def partly_failed(lineup: object, now: datetime) -> None:
-        calls.append(now)
+    def partly_failed(lineup: object, now: datetime, retry: bool = False) -> None:
+        calls.append((now, retry))
         app.guide.built_at = now
         app.guide.failed_sources = 1 if len(calls) == 1 else 0
 
@@ -256,7 +256,24 @@ def test_failed_guide_source_is_retried_soon(app: App, monkeypatch: pytest.Monke
     app.refresh_guide(now + timedelta(minutes=10))
     app.refresh_guide(now + timedelta(minutes=15))
     app.refresh_guide(now + timedelta(minutes=30))
-    assert calls == [now, now + timedelta(minutes=15)]
+    assert calls == [(now, False), (now + timedelta(minutes=15), True)]
+
+
+def test_retries_do_not_delay_the_full_refresh(app: App, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[datetime, bool]] = []
+
+    def always_failing(lineup: object, now: datetime, retry: bool = False) -> None:
+        calls.append((now, retry))
+        app.guide.built_at = now
+        app.guide.failed_sources = 1
+
+    monkeypatch.setattr(app.guide, "rebuild", always_failing)
+    now = datetime(2026, 10, 11, 12, tzinfo=UTC)
+    for minutes in range(0, 7 * 60 + 1, 15):
+        app.refresh_guide(now + timedelta(minutes=minutes))
+    full = [moment for moment, retry in calls if not retry]
+    assert full == [now, now + timedelta(hours=6)]
+    assert len(calls) == 7 * 4 + 1
 
 
 def test_failed_guide_rebuild_waits_before_retrying(
@@ -264,7 +281,7 @@ def test_failed_guide_rebuild_waits_before_retrying(
 ) -> None:
     calls: list[datetime] = []
 
-    def broken(lineup: object, now: datetime) -> None:
+    def broken(lineup: object, now: datetime, retry: bool = False) -> None:
         calls.append(now)
         raise RuntimeError("disk full")
 

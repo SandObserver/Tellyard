@@ -6,6 +6,7 @@ import logging
 import shutil
 import tempfile
 import xml.etree.ElementTree as ET
+import zlib
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
@@ -13,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from tellyard.channels import Channel, Lineup
-from tellyard.net import FetchError, download, hosts_of, open_maybe_gzip, safe_url
+from tellyard.net import FetchError, TooLargeError, download, hosts_of, open_maybe_gzip, safe_url
 
 log = logging.getLogger(__name__)
 XMLTV_TIME = "%Y%m%d%H%M%S %z"
@@ -22,6 +23,7 @@ FEED_LIMIT = 1024 * 1024 * 1024
 ENTRY_LIMIT = 64 * 1024
 ENTRY_ELEMENTS = 1000
 KEPT_LIMIT = 32 * 1024 * 1024
+ENTITY_DECLARATION = b"<!ENTITY"
 
 type Downloader = Callable[[str, Path], None]
 # Strict XMLTV readers need this element order.
@@ -37,7 +39,9 @@ class FeedError(Exception):
     pass
 
 
-FEED_ERRORS = (FetchError, FeedError, ET.ParseError, OSError, EOFError)
+FEED_ERRORS = (FetchError, FeedError, ET.ParseError, OSError, EOFError, zlib.error)
+# These fail again on the next try. Only the others make the guide retry soon.
+LASTING_ERRORS = (FeedError, TooLargeError)
 
 
 @dataclass(frozen=True)
@@ -65,9 +69,11 @@ def parse_time(text: str) -> datetime | None:
     if not zone:
         return moment.replace(tzinfo=UTC)
     try:
-        return datetime.strptime(f"{digits[:14]} {zone}", XMLTV_TIME)
-    except ValueError:
+        moment = datetime.strptime(f"{digits[:14]} {zone}", XMLTV_TIME)
+        moment.astimezone(UTC)
+    except (ValueError, OverflowError):
         return None
+    return moment
 
 
 def fetch_feed(url: str, destination: Path) -> None:
@@ -78,6 +84,7 @@ def fetch_feed(url: str, destination: Path) -> None:
 class Built:
     data: bytes
     failed: int
+    loaded: frozenset[str] = frozenset()
 
 
 def build(
@@ -85,7 +92,7 @@ def build(
 ) -> Built:
     start = now - HISTORY
     end = now + timedelta(days=days)
-    schedules, failed = _external(lineup.channels, start, end, downloader, saved)
+    schedules, failed, loaded = _external(lineup.channels, start, end, downloader, saved)
     root = ET.Element("tv", {"generator-info-name": "Tellyard"})
     for channel in lineup.channels:
         element = ET.SubElement(root, "channel", {"id": channel.guide_id})
@@ -96,22 +103,26 @@ def build(
         for slot in _fill(channel, schedules.get(channel.number, []), start, end):
             root.append(_programme(channel, slot))
     ET.indent(root)
-    return Built(ET.tostring(root, encoding="utf-8", xml_declaration=True), failed)
+    return Built(ET.tostring(root, encoding="utf-8", xml_declaration=True), failed, loaded)
 
 
 def _external(
     channels: Iterable[Channel], start: datetime, end: datetime, downloader: Downloader, saved: Path | None
-) -> tuple[dict[str, list[Slot]], int]:
+) -> tuple[dict[str, list[Slot]], int, frozenset[str]]:
     wanted: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
     for channel in channels:
         if channel.xmltv:
             wanted[channel.xmltv.url][channel.xmltv.channel_id].append(channel.number)
     schedules: dict[str, list[Slot]] = defaultdict(list)
     failed = 0
+    loaded: set[str] = set()
     for url, ids in wanted.items():
         kept = saved / _saved_name(url) if saved else None
         found, ok = _load(url, ids, (start, end), downloader, kept)
-        failed += not ok
+        if ok:
+            loaded.add(url)
+        else:
+            failed += 1
         if found is None:
             continue
         for number, slots in found.items():
@@ -121,7 +132,7 @@ def _external(
             log.warning("guide source has no current listings", extra={"url": safe_url(url), "ids": ",".join(missing)})
     if saved:
         _forget_saved(saved, {_saved_name(url) for url in wanted})
-    return schedules, failed
+    return schedules, failed, frozenset(loaded)
 
 
 def _load(
@@ -133,10 +144,23 @@ def _load(
             downloader(url, path)
             found = _read(path, ids, *span)
         except FEED_ERRORS as error:
-            return _read_saved(kept, url, ids, span, error), False
+            return _read_saved(kept, url, ids, span, error), isinstance(error, LASTING_ERRORS)
+        if not found:
+            return _read_saved(kept, url, ids, span) or found, True
         if kept:
             _save(path, kept)
         return found, True
+
+
+def _reusing(downloader: Downloader, saved: Path, reuse: frozenset[str]) -> Downloader:
+    def fetch(url: str, destination: Path) -> None:
+        kept = saved / _saved_name(url)
+        if url in reuse and kept.is_file():
+            shutil.copyfile(kept, destination)
+        else:
+            downloader(url, destination)
+
+    return fetch
 
 
 def _saved_name(url: str) -> str:
@@ -144,19 +168,25 @@ def _saved_name(url: str) -> str:
 
 
 def _read_saved(
-    kept: Path | None, url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime], error: Exception
+    kept: Path | None,
+    url: str,
+    ids: dict[str, list[str]],
+    span: tuple[datetime, datetime],
+    error: Exception | None = None,
 ) -> dict[str, list[Slot]] | None:
-    extra = {"url": safe_url(url), "reason": str(error)}
-    if kept and kept.is_file():
+    extra = {"url": safe_url(url), "reason": str(error) if error else "no current listings"}
+    if kept:
         try:
             found = _read(kept, ids, *span)
+            saved_at = datetime.fromtimestamp(kept.stat().st_mtime, UTC).isoformat(timespec="seconds")
         except FEED_ERRORS:
             pass
         else:
-            saved_at = datetime.fromtimestamp(kept.stat().st_mtime, UTC).isoformat(timespec="seconds")
-            log.warning("guide source failed, using the last good copy", extra={**extra, "saved_at": saved_at})
-            return found
-    log.warning("guide source failed, using placeholders", extra=extra)
+            if found:
+                log.warning("guide source failed, using the last good copy", extra={**extra, "saved_at": saved_at})
+                return found
+    if error:
+        log.warning("guide source failed, using placeholders", extra=extra)
     return None
 
 
@@ -192,6 +222,7 @@ def _read(path: Path, ids: dict[str, list[str]], start: datetime, end: datetime)
                 depth += 1
                 if root is None:
                     root = element
+                    stream.prolog = False
                 elif depth == 2:
                     elements, began = 0, stream.count
                 elif (elements := elements + 1) > ENTRY_ELEMENTS:
@@ -229,6 +260,8 @@ class _Counted(io.RawIOBase):
         self._stream = stream
         self.count = 0
         self.mark = 0
+        self.prolog = True
+        self._tail = b""
 
     def readable(self) -> bool:
         return True
@@ -240,6 +273,12 @@ class _Counted(io.RawIOBase):
             raise FeedError(f"the guide source is larger than {FEED_LIMIT // 1024 // 1024} MB unpacked")
         if self.count - self.mark > ENTRY_LIMIT + len(data):
             raise FeedError(f"a guide entry is larger than {ENTRY_LIMIT // 1024} KB")
+        if self.prolog:
+            # Entities declared in the source expand past every size limit here.
+            window = self._tail + data
+            if ENTITY_DECLARATION in window:
+                raise FeedError("the guide source declares its own XML entities")
+            self._tail = window[-len(ENTITY_DECLARATION) :]
         return data
 
 
@@ -315,6 +354,7 @@ class Guide:
         self.built_at: datetime | None = None
         self.write_error: str | None = None
         self.failed_sources = 0
+        self._loaded: frozenset[str] = frozenset()
         if path.is_file():
             self._data = path.read_bytes()
             self.built_at = datetime.fromtimestamp(path.stat().st_mtime, UTC)
@@ -323,9 +363,12 @@ class Guide:
     def data(self) -> bytes | None:
         return self._data
 
-    def rebuild(self, lineup: Lineup, now: datetime | None = None) -> None:
+    def rebuild(self, lineup: Lineup, now: datetime | None = None, retry: bool = False) -> None:
         moment = now or datetime.now(UTC)
-        built = build(lineup, moment, self._days, self._downloader, self._path.parent / "feeds")
+        saved = self._path.parent / "feeds"
+        reuse = self._loaded if retry else frozenset()
+        built = build(lineup, moment, self._days, _reusing(self._downloader, saved, reuse), saved)
+        self._loaded = reuse | built.loaded
         data = built.data
         self._data = data
         self.built_at = moment

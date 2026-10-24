@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from tellyard import channels, guide
-from tellyard.net import FetchError
+from tellyard.net import FetchError, TooLargeError
 
 NOW = datetime(2026, 10, 11, 15, 30, tzinfo=UTC)
 SOURCE = """<?xml version="1.0" encoding="UTF-8"?>
@@ -317,3 +317,107 @@ def test_huge_entry_is_stopped_while_reading(tmp_path: Path) -> None:
     finally:
         tracemalloc.stop()
     assert peak < 5 * 1024 * 1024
+
+
+def test_entity_declarations_stop_the_feed(tmp_path: Path) -> None:
+    path = tmp_path / "feed.xml.gz"
+    declared = b'<?xml version="1.0"?>\n<!DOCTYPE tv [\n<!ENTITY a "' + b"A" * 100 + b'">\n]>\n<tv>'
+    bulk(path, [declared, ENTRY.replace(b">A<", b">&a;<"), b"</tv>"])
+    with pytest.raises(guide.FeedError, match="declares its own XML entities"):
+        read_feed(path)
+
+
+def test_doctype_without_entities_is_read(tmp_path: Path) -> None:
+    path = tmp_path / "feed.xml.gz"
+    bulk(path, [b'<?xml version="1.0"?>\n<!DOCTYPE tv SYSTEM "xmltv.dtd">\n<tv>', ENTRY, b"</tv>"])
+    assert read_feed(path) == ["A"]
+
+
+def test_out_of_range_times_are_skipped() -> None:
+    source = SOURCE.replace(
+        '<programme start="bad"',
+        '<programme start="99991231225959 -1400" stop="99991231235959 -1400" channel="ATV.tr">'
+        '<title>Far</title></programme>\n  <programme start="bad"',
+    )
+    items = programmes(guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving(source)).data)
+    assert "Dizi" in {item.findtext("title") for item in items}
+    assert guide.parse_time("99991231235959 -1400") is None
+
+
+def test_damaged_gzip_falls_back(caplog: pytest.LogCaptureFixture) -> None:
+    def damaged(url: str, destination: Path) -> None:
+        data = gzip.compress(SOURCE.encode())
+        destination.write_bytes(data[:20] + b"\xff" * 40 + data[60:])
+
+    built = guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, damaged)
+    assert {item.findtext("title") for item in programmes(built.data)} == {"atv"}
+    assert built.failed == 1
+    assert "using placeholders" in caplog.text
+
+
+def test_unreadable_copies_folder_falls_back(tmp_path: Path) -> None:
+    def broken(url: str, destination: Path) -> None:
+        raise FetchError("epg.example.com: HTTP 503")
+
+    saved = tmp_path / "feeds"
+    saved.mkdir()
+    saved.chmod(0o000)
+    try:
+        built = guide.build(lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr"), NOW, 1, broken, saved)
+    finally:
+        saved.chmod(0o755)
+    assert built.failed == 1
+
+
+def test_source_without_listings_keeps_the_last_good_copy(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    fresh = guide.build(channel, NOW, 1, serving(SOURCE), saved)
+    empty = guide.build(channel, NOW, 1, serving("<tv></tv>"), saved)
+    assert empty.data == fresh.data
+    assert empty.failed == 0
+    assert [record.__dict__.get("reason") for record in caplog.records] == ["no current listings"]
+    assert guide.build(channel, NOW, 1, serving("<tv><"), saved).data == fresh.data
+
+
+def test_sources_that_fail_the_same_way_again_are_not_retried_soon() -> None:
+    def too_large(url: str, destination: Path) -> None:
+        raise TooLargeError("epg.example.com: file is larger than 256 MB")
+
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    assert guide.build(channel, NOW, 1, too_large).failed == 0
+    declared = '<!DOCTYPE tv [<!ENTITY a "x">]>' + SOURCE.partition("?>")[2]
+    assert guide.build(channel, NOW, 1, serving(declared)).failed == 0
+
+
+def test_retry_downloads_only_the_failed_sources(tmp_path: Path) -> None:
+    calls: list[str] = []
+    failing = {"https://b.example.com/x"}
+
+    def download(url: str, destination: Path) -> None:
+        calls.append(url)
+        if url in failing:
+            raise FetchError("b.example.com: HTTP 503")
+        destination.write_text(SOURCE)
+
+    entries = [
+        {"number": number, "name": name, "logo": "https://example.com/l.png", "hls": "https://cdn.example.com/x.m3u8",
+         "guide": {"xmltv": url, "id": "ATV.tr"}}
+        for number, name, url in [(201, "atv", "https://a.example.com/x"), (202, "show", "https://b.example.com/x")]
+    ]  # fmt: skip
+    both = channels.parse({"channel": entries})
+    cache = guide.Guide(tmp_path / "guide.xml", 1, download)
+    cache.rebuild(both, NOW)
+    assert cache.failed_sources == 1
+    first = cache.data
+    failing.clear()
+    calls.clear()
+    cache.rebuild(both, NOW, retry=True)
+    assert calls == ["https://b.example.com/x"]
+    assert cache.failed_sources == 0
+    assert cache.data != first
+    calls.clear()
+    cache.rebuild(both, NOW, retry=True)
+    assert calls == []
+    cache.rebuild(both, NOW)
+    assert sorted(calls) == ["https://a.example.com/x", "https://b.example.com/x"]
