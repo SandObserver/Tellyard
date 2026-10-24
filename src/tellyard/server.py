@@ -219,8 +219,11 @@ class App:
         if self._guide_failed_at and now - self._guide_failed_at < GUIDE_RETRY:
             return False
         built = self.guide.built_at
-        refresh = timedelta(hours=self.settings.guide_refresh_hours)
-        return self._guide_version != self.store.version or built is None or now - built >= refresh
+        if built is None or self._guide_version != self.store.version:
+            return True
+        if self.guide.failed_sources and now - built >= GUIDE_RETRY:
+            return True
+        return now - built >= timedelta(hours=self.settings.guide_refresh_hours)
 
 
 class Server(ThreadingHTTPServer):

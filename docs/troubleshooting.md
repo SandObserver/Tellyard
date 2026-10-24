@@ -30,6 +30,8 @@ Set `LOG_LEVEL=debug` to see every request Plex makes. `docker exec tellyard tel
 | `no channel file yet, add your channels to it` | Tellyard found no `channels.toml` at `file`. Put your channel list there. Tellyard loads it within a minute. |
 | `channel file has an error, keeping the previous channels` | Fix the mistake named in `reason`. `tellyard validate` checks the file. |
 | `guide source failed, using placeholders` | The XMLTV address could not be downloaded or read, or is too large. See `reason`, and open the address in a browser. |
+| `guide source failed, using the last good copy` | As above, but Tellyard has a copy from `saved_at` and uses it. Tellyard tries again in 15 minutes. |
+| `guide source copy not saved` | Tellyard cannot write to `/data/feeds`. Give user 1000 write access to the data folder. |
 | `guide not saved` | Tellyard cannot write to `/data`. `/healthz` reports it. Give user 1000 write access to the data folder, such as `sudo chown 1000:1000 ./data`. |
 | `too many connections, refusing new ones` | More than 64 connections are open. Something on your network keeps connections open. |
 | `guide source has no current listings` | The source has no shows for the listed `ids` right now. Check each `id` against the `<channel id="...">` lines in the file. |

@@ -63,7 +63,9 @@ def window(items: list[ET.Element]) -> tuple[str | None, str | None]:
 
 @pytest.mark.parametrize("compress", [False, True])
 def test_merges_real_listings_and_fills_gaps(compress: bool) -> None:
-    data = guide.build(lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr"), NOW, 1, serving(SOURCE, compress))
+    data = guide.build(
+        lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr"), NOW, 1, serving(SOURCE, compress)
+    ).data
     root = ET.fromstring(data)
     channel = root.find("channel")
     assert channel is not None
@@ -88,7 +90,7 @@ def test_overlapping_shows_end_when_the_next_starts() -> None:
   <programme start="20261011180000 +0000" stop="20261011200000 +0000" channel="ATV.tr"><title>Long</title></programme>
   <programme start="20261011183000 +0000" stop="20261011190000 +0000" channel="ATV.tr"><title>Inside</title></programme>
 </tv>"""
-    items = programmes(guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving(source)))
+    items = programmes(guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving(source)).data)
     times = {item.findtext("title"): (item.get("start"), item.get("stop")) for item in items}
     assert times["First"] == ("20261011150000 +0000", "20261011160000 +0000")
     assert times["Second"] == ("20261011160000 +0000", "20261011180000 +0000")
@@ -99,7 +101,7 @@ def test_overlapping_shows_end_when_the_next_starts() -> None:
 
 
 def test_placeholder_blocks_align_to_the_block_length() -> None:
-    items = programmes(guide.build(lineup(hours=4, category="News"), NOW, 1))
+    items = programmes(guide.build(lineup(hours=4, category="News"), NOW, 1).data)
     assert window(items) == ("20261011133000 +0000", "20261012153000 +0000")
     assert items[0].get("stop") == "20261011160000 +0000"
     assert items[1].get("stop") == "20261011200000 +0000"
@@ -111,9 +113,53 @@ def test_failed_source_falls_back_to_placeholders(caplog: pytest.LogCaptureFixtu
     def broken(url: str, destination: Path) -> None:
         raise FetchError("epg.example.com: HTTP 503")
 
-    items = programmes(guide.build(lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr"), NOW, 1, broken))
+    items = programmes(guide.build(lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr"), NOW, 1, broken).data)
     assert {item.findtext("title") for item in items} == {"atv"}
     assert "using placeholders" in caplog.text
+
+
+def test_failed_source_uses_the_last_good_copy(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    def broken(url: str, destination: Path) -> None:
+        raise FetchError("epg.example.com: HTTP 503")
+
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    fresh = guide.build(channel, NOW, 1, serving(SOURCE), saved)
+    assert fresh.failed == 0
+    later = guide.build(channel, NOW, 1, broken, saved)
+    assert later.failed == 1
+    assert later.data == fresh.data
+    assert "using the last good copy" in caplog.text
+    assert "using placeholders" not in caplog.text
+
+
+def test_unreadable_copy_falls_back_to_placeholders(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    guide.build(channel, NOW, 1, serving(SOURCE), saved)
+    for kept in saved.iterdir():
+        kept.write_text("<tv><")
+    items = programmes(guide.build(channel, NOW, 1, serving("<tv><"), saved).data)
+    assert {item.findtext("title") for item in items} == {"atv"}
+    assert "using placeholders" in caplog.text
+
+
+def test_copies_of_removed_sources_are_deleted(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    guide.build(lineup(xmltv="https://a.example.com/x", id="ATV.tr"), NOW, 1, serving(SOURCE), saved)
+    first = {kept.name for kept in saved.iterdir()}
+    guide.build(lineup(xmltv="https://b.example.com/x", id="ATV.tr"), NOW, 1, serving(SOURCE), saved)
+    second = {kept.name for kept in saved.iterdir()}
+    assert len(first) == len(second) == 1
+    assert first != second
+
+
+def test_copy_not_saved_is_logged(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    saved = tmp_path / "feeds"
+    saved.write_text("not a folder")
+    data = guide.build(lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr"), NOW, 1, serving(SOURCE), saved)
+    assert data.failed == 0
+    assert "guide source copy not saved" in caplog.text
 
 
 def test_reports_ids_missing_from_the_source(caplog: pytest.LogCaptureFixture) -> None:
@@ -122,7 +168,7 @@ def test_reports_ids_missing_from_the_source(caplog: pytest.LogCaptureFixture) -
 
 
 def test_unparseable_source_falls_back() -> None:
-    items = programmes(guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving("<tv><")))
+    items = programmes(guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving("<tv><")).data)
     assert {item.findtext("title") for item in items} == {"atv"}
 
 
@@ -152,7 +198,7 @@ def test_entries_are_decorated_for_plex() -> None:
     )
     data = guide.build(
         lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr", category="Drama"), NOW, 1, serving(source)
-    )
+    ).data
     items = programmes(data)
     dizi = next(item for item in items if item.findtext("title") == "Dizi")
     haber = next(item for item in items if item.findtext("title") == "Haber")
@@ -170,7 +216,7 @@ def test_existing_icons_are_kept() -> None:
     source = SOURCE.replace(
         "<desc>Episode text</desc>", '<desc>Episode text</desc><icon src="https://own.example/x.jpg"/>'
     )
-    items = programmes(guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving(source)))
+    items = programmes(guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving(source)).data)
     dizi = next(item for item in items if item.findtext("title") == "Dizi")
     assert [icon.get("src") for icon in dizi.findall("icon")] == ["https://own.example/x.jpg"]
 
@@ -235,7 +281,9 @@ def test_feed_limits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: py
     def copy_feed(url: str, destination: Path) -> None:
         destination.write_bytes(path.read_bytes())
 
-    items = programmes(guide.build(lineup(xmltv="https://u:p@e.example.com/x?key=s", id="ATV.tr"), NOW, 1, copy_feed))
+    items = programmes(
+        guide.build(lineup(xmltv="https://u:p@e.example.com/x?key=s", id="ATV.tr"), NOW, 1, copy_feed).data
+    )
     assert {item.findtext("title") for item in items} == {"atv"}
     assert [getattr(record, "url", "") for record in caplog.records] == ["e.example.com"]
 

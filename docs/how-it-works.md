@@ -47,7 +47,7 @@ Tellyard publishes an XMLTV guide at `/guide.xml` for `GUIDE_DAYS` days, startin
 
 A guide source is skipped, and its channels get placeholder blocks, when it is larger than 256 MB to download or 1 GB unpacked, has an entry larger than 64 KB, or has more than 32 MB of shows for your channels.
 
-The guide is rebuilt every `GUIDE_REFRESH_HOURS` hours and within a minute of a change to `channels.toml`. If a rebuild fails, Tellyard keeps the last guide and tries again 15 minutes later. If a guide source fails, its channels get placeholder blocks until the next rebuild.
+The guide is rebuilt every `GUIDE_REFRESH_HOURS` hours and within a minute of a change to `channels.toml`. If a rebuild fails, Tellyard keeps the last guide and tries again 15 minutes later. Tellyard keeps the last good copy of each guide source in `/data`. If a source fails, its channels use that copy, or placeholder blocks when there is none, and Tellyard tries the source again 15 minutes later.
 
 Tellyard serves no images itself. Tools such as [Posteryard](https://github.com/SandObserver/Posteryard) can add posters to the Plex guide.
 
