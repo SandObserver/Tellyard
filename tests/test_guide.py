@@ -177,7 +177,12 @@ def test_parse_time_variants() -> None:
     assert guide.parse_time("20261011150000 +0300") == datetime(2026, 10, 11, 12, tzinfo=UTC)
     assert guide.parse_time("20261011150000+0300") == datetime(2026, 10, 11, 12, tzinfo=UTC)
     assert guide.parse_time("20261011150000") == datetime(2026, 10, 11, 15, tzinfo=UTC)
+    assert guide.parse_time("202610111530 +0300") == datetime(2026, 10, 11, 12, 30, tzinfo=UTC)
+    assert guide.parse_time("202610111530") == datetime(2026, 10, 11, 15, 30, tzinfo=UTC)
+    assert guide.parse_time("2026101115") == datetime(2026, 10, 11, 15, tzinfo=UTC)
+    assert guide.parse_time("20261011") == datetime(2026, 10, 11, tzinfo=UTC)
     assert guide.parse_time("2026") is None
+    assert guide.parse_time("2026101115301") is None
     assert guide.parse_time("20261011150000 nonsense") is None
 
 

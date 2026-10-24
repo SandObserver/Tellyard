@@ -3,6 +3,7 @@ import copy
 import hashlib
 import io
 import logging
+import re
 import shutil
 import tempfile
 import xml.etree.ElementTree as ET
@@ -18,6 +19,7 @@ from tellyard.net import FetchError, TooLargeError, download, hosts_of, open_may
 
 log = logging.getLogger(__name__)
 XMLTV_TIME = "%Y%m%d%H%M%S %z"
+XMLTV_STAMP = re.compile(r"(\d{8,14})\s*(.*)")
 HISTORY = timedelta(hours=2)
 FEED_LIMIT = 1024 * 1024 * 1024
 ENTRY_LIMIT = 64 * 1024
@@ -60,8 +62,11 @@ def is_movie(categories: list[str]) -> bool:
 
 
 def parse_time(text: str) -> datetime | None:
-    text = text.strip()
-    digits, zone = text[:14], text[14:].strip()
+    match = XMLTV_STAMP.fullmatch(text.strip())
+    if not match or len(match[1]) % 2:
+        return None
+    # strptime misreads stamps shorter than 14 digits.
+    digits, zone = match[1].ljust(14, "0"), match[2]
     try:
         moment = datetime.strptime(digits, "%Y%m%d%H%M%S")
     except ValueError:
