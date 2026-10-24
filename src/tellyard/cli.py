@@ -24,7 +24,9 @@ log = logging.getLogger("tellyard")
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="tellyard", description="Live channels for Plex, tuned only when watched.")
+    parser = argparse.ArgumentParser(
+        prog="tellyard", description="Live channels for Plex and Jellyfin, tuned only when watched."
+    )
     parser.add_argument("--version", action="version", version=f"tellyard {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("serve", help="run the tuner")
