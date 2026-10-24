@@ -6,15 +6,14 @@ updates:
       interval: daily
     cooldown:
       default-days: 7
-      # YouTube changes break older yt-dlp releases quickly, so take its fixes at once.
-      exclude: ["yt-dlp*"]
+    # yt-dlp-release.yml updates and releases yt-dlp.
+    ignore:
+      - dependency-name: "yt-dlp*"
     groups:
       python:
         update-types: [minor, patch]
-        exclude-patterns: ["yt-dlp*"]
       python-major:
         update-types: [major]
-        exclude-patterns: ["yt-dlp*"]
 
   - package-ecosystem: npm
     directory: /site

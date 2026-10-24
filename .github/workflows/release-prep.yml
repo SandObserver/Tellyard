@@ -1,9 +1,6 @@
 name: Release prep
 
 on:
-  push:
-    branches: [main]
-    paths: [uv.lock]
   workflow_dispatch:
     inputs:
       note:
@@ -23,29 +20,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           version: "0.13.5"
-      - name: Decide whether yt-dlp changed
-        id: decide
-        env:
-          EVENT: ${{ github.event_name }}
-          INPUT_NOTE: ${{ inputs.note }}
-        run: |
-          set -euo pipefail
-          if [ "$EVENT" = workflow_dispatch ]; then
-            echo "note=$INPUT_NOTE" >> "$GITHUB_OUTPUT"
-            echo "release=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git show HEAD~1:uv.lock > "$RUNNER_TEMP/old.lock"
-          note=$(python3 tools/release.py note "$RUNNER_TEMP/old.lock" uv.lock)
-          echo "note=$note" >> "$GITHUB_OUTPUT"
-          if [ -n "$note" ]; then echo "release=true" >> "$GITHUB_OUTPUT"; else echo "release=false" >> "$GITHUB_OUTPUT"; fi
       - name: Mint a token for the release app
-        if: steps.decide.outputs.release == 'true'
         id: app
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
@@ -54,14 +34,19 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
       - name: Open the release pull request
-        if: steps.decide.outputs.release == 'true'
         env:
-          NOTE: ${{ steps.decide.outputs.note }}
+          NOTE: ${{ inputs.note }}
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
-          version=$(python3 tools/release.py prepare --note "$NOTE")
+          published=$(gh api "repos/$REPO/releases/latest" --jq .tag_name)
+          if ! grep -qE "^## \[${published#v}\] - " CHANGELOG.md; then
+            echo "::error::$published is published but not recorded on main yet. Merge its Release pull request first."
+            exit 1
+          fi
+          highest=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          version=$(python3 tools/release.py prepare --note "$NOTE" --above "${highest#v}")
           python3 tools/unraid_template.py
           uv lock
           branch="release/v$version"
