@@ -101,12 +101,19 @@ def fetch_text(
     timeout: float = 10.0,
     deadline: float = TEXT_DEADLINE,
 ) -> tuple[str, str]:
+    body = bytearray()
     with open_url(url, headers, trusted, timeout, deadline) as response:
         final = response.geturl()
-        body = response.read(TEXT_LIMIT + 1)
+        while len(body) <= TEXT_LIMIT and (block := read_block(response, TEXT_LIMIT + 1 - len(body))):
+            body += block
     if len(body) > TEXT_LIMIT:
         raise FetchError(f"{safe_url(url)}: response is larger than {TEXT_LIMIT // 1024 // 1024} MB")
     return final, body.decode("utf-8", errors="replace")
+
+
+def read_block(response: http.client.HTTPResponse, size: int) -> bytes:
+    # read() keeps each piece of a chunked body as its own object. Tiny pieces then use about 90 times their size.
+    return response.read1(size) if response.chunked else response.read(size)
 
 
 def download(

@@ -233,7 +233,7 @@ class _Handler(BaseHTTPRequestHandler):
                 self.send_header("Connection", "close")
                 self.end_headers()
                 started = True
-                while not feed.closed.is_set() and (chunk := response.read(CHUNK)):
+                while not feed.closed.is_set() and (chunk := net.read_block(response, CHUNK)):
                     if not self._write(b"%x\r\n%b\r\n" % (len(chunk), chunk) if chunked else chunk):
                         return
                 if chunked and not feed.closed.is_set():
