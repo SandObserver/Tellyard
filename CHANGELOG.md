@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Read guide times that have no space before the time zone offset. They were read as UTC.
+- Read guide times without seconds or minutes, such as `202610111530 +0300`. They were read at the wrong time.
+- Log the time the last good copy of a guide source was downloaded, also after a retry.
+
 ## [0.1.1] - 2026-10-24
 
 ### Changed

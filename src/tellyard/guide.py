@@ -3,6 +3,7 @@ import copy
 import hashlib
 import io
 import logging
+import re
 import shutil
 import tempfile
 import xml.etree.ElementTree as ET
@@ -18,6 +19,7 @@ from tellyard.net import FetchError, TooLargeError, download, hosts_of, open_may
 
 log = logging.getLogger(__name__)
 XMLTV_TIME = "%Y%m%d%H%M%S %z"
+XMLTV_STAMP = re.compile(r"(\d{8,14})\s*(.*)")
 HISTORY = timedelta(hours=2)
 FEED_LIMIT = 1024 * 1024 * 1024
 ENTRY_LIMIT = 64 * 1024
@@ -60,16 +62,19 @@ def is_movie(categories: list[str]) -> bool:
 
 
 def parse_time(text: str) -> datetime | None:
-    text = text.strip()
-    digits, _, zone = text.partition(" ")
+    match = XMLTV_STAMP.fullmatch(text.strip())
+    if not match or len(match[1]) % 2:
+        return None
+    # strptime misreads stamps shorter than 14 digits.
+    digits, zone = match[1].ljust(14, "0"), match[2]
     try:
-        moment = datetime.strptime(digits[:14], "%Y%m%d%H%M%S")
+        moment = datetime.strptime(digits, "%Y%m%d%H%M%S")
     except ValueError:
         return None
     if not zone:
         return moment.replace(tzinfo=UTC)
     try:
-        moment = datetime.strptime(f"{digits[:14]} {zone}", XMLTV_TIME)
+        moment = datetime.strptime(f"{digits} {zone}", XMLTV_TIME)
         moment.astimezone(UTC)
     except (ValueError, OverflowError):
         return None
@@ -156,7 +161,7 @@ def _reusing(downloader: Downloader, saved: Path, reuse: frozenset[str]) -> Down
     def fetch(url: str, destination: Path) -> None:
         kept = saved / _saved_name(url)
         if url in reuse and kept.is_file():
-            shutil.copyfile(kept, destination)
+            shutil.copy2(kept, destination)
         else:
             downloader(url, destination)
 
@@ -194,7 +199,7 @@ def _save(path: Path, kept: Path) -> None:
     partial = kept.with_name(kept.name + ".part")
     try:
         kept.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(path, partial)
+        shutil.copy2(path, partial)
         partial.replace(kept)
     except OSError as error:
         with contextlib.suppress(OSError):
@@ -286,8 +291,6 @@ def _fill(channel: Channel, slots: list[Slot], start: datetime, end: datetime) -
     ordered: list[Slot] = []
     cursor = start
     for slot in sorted(slots, key=lambda item: item.start):
-        if slot.stop <= start:
-            continue
         if ordered and slot.start < cursor:
             # Plex shows overlapping programmes badly.
             previous = ordered.pop()
