@@ -14,6 +14,7 @@ updates:
         exclude-patterns: ["yt-dlp*"]
       python-major:
         update-types: [major]
+        exclude-patterns: ["yt-dlp*"]
 
   - package-ecosystem: npm
     directory: /site
