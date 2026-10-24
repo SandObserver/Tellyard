@@ -1,5 +1,7 @@
 import importlib.util
 import sys
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
 
@@ -119,3 +121,100 @@ def test_command_line(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
     (tmp_path / "CHANGELOG.md").write_text(CHANGELOG, encoding="utf-8")
     assert release.main(["prepare", "--root", str(tmp_path), "--note", "Update yt-dlp to 2026.10.20."]) == 0
     assert capsys.readouterr().out == "0.1.0-beta.2\n"
+
+
+NOW = datetime(2026, 10, 25, 12, tzinfo=UTC)
+
+
+def files(uploaded: datetime, yanked: bool = False) -> list[dict[str, object]]:
+    return [{"upload_time_iso_8601": uploaded.isoformat().replace("+00:00", "Z"), "yanked": yanked}]
+
+
+def pypi(**ages: dict[str, timedelta | None]) -> Callable[[str], dict[str, object]]:
+    def fetch(name: str) -> dict[str, object]:
+        versions = ages[name.replace("-", "_")]
+        return {
+            "releases": {
+                version: files(NOW - age) if age is not None else files(NOW - timedelta(days=9), yanked=True)
+                for version, age in versions.items()
+            }
+        }
+
+    return fetch
+
+
+OLD = timedelta(days=3)
+
+
+def test_newest_skips_yanked_and_pre_releases() -> None:
+    project = pypi(yt_dlp={"2026.9.1": OLD, "2026.10.21": OLD, "2026.10.22": None, "2026.10.23.1.dev0": OLD})("yt-dlp")
+    assert release.newest(project) == ("2026.10.21", NOW - OLD)
+    assert release.newest({"releases": {"1.0": []}}) is None
+
+
+def test_waits_while_the_newest_release_is_young() -> None:
+    locked = {"yt-dlp": "2026.8.19", "yt-dlp-ejs": "0.8.0"}
+    young = pypi(
+        yt_dlp={"2026.8.19": OLD, "2026.10.21": OLD, "2026.10.24": timedelta(hours=20)}, yt_dlp_ejs={"0.8.0": OLD}
+    )
+    assert release.waiting(locked, young, NOW) == ["yt-dlp 2026.10.24 is not 24 hours old yet"]
+    settled = pypi(yt_dlp={"2026.8.19": OLD, "2026.10.24": timedelta(hours=25)}, yt_dlp_ejs={"0.8.0": OLD})
+    assert release.waiting(locked, settled, NOW) == []
+
+
+def test_refuses_a_lock_with_a_young_or_unknown_version() -> None:
+    fetch = pypi(yt_dlp={"2026.10.21": OLD, "2026.10.24": timedelta(hours=2)}, yt_dlp_ejs={"0.8.0": OLD})
+    assert release.too_new({"yt-dlp": "2026.10.21", "yt-dlp-ejs": "0.8.0"}, fetch, NOW) == []
+    assert release.too_new({"yt-dlp": "2026.10.24", "yt-dlp-ejs": "0.9.0"}, fetch, NOW) == [
+        "yt-dlp 2026.10.24 is not a stable release 24 hours old",
+        "yt-dlp-ejs 0.9.0 is not a stable release 24 hours old",
+    ]
+
+
+def test_record_adds_the_release_below_unreleased(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text(CHANGELOG.replace("0.1.0-beta.1", "0.1.0"), encoding="utf-8")
+    release.record(tmp_path, "0.1.1", "Update yt-dlp to 2026.10.21.", "2026-10-25")
+    text = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert (
+        "- Add another thing.\n\n## [0.1.1] - 2026-10-25\n\n### Changed\n\n- Update yt-dlp to 2026.10.21.\n\n## [0.1.0]"
+        in text
+    )
+    assert 'version = "0.1.1"' in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+
+
+def test_record_with_an_empty_unreleased(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('version = "0.1.0"\n', encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.1.0] - 2026-10-11\n\nFirst.\n", encoding="utf-8")
+    release.record(tmp_path, "0.1.1", "Update yt-dlp to 2026.10.21.", "2026-10-25")
+    assert (
+        (tmp_path / "CHANGELOG.md")
+        .read_text(encoding="utf-8")
+        .startswith(
+            "## [Unreleased]\n\n## [0.1.1] - 2026-10-25\n\n### Changed\n\n- Update yt-dlp to 2026.10.21.\n\n## [0.1.0]"
+        )
+    )
+
+
+def test_age_commands(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "uv.lock"
+    path.write_text(lock(ytdlp="2026.10.21"), encoding="utf-8")
+    young = pypi(yt_dlp={"2026.10.21": OLD, "2026.10.24": timedelta(hours=1)}, yt_dlp_ejs={"0.8.0": OLD})
+    assert release.main(["ready", str(path)], young) == 0
+    out = capsys.readouterr()
+    assert out.out == "false\n"
+    assert "Waiting: yt-dlp 2026.10.24" in out.err
+    settled = pypi(yt_dlp={"2026.10.21": OLD}, yt_dlp_ejs={"0.8.0": OLD})
+    assert release.main(["ready", str(path)], settled) == 0
+    assert capsys.readouterr().out == "true\n"
+    assert release.main(["verify", str(path)], settled) == 0
+    path.write_text(lock(ytdlp="2026.10.24"), encoding="utf-8")
+    assert release.main(["verify", str(path)], young) == 1
+    assert "Refused: yt-dlp 2026.10.24" in capsys.readouterr().err
+
+
+def test_record_command(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('version = "0.1.0"\n', encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.1.0] - 2026-10-11\n", encoding="utf-8")
+    assert release.main(["record", "--root", str(tmp_path), "--version", "0.1.1", "--note", "Update yt-dlp."]) == 0
+    assert "## [0.1.1] - " in (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")

@@ -1,0 +1,111 @@
+name: yt-dlp release
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Build the release without pushing the tag or opening the pull request
+        type: boolean
+        default: true
+
+# Use the app token. A GITHUB_TOKEN push starts no workflow.
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.5"
+          enable-cache: false
+      - name: Build the release on top of the last release
+        id: build
+        run: |
+          set -euo pipefail
+          tools="$PWD/tools"
+          tag=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          git show "$tag:uv.lock" > "$RUNNER_TEMP/released.lock"
+          ready=$(python3 "$tools/release.py" ready "$RUNNER_TEMP/released.lock")
+          if [ "$ready" != true ]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git worktree add --detach "$RUNNER_TEMP/release" "$tag"
+          cd "$RUNNER_TEMP/release"
+          uv lock --upgrade-package yt-dlp --upgrade-package yt-dlp-ejs
+          note=$(python3 "$tools/release.py" note "$RUNNER_TEMP/released.lock" uv.lock)
+          if [ -z "$note" ]; then
+            echo "$tag already has the newest yt-dlp."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python3 "$tools/release.py" verify uv.lock
+          version=$(python3 "$tools/release.py" prepare --note "$note")
+          python3 tools/unraid_template.py
+          uv lock
+          git config user.name 'SandObserver'
+          git config user.email '260779319+SandObserver@users.noreply.github.com'
+          git add pyproject.toml uv.lock CHANGELOG.md templates/tellyard.xml
+          git commit -m "Release $version"
+          git tag -a "v$version" -m "Release $version"
+          git show --stat HEAD
+          {
+            echo "release=true"
+            echo "version=$version"
+            echo "note=$note"
+          } >> "$GITHUB_OUTPUT"
+      - name: Record the release on main
+        if: steps.build.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.build.outputs.version }}
+          NOTE: ${{ steps.build.outputs.note }}
+        run: |
+          set -euo pipefail
+          uv lock --upgrade-package yt-dlp --upgrade-package yt-dlp-ejs
+          if [ -n "$(python3 tools/release.py note "$RUNNER_TEMP/release/uv.lock" uv.lock)" ]; then
+            echo "::error::main resolves a different yt-dlp than the v$VERSION release."
+            exit 1
+          fi
+          python3 tools/release.py record --version "$VERSION" --note "$NOTE"
+          python3 tools/unraid_template.py
+          uv lock
+          git config user.name 'SandObserver'
+          git config user.email '260779319+SandObserver@users.noreply.github.com'
+          git switch -c "release/v$VERSION"
+          git add pyproject.toml uv.lock CHANGELOG.md templates/tellyard.xml
+          git commit -m "Release $VERSION"
+          git show --stat HEAD
+      - name: Mint a token for the release app
+        if: steps.build.outputs.release == 'true' && !inputs.dry-run
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Push the tag and open the pull request for main
+        if: steps.build.outputs.release == 'true' && !inputs.dry-run
+        env:
+          VERSION: ${{ steps.build.outputs.version }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          set -euo pipefail
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          git -C "$RUNNER_TEMP/release" push "$remote" "refs/tags/v$VERSION"
+          git push "$remote" "HEAD:refs/heads/release/v$VERSION"
+          gh pr create --base main --head "release/v$VERSION" --title "Release: $VERSION" \
+            --body "$(printf '%s\n' '## Summary' "- Record the $VERSION yt-dlp release on main: version, CHANGELOG, uv.lock and the Unraid template." '' '## Testing' "v$VERSION is already tagged and published from the previous release plus the yt-dlp update.")"
+          gh pr merge --auto --squash "release/v$VERSION"

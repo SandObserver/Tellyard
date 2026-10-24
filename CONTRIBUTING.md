@@ -83,12 +83,16 @@ Semantic versioning. Move the `Unreleased` entries in [CHANGELOG.md](CHANGELOG.m
 
 ### Automatic yt-dlp releases
 
-YouTube changes break older yt-dlp releases, so new yt-dlp versions ship on their own:
+YouTube changes break older yt-dlp releases, so new yt-dlp versions ship on their own. They never ship unreleased work from `main`.
 
-1. Dependabot opens a pull request for each new stable `yt-dlp` or `yt-dlp-ejs` daily. `yt-dlp-automerge.yml` turns on auto-merge, and it merges once the required checks pass.
-2. When `uv.lock` on `main` changes a watched version, `release-prep.yml` runs `tools/release.py`: it bumps the version (the next beta while on betas, a minor release when Unreleased lists additions, a patch otherwise), dates the Unreleased section with an "Update yt-dlp to ..." line, and opens a release pull request with auto-merge on.
-3. When `pyproject.toml` on `main` holds a new version with a dated CHANGELOG section, `release-tag.yml` pushes the tag, which runs `release.yml`.
+1. Every 6 hours, `yt-dlp-release.yml` looks for a newer stable `yt-dlp` or `yt-dlp-ejs` on PyPI. Yanked and pre-release versions do not count. It waits until the newest version is 24 hours old, so a release that is pulled or fixed again the same day never ships.
+2. It takes the last release tag, updates yt-dlp in `uv.lock`, and dates a patch release with an "Update yt-dlp to ..." line. Pushing that tag runs `release.yml`, which runs every CI job before it publishes.
+3. It opens an auto-merging `Release: X.Y.Z` pull request that records the same version, CHANGELOG section and yt-dlp update on `main`.
 
-The workflows act through a GitHub App, because pushes, merges and tags made with `GITHUB_TOKEN` start no further workflows. Its client ID and private key are stored as `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY`, both as Actions secrets and as Dependabot secrets. Run **Release prep** by hand from the Actions tab to release whatever is in Unreleased.
+Dependabot ignores yt-dlp. Run the workflow by hand with `dry-run` to see what it would release.
+
+Other releases are made by hand. Run **Release prep** from the Actions tab to open a release pull request for whatever is in Unreleased. When `pyproject.toml` on `main` holds a new version with a dated CHANGELOG section, `release-tag.yml` pushes the tag, which runs `release.yml`.
+
+The workflows act through a GitHub App, because pushes, merges and tags made with `GITHUB_TOKEN` start no further workflows. Its client ID and private key are stored as `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY` Actions secrets.
 
 A beta is a tag such as `v1.2.0-beta.1`, with `version = "1.2.0b1"` in `pyproject.toml` and a CHANGELOG heading `[1.2.0-beta.1]`. It publishes the image tags `1.2.0-beta.1` and `beta`, never `latest`, and a GitHub release marked as prerelease.
