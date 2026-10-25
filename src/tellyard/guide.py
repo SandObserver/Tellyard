@@ -25,6 +25,7 @@ HISTORY = timedelta(hours=2)
 FEED_LIMIT = 1024 * 1024 * 1024
 ENTRY_LIMIT = 64 * 1024
 ENTRY_ELEMENTS = 1000
+ENTRY_DEPTH = 8
 KEPT_LIMIT = 32 * 1024 * 1024
 ENTITY_DECLARATION = b"<!ENTITY"
 
@@ -245,8 +246,9 @@ def _read(
                     stream.prolog = False
                 elif depth == 2:
                     elements, began = 0, stream.count
-                elif (elements := elements + 1) > ENTRY_ELEMENTS:
-                    raise FeedError(f"a guide entry has more than {ENTRY_ELEMENTS} parts")
+                else:
+                    elements += 1
+                    _check_part(depth - 2, elements)
                 continue
             depth -= 1
             if depth != 1 or root is None:
@@ -276,6 +278,13 @@ def _report_unreadable(url: str, unreadable: _Unreadable) -> None:
             "guide source has entries with unreadable times",
             extra={"url": safe_url(url), "entries": unreadable.count, "example": unreadable.example},
         )
+
+
+def _check_part(level: int, elements: int) -> None:
+    if level > ENTRY_DEPTH:
+        raise FeedError(f"a guide entry is nested more than {ENTRY_DEPTH} levels deep")
+    if elements > ENTRY_ELEMENTS:
+        raise FeedError(f"a guide entry has more than {ENTRY_ELEMENTS} parts")
 
 
 def _keep(
