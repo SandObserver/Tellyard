@@ -32,7 +32,7 @@ Tellyard fetches every page, playlist, key and video segment itself. ffmpeg rece
 - An address on your home network, on the host itself or in another private range is reached only when its host is written in that channel's `live`, `page`, `hls` or `token`, is a guide source, or is `HEARTBEAT_URL`. A stream, page or redirect that points at any other private address fails. The log then says `refused <address>: private addresses need a host named in the configuration`.
 - `Authorization` and `Cookie` headers go only to the hosts written in the channel. Other `headers` go to every host the stream uses.
 - Each request has a time limit: 30 seconds for a page, playlist or token answer when a stream starts, 15 seconds for a playlist during playback, 60 seconds for a video segment and 10 minutes for a guide download.
-- With `http_proxy` or `https_proxy` set, requests go through the proxy. Tellyard then refuses private addresses written as numbers, such as `192.168.1.1`. A name that points to a private address is up to the proxy.
+- With `http_proxy` or `https_proxy` set, requests go through the proxy. Tellyard then refuses private addresses written as numbers, such as `192.168.1.1`. A name that points to a private address is up to the proxy. Requests inside the container, from ffmpeg to Tellyard and from the health check, skip the proxy.
 
 yt-dlp opens `live` channels on its own.
 

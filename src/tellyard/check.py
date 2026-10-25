@@ -8,7 +8,7 @@ from tellyard.channels import Channel
 from tellyard.net import redact
 from tellyard.relay import Relay
 from tellyard.resolve import Resolved, ResolveError, Resolver, Runner
-from tellyard.stream import input_options, local
+from tellyard.stream import ffmpeg_env, input_options, local
 
 PROBE_TIMEOUT = 45.0
 VIDEO_SIZE = re.compile(r"^\s*Stream #\d+:\d+.*?: Video: .*?, (\d{1,5})x(\d{1,5})\b", re.MULTILINE)
@@ -36,6 +36,7 @@ def run_probe(args: Sequence[str], timeout: float, cancel: threading.Event | Non
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             timeout=timeout,
+            env=ffmpeg_env(),
         )
     except FileNotFoundError as error:
         raise ResolveError(f"{args[0]} is not installed") from error

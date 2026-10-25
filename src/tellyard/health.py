@@ -9,8 +9,9 @@ from tellyard.settings import Settings, SettingsError
 
 def probe(port: int) -> int:
     url = f"http://127.0.0.1:{port}/healthz"
+    direct = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        with urllib.request.urlopen(url, timeout=5) as response:
+        with direct.open(url, timeout=5) as response:
             status = json.load(response).get("status")
     except urllib.error.HTTPError as error:
         try:

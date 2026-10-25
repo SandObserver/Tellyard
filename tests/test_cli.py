@@ -130,6 +130,14 @@ def test_health_command(monkeypatch: pytest.MonkeyPatch, health_port: int) -> No
     assert cli.main(["health"]) == 0
 
 
+def test_health_command_ignores_the_proxy(monkeypatch: pytest.MonkeyPatch, health_port: int) -> None:
+    monkeypatch.setenv("LISTEN_PORT", str(health_port))
+    monkeypatch.setenv("http_proxy", "http://127.0.0.1:1")
+    monkeypatch.delenv("no_proxy", raising=False)
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    assert cli.main(["health"]) == 0
+
+
 @pytest.mark.parametrize(
     ("body", "reason"),
     [

@@ -26,6 +26,7 @@ SECOND_SIGNAL = 0.2
 STOP_GRACE = 5.0
 CANCEL_POLL = 1.0
 READ_TIMEOUT_US = "15000000"
+PROXY_VARIABLES = frozenset({"http_proxy", "https_proxy", "all_proxy"})
 # Twitch ad breaks hand over frames stamped with the stream's uptime. Re-encoding players freeze on them.
 TIMESTAMP_REPAIR = (
     "setts=pts='if(gt(N,0)*gt(abs(PTS-PREV_OUTPTS)*TB,10),PREV_OUTPTS+1/(30*TB),PTS)'"
@@ -61,6 +62,11 @@ def input_options() -> list[str]:
     return ["-rw_timeout", READ_TIMEOUT_US]
 
 
+def ffmpeg_env() -> dict[str, str]:
+    # ffmpeg reads only the relay on 127.0.0.1. A proxy cannot reach that address.
+    return {key: value for key, value in os.environ.items() if key.lower() not in PROXY_VARIABLES}
+
+
 def local(resolved: Resolved, feed: Feed) -> Resolved:
     # ffmpeg reads the source only through the relay, which checks every address it requests.
     return replace(resolved, video=feed.video, audio=feed.audio, headers=())
@@ -73,7 +79,7 @@ class Process:
         self._queue: queue.Queue[bytes | None] = queue.Queue(maxsize=QUEUE_CHUNKS)
         try:
             self._process = subprocess.Popen(
-                args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=ffmpeg_env()
             )
         except FileNotFoundError as error:
             raise StreamError(f"{args[0]} is not installed") from error
