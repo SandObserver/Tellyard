@@ -361,8 +361,9 @@ def test_feed_with_many_small_entries_stays_small(tmp_path: Path) -> None:
     [
         ([b"<tv><programme>", b"<x/>" * 2000, b"</programme></tv>"], "more than 1000 parts"),
         ([b"<tv><programme><desc>", b"x" * 2_000_000, b"</desc></programme></tv>"], "larger than 64 KB"),
+        ([b"<tv><programme>", b"<a>" * 9, b"</a>" * 9, b"</programme></tv>"], "nested more than 8 levels"),
     ],
-    ids=["parts", "text"],
+    ids=["parts", "text", "depth"],
 )
 def test_oversized_entries_stop_the_feed(tmp_path: Path, parts: list[bytes], message: str) -> None:
     path = tmp_path / "feed.xml.gz"
