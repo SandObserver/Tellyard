@@ -135,6 +135,7 @@ def test_health_command_ignores_the_proxy(monkeypatch: pytest.MonkeyPatch, healt
     monkeypatch.setenv("http_proxy", "http://127.0.0.1:1")
     monkeypatch.delenv("no_proxy", raising=False)
     monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.setattr("urllib.request._opener", None)
     assert cli.main(["health"]) == 0
 
 
