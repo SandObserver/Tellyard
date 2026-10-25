@@ -23,6 +23,8 @@ STREAM_SCAN = 20
 FETCH_ATTEMPTS = 3
 CANCEL_POLL = 0.5
 TWITCH_HOSTS = ("twitch.tv", ".twitch.tv")
+# Without this, yt-dlp sends a made-up address from the allowed country to region-limited sites.
+YTDLP_BASE = ("--no-warnings", "--xff", "never")
 
 type Runner = Callable[[Sequence[str], float, threading.Event | None], str]
 type Fetcher = Callable[[str, Headers, Hosts], tuple[str, str]]
@@ -74,7 +76,9 @@ def run_command(args: Sequence[str], timeout: float, cancel: threading.Event | N
                     raise ResolveError(f"{args[0]} took longer than {timeout:.0f} s") from None
     if process.returncode != 0:
         lines = [line for line in stderr.splitlines() if line.strip()]
-        raise ResolveError(redact(lines[-1]) if lines else f"{args[0]} exited with code {process.returncode}")
+        # yt-dlp prints hints after its error line.
+        errors = [line for line in lines if line.startswith("ERROR:")] or lines
+        raise ResolveError(redact(errors[-1]) if errors else f"{args[0]} exited with code {process.returncode}")
     return stdout
 
 
@@ -138,7 +142,7 @@ class Resolver:
         if not source.match:
             return source.url
         channel = source.url.rstrip("/").removesuffix("/live")
-        args = [self._settings.ytdlp, "--no-warnings", "--flat-playlist", "--playlist-end", str(STREAM_SCAN), "-J"]
+        args = [self._settings.ytdlp, *YTDLP_BASE, "--flat-playlist", "--playlist-end", str(STREAM_SCAN), "-J"]
         args += [*self._settings.ytdlp_args, f"{channel}/streams"]
         try:
             listing = _json(self._run(args, YTDLP_TIMEOUT, cancel))
@@ -161,7 +165,7 @@ class Resolver:
         return source.url
 
     def _from_ytdlp(self, url: str, cancel: threading.Event) -> str:
-        args = [self._settings.ytdlp, "--no-warnings", "--no-playlist", "--skip-download", "-J"]
+        args = [self._settings.ytdlp, *YTDLP_BASE, "--no-playlist", "--skip-download", "-J"]
         args += [*self._settings.ytdlp_args, url]
         info = _json(self._run(args, YTDLP_TIMEOUT, cancel))
         if info.get("live_status") != "is_live":
