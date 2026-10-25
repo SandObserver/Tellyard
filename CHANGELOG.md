@@ -6,8 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Stop yt-dlp from sending a made-up address in another country to sites that limit streams by region.
+
 ### Fixed
 
+- Report the error yt-dlp gives when a stream cannot be opened, such as a region limit, instead of its last hint line.
 - Read guide times that have no space before the time zone offset. They were read as UTC.
 - Read guide times without seconds or minutes, such as `202610111530 +0300`. They were read at the wrong time.
 - Log the time the last good copy of a guide source was downloaded, also after a retry.

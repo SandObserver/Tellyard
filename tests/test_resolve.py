@@ -142,6 +142,7 @@ def test_youtube_uses_the_live_manifest(make_settings: Callable[..., Settings]) 
     assert resolved.height == 1080
     assert seen[0][0] == "/opt/yt-dlp"
     assert seen[0][-3:] == ["--proxy", "http://p:1", "https://www.youtube.com/@news/live"]
+    assert seen[0][2:4] == ["--xff", "never"]
 
 
 def test_youtube_falls_back_to_format_manifests(make_settings: Callable[..., Settings]) -> None:
@@ -191,6 +192,9 @@ def test_run_command_reports_failures() -> None:
     assert run_command([sys.executable, "-c", "print('hi')"], 10) == "hi\n"
     with pytest.raises(ResolveError, match="boom"):
         run_command([sys.executable, "-c", "import sys; sys.stderr.write('x\\nboom\\n'); sys.exit(3)"], 10)
+    geo = "ERROR: [x] 1: not available in your country\nAvailable in DE.\nYou might want to use a VPN.\n"
+    with pytest.raises(ResolveError, match=r"not available in your country$"):
+        run_command([sys.executable, "-c", f"import sys; sys.stderr.write({geo!r}); sys.exit(1)"], 10)
     with pytest.raises(ResolveError, match="exited with code 4"):
         run_command([sys.executable, "-c", "import sys; sys.exit(4)"], 10)
     with pytest.raises(ResolveError, match="took longer"):
@@ -234,6 +238,7 @@ def test_youtube_match_picks_the_stream_by_title(make_settings: Callable[..., Se
     resolved = resolver.resolve(channel(youtube="https://www.youtube.com/@LiveNOWFOX/live", match="24/7"))
     assert resolved.height == 1080
     assert seen[1][-1] == "https://www.youtube.com/watch?v=main"
+    assert all(args[2:4] == ["--xff", "never"] for args in seen)
 
 
 @pytest.mark.parametrize("listing", [json.dumps({"entries": []}), None])
