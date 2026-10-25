@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Self
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 DEVICE_ID = re.compile(r"^[0-9A-F]{8}$")
 BASE_URL = re.compile(r"^https?://[^\s/]+$")
@@ -39,6 +40,8 @@ class Settings:
     log_level: LogLevel
     min_height: int | None
     heartbeat_url: str
+    time_zone: ZoneInfo | None
+    unknown_time_zone: str
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -60,6 +63,8 @@ class Settings:
             ytdlp_args = tuple(shlex.split(env.get("YTDLP_ARGS", "")))
         except ValueError as error:
             raise SettingsError(f"YTDLP_ARGS cannot be parsed: {error}") from error
+        zone_name = env.get("TZ", "").strip().removeprefix(":")
+        zone = _time_zone(zone_name)
         return cls(
             channels_file=Path(env.get("CHANNELS_FILE", "/config/channels.toml")),
             data_dir=Path(env.get("DATA_DIR", "/data")),
@@ -76,12 +81,23 @@ class Settings:
             log_level=level,
             min_height=_min_height(env),
             heartbeat_url=heartbeat_url,
+            time_zone=zone,
+            unknown_time_zone=zone_name if zone_name and zone is None else "",
         )
 
 
 def _device_id(name: str) -> str:
     # Plex identifies the tuner by this ID. Keep the default stable across restarts.
     return hashlib.sha256(name.encode()).hexdigest()[:8].upper()
+
+
+def _time_zone(name: str) -> ZoneInfo | None:
+    if not name:
+        return None
+    try:
+        return ZoneInfo(name)
+    except (ValueError, ZoneInfoNotFoundError):
+        return None
 
 
 def _min_height(env: Mapping[str, str]) -> int | None:

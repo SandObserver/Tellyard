@@ -145,6 +145,8 @@ class App:
         limit = timedelta(hours=2 * self.settings.guide_refresh_hours)
         if age > limit:
             return f"the guide is {age.total_seconds() / 3600:.0f} hours old"
+        if age < timedelta(0):
+            return "the clock is earlier than the last guide build"
         return None
 
     def health(self) -> dict[str, Any]:
@@ -220,13 +222,14 @@ class App:
             log.warning("HEARTBEAT_URL call failed", extra={"reason": str(error)})
 
     def _guide_due(self, now: datetime) -> tuple[bool, bool]:
-        if self._guide_failed_at and now - self._guide_failed_at < GUIDE_RETRY:
+        if self._guide_failed_at and timedelta(0) <= now - self._guide_failed_at < GUIDE_RETRY:
             return False, False
         built = self.guide.built_at
         full = self._guide_full_at or built
         if built is None or full is None or self._guide_version != self.store.version:
             return True, False
-        if now - full >= timedelta(hours=self.settings.guide_refresh_hours):
+        # A clock set back makes the last build look newer than now.
+        if now < built or now - full >= timedelta(hours=self.settings.guide_refresh_hours):
             return True, False
         return bool(self.guide.failed_sources) and now - built >= GUIDE_RETRY, True
 

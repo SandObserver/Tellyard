@@ -126,6 +126,13 @@ def test_health_fails_when_the_guide_is_old(base: str, app: App) -> None:
     assert app.problem() is None
 
 
+def test_health_fails_when_the_clock_is_behind_the_guide(app: App) -> None:
+    app.refresh_guide(datetime.now(UTC) + timedelta(days=30))
+    assert app.problem() == "the clock is earlier than the last guide build"
+    app.refresh_guide(datetime.now(UTC))
+    assert app.problem() is None
+
+
 def test_health_fails_when_the_guide_thread_stops(app: App) -> None:
     stop = threading.Event()
     stop.set()
@@ -274,6 +281,25 @@ def test_retries_do_not_delay_the_full_refresh(app: App, monkeypatch: pytest.Mon
     full = [moment for moment, retry in calls if not retry]
     assert full == [now, now + timedelta(hours=6)]
     assert len(calls) == 7 * 4 + 1
+
+
+def test_clock_set_back_rebuilds_the_guide(app: App, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[datetime] = []
+
+    def failing_second(lineup: object, now: datetime, retry: bool = False) -> None:
+        calls.append(now)
+        if len(calls) == 2:
+            raise RuntimeError("disk full")
+        app.guide.built_at = now
+
+    monkeypatch.setattr(app.guide, "rebuild", failing_second)
+    ahead = datetime(2027, 10, 11, 12, tzinfo=UTC)
+    app.refresh_guide(ahead)
+    app.refresh_guide(ahead + timedelta(hours=7))
+    now = datetime(2026, 10, 11, 12, tzinfo=UTC)
+    app.refresh_guide(now)
+    app.refresh_guide(now + timedelta(minutes=1))
+    assert calls == [ahead, ahead + timedelta(hours=7), now]
 
 
 def test_failed_guide_rebuild_waits_before_retrying(

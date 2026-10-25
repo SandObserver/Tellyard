@@ -1,11 +1,13 @@
 import gzip
 import itertools
 import os
+import shutil
 import tracemalloc
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -184,6 +186,102 @@ def test_parse_time_variants() -> None:
     assert guide.parse_time("2026") is None
     assert guide.parse_time("2026101115301") is None
     assert guide.parse_time("20261011150000 nonsense") is None
+    assert guide.parse_time("20261011150000 UTC") == datetime(2026, 10, 11, 15, tzinfo=UTC)
+    assert guide.parse_time("202610111500 gmt") == datetime(2026, 10, 11, 15, tzinfo=UTC)
+    assert guide.parse_time("20261011150000Z") == datetime(2026, 10, 11, 15, tzinfo=UTC)
+
+
+def test_unreadable_times_are_reported(caplog: pytest.LogCaptureFixture) -> None:
+    guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving(SOURCE))
+    record = next(
+        item for item in caplog.records if item.getMessage() == "guide source has entries with unreadable times"
+    )
+    assert (record.__dict__["entries"], record.__dict__["example"]) == (1, "bad")
+
+
+def test_unreadable_times_keep_only_the_first_example(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
+    entry = '<programme start="{}" stop="20261011170000 +0000" channel="ATV.tr"><title>x</title></programme>'
+    feed = tmp_path / "feed.xml"
+    feed.write_text("<tv>" + "".join(entry.format(letter * 30000) for letter in "abc" * 300) + "</tv>")
+
+    def download(url: str, destination: Path) -> None:
+        shutil.copyfile(feed, destination)
+
+    tracemalloc.start()
+    try:
+        guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, download)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak < 10 * 1024 * 1024
+    record = next(
+        item for item in caplog.records if item.getMessage() == "guide source has entries with unreadable times"
+    )
+    assert (record.__dict__["entries"], record.__dict__["example"]) == (900, "a" * 40)
+
+
+def test_window_is_counted_in_real_hours() -> None:
+    zone = ZoneInfo("America/New_York")
+    now = datetime(2026, 11, 1, 6, 30, tzinfo=UTC)
+    items = programmes(guide.build(lineup(hours=1), now.astimezone(zone), 1).data)
+    assert window(items) == ("20261101043000 +0000", "20261102063000 +0000")
+
+
+def test_far_stop_is_cut_at_the_window_end() -> None:
+    source = SOURCE.replace('stop="20261011183000 +0000"', 'stop="99991231235959 +0000"')
+    items = programmes(guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving(source)).data)
+    assert items[-1].findtext("title") == "Haber"
+    assert items[-1].get("stop") == "20261012153000 +0000"
+
+
+def test_unusable_entry_falls_back_to_placeholders(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def overflow(*args: Any) -> list[guide.Slot]:
+        raise OverflowError("date value out of range")
+
+    monkeypatch.setattr(guide, "_fill", overflow)
+    items = programmes(guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, serving(SOURCE)).data)
+    assert {item.findtext("title") for item in items} == {"atv"}
+    assert window(items) == ("20261011133000 +0000", "20261012153000 +0000")
+    assert "guide entries unusable, using placeholders" in caplog.text
+
+
+def local_stops(items: list[ET.Element], zone: ZoneInfo) -> list[str]:
+    stops = [guide.parse_time(item.get("stop", "")) for item in items]
+    return [stop.astimezone(zone).strftime("%m-%d %H:%M") for stop in stops if stop]
+
+
+def test_placeholder_blocks_follow_the_local_clock() -> None:
+    zone = ZoneInfo("Asia/Tehran")
+    items = programmes(guide.build(lineup(hours=2), NOW.astimezone(zone), 1).data)
+    assert local_stops(items, zone)[:3] == ["10-11 18:00", "10-11 20:00", "10-11 22:00"]
+    assert window(items) == ("20261011133000 +0000", "20261012153000 +0000")
+
+
+@pytest.mark.parametrize("hours", [0.5, 1, 24])
+def test_placeholder_blocks_across_a_clock_change(hours: float) -> None:
+    zone = ZoneInfo("America/New_York")
+    now = datetime(2026, 10, 31, 12, tzinfo=zone)
+    items = programmes(guide.build(lineup(hours=hours), now, 3).data)
+    for before, after in itertools.pairwise(items):
+        assert before.get("stop") == after.get("start")
+        assert before.get("start", "") < before.get("stop", "")
+    stops = local_stops(items, zone)
+    assert all(stop.endswith((":00", ":30")) for stop in stops)
+    if hours == 24:
+        assert stops[:3] == ["11-01 00:00", "11-02 00:00", "11-03 00:00"]
+        assert items[1].get("start") == "20261101040000 +0000"
+        assert items[1].get("stop") == "20261102050000 +0000"
+
+
+def test_guide_uses_its_time_zone(tmp_path: Path) -> None:
+    zone = ZoneInfo("Asia/Kathmandu")
+    cache = guide.Guide(tmp_path / "guide.xml", 1, zone=zone)
+    cache.rebuild(lineup(hours=1), NOW)
+    assert cache.data is not None
+    assert local_stops(programmes(cache.data), zone)[:2] == ["10-11 20:00", "10-11 21:00"]
+    assert cache.built_at == NOW
 
 
 def test_guide_cache_survives_restarts(tmp_path: Path) -> None:
@@ -391,7 +489,8 @@ def test_source_without_listings_keeps_the_last_good_copy(tmp_path: Path, caplog
     empty = guide.build(channel, NOW, 1, serving("<tv></tv>"), saved)
     assert empty.data == fresh.data
     assert empty.failed == 0
-    assert [record.__dict__.get("reason") for record in caplog.records] == ["no current listings"]
+    reasons = [record.__dict__.get("reason") for record in caplog.records if "unreadable" not in record.getMessage()]
+    assert reasons == ["no current listings"]
     assert guide.build(channel, NOW, 1, serving("<tv><"), saved).data == fresh.data
 
 

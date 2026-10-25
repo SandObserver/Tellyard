@@ -9,10 +9,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Stop yt-dlp from sending a made-up address in another country to sites that limit streams by region. A `live` channel limited to another region now fails with the site's region error.
+- Start guide placeholder blocks at local midnight in `TZ` instead of UTC. A `TZ` that is not a known time zone name logs a warning and keeps UTC.
 
 ### Fixed
 
 - Report the error yt-dlp gives when a stream cannot be opened, such as a region limit, instead of its last hint line.
+- Read guide times that name their time zone as `UTC` or `GMT`. Log the entries whose times cannot be read.
+- Keep building the guide when a guide source lists a show that ends far in the future. All channels lost their guide.
+- Rebuild the guide after the system clock is set back. It stopped updating until the clock caught up.
 - Read guide times that have no space before the time zone offset. They were read as UTC.
 - Read guide times without seconds or minutes, such as `202610111530 +0300`. They were read at the wrong time.
 - Log the time the last good copy of a guide source was downloaded, also after a retry.

@@ -11,7 +11,7 @@ import zlib
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 
 from tellyard.channels import Channel, Lineup
@@ -20,6 +20,7 @@ from tellyard.net import FetchError, TooLargeError, download, hosts_of, open_may
 log = logging.getLogger(__name__)
 XMLTV_TIME = "%Y%m%d%H%M%S %z"
 XMLTV_STAMP = re.compile(r"(\d{8,14})\s*(.*)")
+UTC_NAMES = frozenset({"UTC", "GMT", "UT", "Z"})
 HISTORY = timedelta(hours=2)
 FEED_LIMIT = 1024 * 1024 * 1024
 ENTRY_LIMIT = 64 * 1024
@@ -71,7 +72,7 @@ def parse_time(text: str) -> datetime | None:
         moment = datetime.strptime(digits, "%Y%m%d%H%M%S")
     except ValueError:
         return None
-    if not zone:
+    if not zone or zone.upper() in UTC_NAMES:
         return moment.replace(tzinfo=UTC)
     try:
         moment = datetime.strptime(f"{digits} {zone}", XMLTV_TIME)
@@ -95,8 +96,9 @@ class Built:
 def build(
     lineup: Lineup, now: datetime, days: int, downloader: Downloader = fetch_feed, saved: Path | None = None
 ) -> Built:
-    start = now - HISTORY
-    end = now + timedelta(days=days)
+    # Placeholder blocks follow the clock in the time zone of now.
+    start = now.astimezone(UTC) - HISTORY
+    end = start + HISTORY + timedelta(days=days)
     schedules, failed, loaded = _external(lineup.channels, start, end, downloader, saved)
     root = ET.Element("tv", {"generator-info-name": "Tellyard"})
     for channel in lineup.channels:
@@ -105,8 +107,18 @@ def build(
         ET.SubElement(element, "display-name").text = channel.number
         ET.SubElement(element, "icon", {"src": channel.logo})
     for channel in lineup.channels:
-        for slot in _fill(channel, schedules.get(channel.number, []), start, end):
-            root.append(_programme(channel, slot))
+        try:
+            entries = [
+                _programme(channel, slot)
+                for slot in _fill(channel, schedules.get(channel.number, []), start, end, now.tzinfo)
+            ]
+        except (ArithmeticError, ValueError) as error:
+            # One bad entry must not stop the guide for every channel.
+            log.warning(
+                "guide entries unusable, using placeholders", extra={"channel": channel.number, "reason": str(error)}
+            )
+            entries = [_programme(channel, slot) for slot in _placeholders(channel, start, end, now.tzinfo)]
+        root.extend(entries)
     ET.indent(root)
     return Built(ET.tostring(root, encoding="utf-8", xml_declaration=True), failed, loaded)
 
@@ -147,7 +159,7 @@ def _load(
         path = Path(scratch) / "source.xml"
         try:
             downloader(url, path)
-            found = _read(path, ids, *span)
+            found = _read(path, ids, *span, url)
         except FEED_ERRORS as error:
             return _read_saved(kept, url, ids, span, error), isinstance(error, LASTING_ERRORS)
         if not found:
@@ -182,7 +194,7 @@ def _read_saved(
     extra = {"url": safe_url(url), "reason": str(error) if error else "no current listings"}
     if kept:
         try:
-            found = _read(kept, ids, *span)
+            found = _read(kept, ids, *span, url)
             saved_at = datetime.fromtimestamp(kept.stat().st_mtime, UTC).isoformat(timespec="seconds")
         except FEED_ERRORS:
             pass
@@ -214,9 +226,12 @@ def _forget_saved(saved: Path, keep: set[str]) -> None:
                 old.unlink(missing_ok=True)
 
 
-def _read(path: Path, ids: dict[str, list[str]], start: datetime, end: datetime) -> dict[str, list[Slot]]:
+def _read(
+    path: Path, ids: dict[str, list[str]], start: datetime, end: datetime, url: str = ""
+) -> dict[str, list[Slot]]:
     # Feeds are untrusted and may be compressed. Every limit here bounds memory, not only time.
     found: dict[str, list[Slot]] = defaultdict(list)
+    unreadable = _Unreadable()
     with open_maybe_gzip(path) as raw:
         stream = _Counted(raw)
         root: ET.Element | None = None
@@ -240,24 +255,49 @@ def _read(path: Path, ids: dict[str, list[str]], start: datetime, end: datetime)
             if size > ENTRY_LIMIT:
                 raise FeedError(f"a guide entry is larger than {ENTRY_LIMIT // 1024} KB")
             numbers = ids.get(element.get("channel", "")) if element.tag == "programme" else None
-            if numbers and _keep(element, numbers, start, end, found):
-                kept += len(ET.tostring(element)) * len(numbers)
+            if numbers:
+                kept += _keep(element, numbers, (start, end), found, unreadable)
                 if kept > KEPT_LIMIT:
                     raise FeedError(f"the listings for these channels are larger than {KEPT_LIMIT // 1024 // 1024} MB")
             root.clear()
+    _report_unreadable(url, unreadable)
     return found
 
 
+@dataclass
+class _Unreadable:
+    count: int = 0
+    example: str = ""
+
+
+def _report_unreadable(url: str, unreadable: _Unreadable) -> None:
+    if unreadable.count:
+        log.warning(
+            "guide source has entries with unreadable times",
+            extra={"url": safe_url(url), "entries": unreadable.count, "example": unreadable.example},
+        )
+
+
 def _keep(
-    element: ET.Element, numbers: list[str], start: datetime, end: datetime, found: dict[str, list[Slot]]
-) -> bool:
-    begin = parse_time(element.get("start", ""))
-    stop = parse_time(element.get("stop", ""))
-    if not (begin and stop and begin < stop and stop > start and begin < end):
-        return False
+    element: ET.Element,
+    numbers: list[str],
+    span: tuple[datetime, datetime],
+    found: dict[str, list[Slot]],
+    unreadable: _Unreadable,
+) -> int:
+    stamps = element.get("start", ""), element.get("stop", "")
+    begin, stop = (parse_time(stamp) for stamp in stamps)
+    if begin is None or stop is None:
+        if not unreadable.count:
+            unreadable.example = (stamps[0] if begin is None else stamps[1])[:40]
+        unreadable.count += 1
+        return 0
+    start, end = span
+    if not (begin < stop and stop > start and begin < end):
+        return 0
     for number in numbers:
-        found[number].append(Slot(begin, stop, copy.deepcopy(element)))
-    return True
+        found[number].append(Slot(begin, min(stop, end), copy.deepcopy(element)))
+    return len(ET.tostring(element)) * len(numbers)
 
 
 class _Counted(io.RawIOBase):
@@ -287,7 +327,7 @@ class _Counted(io.RawIOBase):
         return data
 
 
-def _fill(channel: Channel, slots: list[Slot], start: datetime, end: datetime) -> list[Slot]:
+def _fill(channel: Channel, slots: list[Slot], start: datetime, end: datetime, zone: tzinfo | None) -> list[Slot]:
     ordered: list[Slot] = []
     cursor = start
     for slot in sorted(slots, key=lambda item: item.start):
@@ -298,24 +338,36 @@ def _fill(channel: Channel, slots: list[Slot], start: datetime, end: datetime) -
                 ordered.append(replace(previous, stop=slot.start))
             cursor = slot.start
         if slot.start > cursor:
-            ordered += _placeholders(channel, cursor, slot.start)
+            ordered += _placeholders(channel, cursor, slot.start, zone)
         ordered.append(slot)
         cursor = slot.stop
-    ordered += _placeholders(channel, cursor, end)
+    ordered += _placeholders(channel, cursor, end, zone)
     return ordered
 
 
-def _placeholders(channel: Channel, start: datetime, end: datetime) -> list[Slot]:
+def _placeholders(channel: Channel, start: datetime, end: datetime, zone: tzinfo | None) -> list[Slot]:
     block = timedelta(minutes=channel.placeholder.block_minutes)
-    epoch = datetime(2000, 1, 1, tzinfo=UTC)
-    boundary = epoch + ((start - epoch) // block + 1) * block
     slots: list[Slot] = []
     cursor = start
     while cursor < end:
-        stop = min(boundary, end)
+        stop = min(_next_boundary(cursor, block, zone), end)
         slots.append(Slot(cursor, stop, None))
-        cursor, boundary = stop, boundary + block
+        cursor = stop
     return slots
+
+
+def _next_boundary(moment: datetime, block: timedelta, zone: tzinfo | None) -> datetime:
+    # Blocks divide a day evenly, so every day starts a new block at local midnight.
+    local = moment.astimezone(zone or UTC)
+    midnight = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    elapsed = local.replace(tzinfo=None) - midnight.replace(tzinfo=None)
+    boundary = midnight + (elapsed // block + 1) * block
+    # In the repeated hour when the clocks go back, the first reading of a time can be earlier than the moment.
+    for fold in (0, 1):
+        utc = boundary.replace(fold=fold).astimezone(UTC)
+        if utc > moment:
+            return utc
+    return moment + block
 
 
 def _programme(channel: Channel, slot: Slot) -> ET.Element:
@@ -349,10 +401,11 @@ def _decorate(element: ET.Element, channel: Channel, slot: Slot) -> None:
 
 
 class Guide:
-    def __init__(self, path: Path, days: int, downloader: Downloader = fetch_feed) -> None:
+    def __init__(self, path: Path, days: int, downloader: Downloader = fetch_feed, zone: tzinfo | None = None) -> None:
         self._path = path
         self._days = days
         self._downloader = downloader
+        self._zone = zone
         self._data: bytes | None = None
         self.built_at: datetime | None = None
         self.write_error: str | None = None
@@ -370,7 +423,8 @@ class Guide:
         moment = now or datetime.now(UTC)
         saved = self._path.parent / "feeds"
         reuse = self._loaded if retry else frozenset()
-        built = build(lineup, moment, self._days, _reusing(self._downloader, saved, reuse), saved)
+        local = moment.astimezone(self._zone) if self._zone else moment
+        built = build(lineup, local, self._days, _reusing(self._downloader, saved, reuse), saved)
         self._loaded = reuse | built.loaded
         data = built.data
         self._data = data

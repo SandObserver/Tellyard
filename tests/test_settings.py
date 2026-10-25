@@ -41,9 +41,25 @@ def test_reads_values() -> None:
     assert Settings.from_env({"MIN_HEIGHT": "Off"}).min_height is None
 
 
+def test_reads_the_time_zone() -> None:
+    assert Settings.from_env({}).time_zone is None
+    assert str(Settings.from_env({"TZ": "Europe/Berlin"}).time_zone) == "Europe/Berlin"
+    assert str(Settings.from_env({"TZ": ":Europe/Berlin"}).time_zone) == "Europe/Berlin"
+    assert Settings.from_env({"TZ": "Europe/Berlin"}).unknown_time_zone == ""
+
+
+@pytest.mark.parametrize(
+    "value", ["Mars/Olympus", "/etc/localtime", ":/etc/localtime", "UTC0", "EST5EDT,M3.2.0,M11.1.0"]
+)
+def test_unknown_time_zone_keeps_utc(value: str) -> None:
+    settings = Settings.from_env({"TZ": value})
+    assert settings.time_zone is None
+    assert settings.unknown_time_zone == value.removeprefix(":")
+
+
 def test_empty_values_mean_the_defaults() -> None:
     names = ["TUNERS", "MIN_HEIGHT", "DEVICE_NAME", "DEVICE_ID", "BASE_URL", "GUIDE_DAYS", "GUIDE_REFRESH_HOURS"]
-    names += ["YTDLP_ARGS", "HEARTBEAT_URL", "LOG_LEVEL", "LISTEN_PORT"]
+    names += ["YTDLP_ARGS", "HEARTBEAT_URL", "LOG_LEVEL", "LISTEN_PORT", "TZ"]
     assert Settings.from_env(dict.fromkeys(names, "")) == Settings.from_env({})
 
 
