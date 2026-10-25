@@ -89,6 +89,10 @@ def _serve(settings: Settings) -> int:
     except ChannelError as error:
         print(f"tellyard: {error}", file=sys.stderr)
         return 2
+    if settings.unknown_time_zone:
+        log.warning(
+            "TZ is not a known time zone name, guide blocks follow UTC", extra={"tz": settings.unknown_time_zone}
+        )
     guide = Guide(settings.data_dir / "guide.xml", settings.guide_days, zone=settings.time_zone)
     app = App(settings, store, guide)
     server = Server(("", settings.port), app)

@@ -97,8 +97,8 @@ def build(
     lineup: Lineup, now: datetime, days: int, downloader: Downloader = fetch_feed, saved: Path | None = None
 ) -> Built:
     # Placeholder blocks follow the clock in the time zone of now.
-    start = now - HISTORY
-    end = now + timedelta(days=days)
+    start = now.astimezone(UTC) - HISTORY
+    end = start + HISTORY + timedelta(days=days)
     schedules, failed, loaded = _external(lineup.channels, start, end, downloader, saved)
     root = ET.Element("tv", {"generator-info-name": "Tellyard"})
     for channel in lineup.channels:
@@ -231,7 +231,7 @@ def _read(
 ) -> dict[str, list[Slot]]:
     # Feeds are untrusted and may be compressed. Every limit here bounds memory, not only time.
     found: dict[str, list[Slot]] = defaultdict(list)
-    unreadable: list[str] = []
+    unreadable = _Unreadable()
     with open_maybe_gzip(path) as raw:
         stream = _Counted(raw)
         root: ET.Element | None = None
@@ -264,11 +264,17 @@ def _read(
     return found
 
 
-def _report_unreadable(url: str, stamps: list[str]) -> None:
-    if stamps:
+@dataclass
+class _Unreadable:
+    count: int = 0
+    example: str = ""
+
+
+def _report_unreadable(url: str, unreadable: _Unreadable) -> None:
+    if unreadable.count:
         log.warning(
             "guide source has entries with unreadable times",
-            extra={"url": safe_url(url), "entries": len(stamps), "example": stamps[0][:40]},
+            extra={"url": safe_url(url), "entries": unreadable.count, "example": unreadable.example},
         )
 
 
@@ -277,12 +283,14 @@ def _keep(
     numbers: list[str],
     span: tuple[datetime, datetime],
     found: dict[str, list[Slot]],
-    unreadable: list[str],
+    unreadable: _Unreadable,
 ) -> int:
     stamps = element.get("start", ""), element.get("stop", "")
     begin, stop = (parse_time(stamp) for stamp in stamps)
     if begin is None or stop is None:
-        unreadable.append(stamps[0] if begin is None else stamps[1])
+        if not unreadable.count:
+            unreadable.example = (stamps[0] if begin is None else stamps[1])[:40]
+        unreadable.count += 1
         return 0
     start, end = span
     if not (begin < stop and stop > start and begin < end):

@@ -145,6 +145,8 @@ class App:
         limit = timedelta(hours=2 * self.settings.guide_refresh_hours)
         if age > limit:
             return f"the guide is {age.total_seconds() / 3600:.0f} hours old"
+        if age < timedelta(0):
+            return "the clock is earlier than the last guide build"
         return None
 
     def health(self) -> dict[str, Any]:

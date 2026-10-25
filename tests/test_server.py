@@ -126,6 +126,13 @@ def test_health_fails_when_the_guide_is_old(base: str, app: App) -> None:
     assert app.problem() is None
 
 
+def test_health_fails_when_the_clock_is_behind_the_guide(app: App) -> None:
+    app.refresh_guide(datetime.now(UTC) + timedelta(days=30))
+    assert app.problem() == "the clock is earlier than the last guide build"
+    app.refresh_guide(datetime.now(UTC))
+    assert app.problem() is None
+
+
 def test_health_fails_when_the_guide_thread_stops(app: App) -> None:
     stop = threading.Event()
     stop.set()

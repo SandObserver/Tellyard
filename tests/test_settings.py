@@ -45,6 +45,16 @@ def test_reads_the_time_zone() -> None:
     assert Settings.from_env({}).time_zone is None
     assert str(Settings.from_env({"TZ": "Europe/Berlin"}).time_zone) == "Europe/Berlin"
     assert str(Settings.from_env({"TZ": ":Europe/Berlin"}).time_zone) == "Europe/Berlin"
+    assert Settings.from_env({"TZ": "Europe/Berlin"}).unknown_time_zone == ""
+
+
+@pytest.mark.parametrize(
+    "value", ["Mars/Olympus", "/etc/localtime", ":/etc/localtime", "UTC0", "EST5EDT,M3.2.0,M11.1.0"]
+)
+def test_unknown_time_zone_keeps_utc(value: str) -> None:
+    settings = Settings.from_env({"TZ": value})
+    assert settings.time_zone is None
+    assert settings.unknown_time_zone == value.removeprefix(":")
 
 
 def test_empty_values_mean_the_defaults() -> None:
@@ -65,8 +75,6 @@ def test_empty_values_mean_the_defaults() -> None:
         ({"LOG_LEVEL": "loud"}, "LOG_LEVEL"),
         ({"YTDLP_ARGS": "'unclosed"}, "cannot be parsed"),
         ({"HEARTBEAT_URL": "example.com/ping"}, "HEARTBEAT_URL"),
-        ({"TZ": "Mars/Olympus"}, "TZ must be a time zone name"),
-        ({"TZ": "/etc/localtime"}, "TZ must be a time zone name"),
     ],
 )
 def test_rejects_bad_values(env: dict[str, str], message: str) -> None:

@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Stop yt-dlp from sending a made-up address in another country to sites that limit streams by region. A `live` channel limited to another region now fails with the site's region error.
-- Start guide placeholder blocks at local midnight in `TZ` instead of UTC. Tellyard stops at start when `TZ` is not a time zone name.
+- Start guide placeholder blocks at local midnight in `TZ` instead of UTC. A `TZ` that is not a known time zone name logs a warning and keeps UTC.
 
 ### Fixed
 

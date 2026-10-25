@@ -1,14 +1,17 @@
 import json
 import os
 import threading
+import xml.etree.ElementTree as ET
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from tellyard import channels, check, cli, health
 from tellyard.check import Result
+from tellyard.guide import Guide, parse_time
 from tellyard.server import App
 from tellyard.settings import Settings
 
@@ -77,6 +80,35 @@ def test_guide_to_file(tmp_path: Path) -> None:
     output = tmp_path / "guide.xml"
     assert cli.main(["guide", "-o", str(output)]) == 0
     assert b'<channel id="tellyard.101">' in output.read_bytes()
+
+
+@pytest.mark.parametrize(("value", "zone"), [("Asia/Kathmandu", "Asia/Kathmandu"), ("Mars/Olympus", None)])
+def test_serve_uses_the_time_zone(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], value: str, zone: str | None
+) -> None:
+    zones: list[ZoneInfo | None] = []
+
+    def guide(path: Path, days: int, zone: ZoneInfo | None = None) -> Guide:
+        zones.append(zone)
+        return Guide(path, days, zone=zone)
+
+    monkeypatch.setenv("TZ", value)
+    monkeypatch.setattr(cli, "Guide", guide)
+    monkeypatch.setattr(cli, "Server", QuietServer)
+    monkeypatch.setattr(App, "start", lambda self, stop: None)
+    assert cli.main(["serve"]) == 0
+    assert [str(item) if item else None for item in zones] == [zone]
+    assert ("TZ is not a known time zone name" in capsys.readouterr().err) == (zone is None)
+
+
+def test_guide_command_uses_the_time_zone(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("TZ", "Asia/Kathmandu")
+    output = tmp_path / "guide.xml"
+    assert cli.main(["guide", "-o", str(output)]) == 0
+    stops = {parse_time(item.get("stop", "")) for item in ET.parse(output).getroot().findall("programme")}
+    end = max(stop for stop in stops if stop)
+    zone = ZoneInfo("Asia/Kathmandu")
+    assert {stop.astimezone(zone).minute for stop in stops if stop and stop != end} == {0}
 
 
 def test_guide_to_stdout(capsysbinary: pytest.CaptureFixture[bytes]) -> None:

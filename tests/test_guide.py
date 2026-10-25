@@ -1,6 +1,7 @@
 import gzip
 import itertools
 import os
+import shutil
 import tracemalloc
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
@@ -196,6 +197,34 @@ def test_unreadable_times_are_reported(caplog: pytest.LogCaptureFixture) -> None
         item for item in caplog.records if item.getMessage() == "guide source has entries with unreadable times"
     )
     assert (record.__dict__["entries"], record.__dict__["example"]) == (1, "bad")
+
+
+def test_unreadable_times_keep_only_the_first_example(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
+    entry = '<programme start="{}" stop="20261011170000 +0000" channel="ATV.tr"><title>x</title></programme>'
+    feed = tmp_path / "feed.xml"
+    feed.write_text("<tv>" + "".join(entry.format(letter * 30000) for letter in "abc" * 300) + "</tv>")
+
+    def download(url: str, destination: Path) -> None:
+        shutil.copyfile(feed, destination)
+
+    tracemalloc.start()
+    try:
+        guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr"), NOW, 1, download)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak < 10 * 1024 * 1024
+    record = next(
+        item for item in caplog.records if item.getMessage() == "guide source has entries with unreadable times"
+    )
+    assert (record.__dict__["entries"], record.__dict__["example"]) == (900, "a" * 40)
+
+
+def test_window_is_counted_in_real_hours() -> None:
+    zone = ZoneInfo("America/New_York")
+    now = datetime(2026, 11, 1, 6, 30, tzinfo=UTC)
+    items = programmes(guide.build(lineup(hours=1), now.astimezone(zone), 1).data)
+    assert window(items) == ("20261101043000 +0000", "20261102063000 +0000")
 
 
 def test_far_stop_is_cut_at_the_window_end() -> None:
