@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Self
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 DEVICE_ID = re.compile(r"^[0-9A-F]{8}$")
 BASE_URL = re.compile(r"^https?://[^\s/]+$")
@@ -39,6 +40,7 @@ class Settings:
     log_level: LogLevel
     min_height: int | None
     heartbeat_url: str
+    time_zone: ZoneInfo | None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> Self:
@@ -76,12 +78,23 @@ class Settings:
             log_level=level,
             min_height=_min_height(env),
             heartbeat_url=heartbeat_url,
+            time_zone=_time_zone(env.get("TZ", "")),
         )
 
 
 def _device_id(name: str) -> str:
     # Plex identifies the tuner by this ID. Keep the default stable across restarts.
     return hashlib.sha256(name.encode()).hexdigest()[:8].upper()
+
+
+def _time_zone(raw: str) -> ZoneInfo | None:
+    name = raw.strip().removeprefix(":")
+    if not name:
+        return None
+    try:
+        return ZoneInfo(name)
+    except (ValueError, ZoneInfoNotFoundError):
+        raise SettingsError("TZ must be a time zone name such as America/New_York") from None
 
 
 def _min_height(env: Mapping[str, str]) -> int | None:

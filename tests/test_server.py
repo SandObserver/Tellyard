@@ -276,6 +276,25 @@ def test_retries_do_not_delay_the_full_refresh(app: App, monkeypatch: pytest.Mon
     assert len(calls) == 7 * 4 + 1
 
 
+def test_clock_set_back_rebuilds_the_guide(app: App, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[datetime] = []
+
+    def failing_second(lineup: object, now: datetime, retry: bool = False) -> None:
+        calls.append(now)
+        if len(calls) == 2:
+            raise RuntimeError("disk full")
+        app.guide.built_at = now
+
+    monkeypatch.setattr(app.guide, "rebuild", failing_second)
+    ahead = datetime(2027, 10, 11, 12, tzinfo=UTC)
+    app.refresh_guide(ahead)
+    app.refresh_guide(ahead + timedelta(hours=7))
+    now = datetime(2026, 10, 11, 12, tzinfo=UTC)
+    app.refresh_guide(now)
+    app.refresh_guide(now + timedelta(minutes=1))
+    assert calls == [ahead, ahead + timedelta(hours=7), now]
+
+
 def test_failed_guide_rebuild_waits_before_retrying(
     app: App, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

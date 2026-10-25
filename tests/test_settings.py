@@ -41,9 +41,15 @@ def test_reads_values() -> None:
     assert Settings.from_env({"MIN_HEIGHT": "Off"}).min_height is None
 
 
+def test_reads_the_time_zone() -> None:
+    assert Settings.from_env({}).time_zone is None
+    assert str(Settings.from_env({"TZ": "Europe/Berlin"}).time_zone) == "Europe/Berlin"
+    assert str(Settings.from_env({"TZ": ":Europe/Berlin"}).time_zone) == "Europe/Berlin"
+
+
 def test_empty_values_mean_the_defaults() -> None:
     names = ["TUNERS", "MIN_HEIGHT", "DEVICE_NAME", "DEVICE_ID", "BASE_URL", "GUIDE_DAYS", "GUIDE_REFRESH_HOURS"]
-    names += ["YTDLP_ARGS", "HEARTBEAT_URL", "LOG_LEVEL", "LISTEN_PORT"]
+    names += ["YTDLP_ARGS", "HEARTBEAT_URL", "LOG_LEVEL", "LISTEN_PORT", "TZ"]
     assert Settings.from_env(dict.fromkeys(names, "")) == Settings.from_env({})
 
 
@@ -59,6 +65,8 @@ def test_empty_values_mean_the_defaults() -> None:
         ({"LOG_LEVEL": "loud"}, "LOG_LEVEL"),
         ({"YTDLP_ARGS": "'unclosed"}, "cannot be parsed"),
         ({"HEARTBEAT_URL": "example.com/ping"}, "HEARTBEAT_URL"),
+        ({"TZ": "Mars/Olympus"}, "TZ must be a time zone name"),
+        ({"TZ": "/etc/localtime"}, "TZ must be a time zone name"),
     ],
 )
 def test_rejects_bad_values(env: dict[str, str], message: str) -> None:

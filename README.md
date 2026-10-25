@@ -53,7 +53,7 @@ services:
       - no-new-privileges:true
     mem_limit: 512m
     environment:
-      # Time zone for log timestamps
+      # Time zone for placeholder blocks in the guide
       - TZ=America/New_York
       # Streams that may play at the same time
       - TUNERS=4
@@ -183,6 +183,7 @@ Set these as environment variables.
 | `BASE_URL` | Address Plex should use, such as `http://192.168.1.10:5004`. Set it when the address Plex connects with is not reachable for streams. | from the request |
 | `GUIDE_DAYS` | Days of listings to publish. | `3` |
 | `GUIDE_REFRESH_HOURS` | How often the guide is rebuilt. | `6` |
+| `TZ` | Time zone name, such as `America/New_York`. Placeholder blocks in the guide start at midnight in this time zone. Logs stay in UTC. | UTC |
 | `YTDLP_ARGS` | Extra yt-dlp arguments, for example extractor options. | |
 | `LOG_LEVEL` | `debug`, `info`, `warning` or `error`. | `info` |
 | `HEARTBEAT_URL` | Address Tellyard calls once a minute while it is healthy, for a monitor such as Uptime Kuma or Healthchecks. | |

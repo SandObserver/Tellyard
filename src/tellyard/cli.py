@@ -75,7 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             relay.close()
         print(check.report(results))
         return 0 if all(result.ok for result in results) else 1
-    data = build(lineup, datetime.now(UTC), settings.guide_days).data
+    data = build(lineup, datetime.now(settings.time_zone or UTC), settings.guide_days).data
     if args.output:
         args.output.write_bytes(data)
     else:
@@ -89,7 +89,7 @@ def _serve(settings: Settings) -> int:
     except ChannelError as error:
         print(f"tellyard: {error}", file=sys.stderr)
         return 2
-    guide = Guide(settings.data_dir / "guide.xml", settings.guide_days)
+    guide = Guide(settings.data_dir / "guide.xml", settings.guide_days, zone=settings.time_zone)
     app = App(settings, store, guide)
     server = Server(("", settings.port), app)
     stop = threading.Event()
