@@ -44,6 +44,11 @@ def test_probe_height_reports_open_errors(relay: Relay) -> None:
         check.probe_height("ffmpeg", relay, resolved, lambda args, timeout, cancel: output)
 
 
+def test_run_probe_runs_without_proxy_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("http_proxy", "http://proxy.example.com:3128")
+    assert check.run_probe(["sh", "-c", 'echo "proxy=${http_proxy-}" >&2'], 5.0) == "proxy=\n"
+
+
 def test_run_probe_returns_stderr(tmp_path: Path) -> None:
     script = tmp_path / "probe"
     script.write_text("#!/bin/sh\necho details >&2\nexit 1\n")

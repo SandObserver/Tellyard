@@ -231,6 +231,22 @@ def test_ffmpeg_output_is_logged_without_url_paths(caplog: pytest.LogCaptureFixt
     assert "PASSWORD" not in caplog.text
 
 
+def test_ffmpeg_runs_without_proxy_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("http_proxy", "http://proxy.example.com:3128")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example.com:3128")
+    monkeypatch.setenv("ALL_PROXY", "socks5://proxy.example.com:1080")
+    monkeypatch.setenv("TELLYARD_KEPT", "kept")
+    script = 'printf "%s|%s|%s|%s" "${http_proxy-}" "${HTTPS_PROXY-}" "${ALL_PROXY-}" "${TELLYARD_KEPT-}"'
+    process = Process(["sh", "-c", script], "7 Seven")
+    output = b""
+    try:
+        while (chunk := process.read(5)) is not None:
+            output += chunk
+    finally:
+        process.close()
+    assert output == b"|||kept"
+
+
 class SecondSignalStops:
     def __init__(self) -> None:
         self.waits: list[float] = []
