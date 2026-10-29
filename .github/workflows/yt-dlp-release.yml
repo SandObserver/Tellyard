@@ -148,6 +148,8 @@ jobs:
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
+          # The tag carries the last release's workflow files. GitHub refuses it when they differ from main.
+          permission-workflows: write
       - name: Open the pull request that records the release on main
         if: steps.record.outputs.open == 'true' && !inputs.dry-run
         env:

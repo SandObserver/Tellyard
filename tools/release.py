@@ -179,7 +179,7 @@ def fetch_pypi(name: str) -> Project:
     return project
 
 
-def main(argv: list[str] | None = None, fetch: Fetch = fetch_pypi) -> int:
+def main(argv: list[str] | None = None, fetch: Fetch = fetch_pypi, now: datetime | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     note = commands.add_parser("note", help="print the changelog line for a yt-dlp change between two uv.lock files")
@@ -200,7 +200,7 @@ def main(argv: list[str] | None = None, fetch: Fetch = fetch_pypi) -> int:
     pins = commands.add_parser("pins", help="print the watched packages in uv.lock as name==version")
     pins.add_argument("lock", type=Path)
     args = parser.parse_args(argv)
-    now = datetime.now(UTC)
+    now = now or datetime.now(UTC)
     day = now.strftime("%Y-%m-%d")
     if args.command == "prepare":
         print(prepare(args.root, args.note or None, day, args.above))

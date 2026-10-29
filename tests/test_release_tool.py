@@ -235,16 +235,16 @@ def test_age_commands(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
     path = tmp_path / "uv.lock"
     path.write_text(lock(ytdlp="2026.10.21"), encoding="utf-8")
     young = pypi(yt_dlp={"2026.10.21": OLD, "2026.10.24": timedelta(hours=1)}, yt_dlp_ejs={"0.8.0": OLD})
-    assert release.main(["ready", str(path)], young) == 0
+    assert release.main(["ready", str(path)], young, NOW) == 0
     out = capsys.readouterr()
     assert out.out == "false\n"
     assert "Waiting: yt-dlp 2026.10.24" in out.err
     settled = pypi(yt_dlp={"2026.10.21": OLD}, yt_dlp_ejs={"0.8.0": OLD})
-    assert release.main(["ready", str(path)], settled) == 0
+    assert release.main(["ready", str(path)], settled, NOW) == 0
     assert capsys.readouterr().out == "true\n"
-    assert release.main(["verify", str(path)], settled) == 0
+    assert release.main(["verify", str(path)], settled, NOW) == 0
     path.write_text(lock(ytdlp="2026.10.24"), encoding="utf-8")
-    assert release.main(["verify", str(path)], young) == 1
+    assert release.main(["verify", str(path)], young, NOW) == 1
     assert "Refused: yt-dlp 2026.10.24" in capsys.readouterr().err
 
 
