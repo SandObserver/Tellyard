@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Log why the last good copy of a guide source was not used when a channel falls back to placeholder blocks.
 - Stop the Deno helper when a channel lookup is cancelled or takes too long. It kept running.
 - Clean up finished helper processes when the container runs without `--init`. The image now starts with tini.
+- Stop yt-dlp and Deno when `tellyard check` or `tellyard serve` is stopped with Ctrl-C during a channel lookup.
 
 ### Security
 
