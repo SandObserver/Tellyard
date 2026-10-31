@@ -1,3 +1,4 @@
+import codecs
 import contextlib
 import copy
 import gzip
@@ -30,6 +31,7 @@ ENTRY_DEPTH = 8
 KEPT_LIMIT = 32 * 1024 * 1024
 ENTITY_DECLARATION = b"<!ENTITY"
 TV_END = b"</tv>"
+XML_ENCODING = re.compile(rb"<\?xml[^>]*?encoding\s*=\s*[\"']([A-Za-z][\w.-]*)[\"']")
 MERGE_TAIL = 64 * 1024
 
 type Downloader = Callable[[str, Path], None]
@@ -46,7 +48,7 @@ class FeedError(Exception):
     pass
 
 
-FEED_ERRORS = (FetchError, FeedError, ET.ParseError, OSError, EOFError, zlib.error)
+FEED_ERRORS = (FetchError, FeedError, ET.ParseError, OSError, EOFError, zlib.error, LookupError)
 # These fail again on the next try. Only the others make the guide retry soon.
 LASTING_ERRORS = (FeedError, TooLargeError)
 
@@ -175,28 +177,26 @@ def _load(
 
 def _extend(
     found: dict[str, list[Slot]], kept: Path, url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime]
-) -> bytes:
+) -> list[ET.Element]:
     try:
         saved = _read(kept, ids, *span)
     except FEED_ERRORS:
-        return b""
+        return []
     added = 0
-    borrowed: dict[bytes, None] = {}
+    borrowed: list[ET.Element] = []
     for number, slots in saved.items():
         # Borrow no show that starts before the window. Otherwise a long show stays in the copy forever.
         last = max((slot.stop for slot in found.get(number, [])), default=span[0])
         later = [slot for slot in slots if slot.start >= last]
         found.setdefault(number, []).extend(later)
         added += len(later)
-        for slot in later:
-            if slot.element is not None:
-                borrowed[ET.tostring(slot.element, encoding="us-ascii", xml_declaration=False).strip() + b"\n"] = None
+        borrowed += [slot.element for slot in later if slot.element is not None]
     if added:
         log.info(
             "guide source ends before its last good copy, adding the later shows from the copy",
             extra={"url": safe_url(url), "shows": added},
         )
-    return b"".join(borrowed)
+    return borrowed
 
 
 def _reusing(downloader: Downloader, saved: Path, reuse: frozenset[str]) -> Downloader:
@@ -241,7 +241,7 @@ def _read_saved(
     return None
 
 
-def _save(path: Path, kept: Path, borrowed: bytes = b"") -> None:
+def _save(path: Path, kept: Path, borrowed: list[ET.Element] | None = None) -> None:
     partial = kept.with_name(kept.name + ".part")
     try:
         kept.parent.mkdir(parents=True, exist_ok=True)
@@ -254,7 +254,12 @@ def _save(path: Path, kept: Path, borrowed: bytes = b"") -> None:
         log.warning("guide source copy not saved", extra={"reason": error.strerror or str(error)})
 
 
-def _merge(path: Path, target: Path, borrowed: bytes) -> bool:
+def _merge(path: Path, target: Path, elements: list[ET.Element]) -> bool:
+    with open_maybe_gzip(path) as head:
+        encoding = _encoding(head.read(1024))
+    if not encoding:
+        return False
+    borrowed = _serialize(elements, encoding)
     with open_maybe_gzip(path) as source:
         packed = isinstance(source, gzip.GzipFile)
         with gzip.open(target, "wb") if packed else target.open("wb") as out:
@@ -268,6 +273,26 @@ def _merge(path: Path, target: Path, borrowed: bytes) -> bool:
                 return False
             out.write(held[:end] + borrowed + held[end:])
     return True
+
+
+def _encoding(head: bytes) -> str:
+    match = XML_ENCODING.match(head.lstrip(codecs.BOM_UTF8))
+    try:
+        name = codecs.lookup(match[1].decode() if match else "utf-8").name
+    except LookupError:
+        return ""
+    # Shows are inserted as bytes, so the encoding must write markup as ASCII.
+    return name if "</tv>".encode(name) == TV_END else ""
+
+
+def _serialize(elements: list[ET.Element], encoding: str) -> bytes:
+    borrowed: dict[bytes, None] = {}
+    for element in elements:
+        entry = ET.tostring(element, encoding=encoding, xml_declaration=False).strip() + b"\n"
+        # A larger entry makes the whole copy unreadable.
+        if len(entry) <= ENTRY_LIMIT:
+            borrowed[entry] = None
+    return b"".join(borrowed)
 
 
 def _forget_saved(saved: Path, keep: set[str]) -> None:

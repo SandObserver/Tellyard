@@ -718,8 +718,78 @@ def test_compressed_source_is_saved_compressed_with_the_borrowed_shows(tmp_path:
     [kept] = saved.iterdir()
     text = gzip.decompress(kept.read_bytes()).decode()
     assert "Kesit" in text
-    assert "Gece &#350;ovu" in text
+    assert "Gece Şovu" in text
     assert text.rstrip().endswith("</tv>")
+
+
+def test_borrowed_shows_keep_the_encoding_of_the_source(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    persian = "شب " * 7000
+    guide.build(channel, NOW, 1, serving(feed(LONG_SHOWS[0], (*LONG_SHOWS[2][:3], persian))), saved)
+    guide.build(channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011180000", "Kesit"))), saved)
+    [kept] = saved.iterdir()
+    assert len(kept.read_bytes()) < 2 * len(persian.encode())
+    built = guide.build(channel, NOW, 1, failing, saved)
+    assert shows(built.data, "tellyard.201", "atv") == ["Kesit", persian]
+    assert "placeholders" not in caplog.text
+
+
+def test_borrowed_shows_in_a_single_byte_encoding(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    head = '<?xml version="1.0" encoding="ISO-8859-9"?>'
+
+    def latin(text: str) -> guide.Downloader:
+        def download(url: str, destination: Path) -> None:
+            destination.write_bytes((head + text).encode("iso8859-9"))
+
+        return download
+
+    guide.build(channel, NOW, 1, latin(feed(LONG_SHOWS[0], (*LONG_SHOWS[2][:3], "Gece Şovu"))), saved)
+    guide.build(channel, NOW, 1, latin(feed(("ATV.tr", "20261011150000", "20261011180000", "Kesit"))), saved)
+    [kept] = saved.iterdir()
+    assert "Gece Şovu".encode("iso8859-9") in kept.read_bytes()
+    built = guide.build(channel, NOW, 1, failing, saved)
+    assert shows(built.data, "tellyard.201", "atv") == ["Kesit", "Gece Şovu"]
+
+
+def test_source_in_a_two_byte_encoding_is_saved_as_downloaded(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    guide.build(channel, NOW, 1, serving(LONG), saved)
+    short = '<?xml version="1.0" encoding="UTF-16"?>' + feed(("ATV.tr", "20261011150000", "20261011180000", "S"))
+
+    def download(url: str, destination: Path) -> None:
+        destination.write_text(short, "utf-16")
+
+    built = guide.build(channel, NOW, 1, download, saved)
+    assert shows(built.data, "tellyard.201", "atv") == ["S", "Gece"]
+    [kept] = saved.iterdir()
+    assert kept.read_text("utf-16") == short
+
+
+def test_source_in_an_unknown_encoding_falls_back_to_the_copy(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    guide.build(channel, NOW, 1, serving(LONG), saved)
+    unknown = '<?xml version="1.0" encoding="x-unknown"?>' + feed(LONG_SHOWS[0])
+    built = guide.build(channel, NOW, 1, serving(unknown), saved)
+    assert shows(built.data, "tellyard.201", "atv") == ["Dizi", "Film", "Gece"]
+
+
+def test_borrowed_show_that_grows_past_the_entry_limit_is_left_out(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    arrows = ">" * 30000
+    guide.build(channel, NOW, 1, serving(feed(LONG_SHOWS[0], (*LONG_SHOWS[2][:3], arrows))), saved)
+    guide.build(channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011180000", "Kesit"))), saved)
+    built = guide.build(channel, NOW, 1, failing, saved)
+    assert shows(built.data, "tellyard.201", "atv") == ["Kesit"]
+
+
+def failing(url: str, destination: Path) -> None:
+    raise FetchError("epg.example.com: HTTP 503")
 
 
 def test_source_without_a_closing_tag_is_saved_as_downloaded(tmp_path: Path) -> None:
