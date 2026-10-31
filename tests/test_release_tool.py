@@ -199,6 +199,21 @@ def test_record_keeps_a_higher_version_on_main(tmp_path: Path) -> None:
     assert release.prepare(tmp_path, "Update yt-dlp.", "2026-10-26") == "0.2.0-beta.2"
 
 
+def test_record_keeps_a_beta_of_the_recorded_number(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('version = "0.1.1b1"\n', encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.1.1-beta.1] - 2026-10-24\n", encoding="utf-8")
+    assert release.record(tmp_path, "0.1.1", RELEASED)
+    assert (tmp_path / "pyproject.toml").read_text(encoding="utf-8") == 'version = "0.1.1b1"\n'
+    assert release.prepare(tmp_path, "Update yt-dlp.", "2026-10-26", "0.1.1") == "0.1.2-beta.1"
+
+
+def test_record_replaces_an_older_beta(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('version = "0.1.0b2"\n', encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.1.0-beta.2] - 2026-10-24\n", encoding="utf-8")
+    assert release.record(tmp_path, "0.1.1", RELEASED)
+    assert (tmp_path / "pyproject.toml").read_text(encoding="utf-8") == 'version = "0.1.1"\n'
+
+
 def test_record_refuses_a_release_without_a_section(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text('version = "0.1.0"\n', encoding="utf-8")
     (tmp_path / "CHANGELOG.md").write_text("## [Unreleased]\n\n## [0.1.0] - 2026-10-11\n", encoding="utf-8")
@@ -213,6 +228,7 @@ def test_record_refuses_a_release_without_a_section(tmp_path: Path) -> None:
         ("0.1.1", "0.1.2", "### Added\n\n- Add.\n", "0.2.0"),
         ("0.1.1", "0.1.1", "### Fixed\n\n- Fix.\n", "0.1.2"),
         ("0.2.0b1", "0.1.2", "### Fixed\n\n- Fix.\n", "0.2.0-beta.2"),
+        ("0.1.3b1", "0.1.3", "### Fixed\n\n- Fix.\n", "0.1.4-beta.1"),
     ],
 )
 def test_prepare_takes_a_number_above_existing_tags(

@@ -58,6 +58,17 @@ def order(version: str) -> tuple[int, int, int, float]:
     return int(major), int(middle), int(patch), float("inf") if beta is None else int(beta)
 
 
+def is_beta(version: str) -> bool:
+    return order(version)[3] != float("inf")
+
+
+def holds(current: str, version: str) -> bool:
+    # A beta stays on main until its own release, even when a patch release of the same number ships first.
+    if is_beta(current):
+        return order(current)[:3] >= order(version)[:3]
+    return order(current) >= order(version)
+
+
 def unreleased(text: str) -> tuple[int, int]:
     start = text.index(UNRELEASED) + len(UNRELEASED)
     end = text.find("\n## [", start)
@@ -100,7 +111,8 @@ def prepare(root: Path, note: str | None, day: str, above: str | None = None) ->
     minor = "Added" in sections(text[start:end])
     version = next_version(match.group(1), minor)
     if above and order(version) <= order(above):
-        version = next_version(above, minor)
+        # A beta whose release number is taken continues as a beta of the next number.
+        version = next_version(above, minor) + ("b1" if is_beta(version) else "")
     changelog.write_text(date_changelog(text, version, day, note), encoding="utf-8")
     pyproject.write_text(VERSION_LINE.sub(f'version = "{version}"', project, count=1), encoding="utf-8")
     return display(version)
@@ -127,7 +139,7 @@ def record(root: Path, version: str, released: str) -> bool:
     changelog.write_text(text[:end] + section + text[end:], encoding="utf-8")
     project = pyproject.read_text(encoding="utf-8")
     current = VERSION_LINE.search(project)
-    if not current or order(current.group(1)) < order(version):
+    if not current or not holds(current.group(1), version):
         pyproject.write_text(VERSION_LINE.sub(f'version = "{version}"', project, count=1), encoding="utf-8")
     return True
 

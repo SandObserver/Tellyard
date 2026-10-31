@@ -87,7 +87,7 @@ YouTube changes break older yt-dlp releases, so new yt-dlp versions ship on thei
 
 1. Every 6 hours, `yt-dlp-release.yml` looks for a newer stable `yt-dlp` or `yt-dlp-ejs` on PyPI. Yanked and pre-release versions do not count. It waits until the newest version is 24 hours old, so a release that is pulled or fixed again the same day never ships.
 2. It takes the newest published release, updates yt-dlp in `uv.lock`, and dates a patch release with an "Update yt-dlp to ..." line. The number is above every existing tag. Pushing that tag runs `release.yml`, which runs every CI job before it publishes.
-3. When `release.yml` succeeds, the workflow opens an auto-merging `Release: X.Y.Z` pull request that copies the release's CHANGELOG section and yt-dlp versions to `main`. It sets the version on `main` only when that is lower, so a beta in progress keeps its version.
+3. When `release.yml` succeeds, the workflow opens an auto-merging `Release: X.Y.Z` pull request that copies the release's CHANGELOG section and yt-dlp versions to `main`. It sets the version on `main` only when that is lower. A beta in progress keeps its version. If the automatic release took the beta's number, the next beta moves to the next patch number.
 
 The workflow waits while a hand release is open or not yet tagged, while a release run is not finished, and while the newest published release is not recorded on `main`. Each run first records the newest published release if `main` does not have it. A release that failed is not built again with the same yt-dlp. Check its Release run.
 
