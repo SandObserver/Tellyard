@@ -43,15 +43,13 @@ def is_master(text: str) -> bool:
 
 
 def parse_master(text: str, base: str) -> tuple[list[Variant], list[Rendition]]:
-    lines = [line.strip() for line in text.splitlines()]
+    lines = [line for line in map(str.strip, text.splitlines()) if line]
     if not lines or lines[0] != "#EXTM3U":
         raise PlaylistError("not an HLS playlist")
     variants: list[Variant] = []
     renditions: list[Rendition] = []
     pending: dict[str, str] | None = None
     for line in lines[1:]:
-        if not line:
-            continue
         if line.startswith("#EXT-X-STREAM-INF:"):
             pending = attributes(line.partition(":")[2])
         elif line.startswith("#EXT-X-MEDIA:"):

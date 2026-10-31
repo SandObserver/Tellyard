@@ -129,3 +129,9 @@ def test_spaces_after_commas_are_tolerated() -> None:
     assert hls.choose(variants, renditions) == hls.Choice(
         "https://a.example.com/1080.m3u8", "https://a.example.com/audio/en.m3u8", 1080
     )
+
+
+def test_blank_lines_before_and_between_tags_are_skipped() -> None:
+    text = "\n\n#EXTM3U\n\n#EXT-X-STREAM-INF:BANDWIDTH=1,RESOLUTION=1920x1080\n\nv.m3u8\n"
+    variants, _ = hls.parse_master(text, "https://a.example.com/")
+    assert variants == [hls.Variant("https://a.example.com/v.m3u8", 1, 1080, None)]
