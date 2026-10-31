@@ -29,7 +29,7 @@ Set `LOG_LEVEL=debug` to see every request Plex makes. `docker exec tellyard tel
 | `all tuners are busy` | More streams were asked for than `TUNERS` allows. Raise `TUNERS`, or stop a stream. |
 | `no channel file yet, add your channels to it` | Tellyard found no `channels.toml` at `file`. Put your channel list there. Tellyard loads it within a minute. |
 | `channel file has an error, keeping the previous channels` | Fix the mistake named in `reason`. `tellyard validate` checks the file. |
-| `guide source failed, using placeholders` | The XMLTV address could not be downloaded or read, or is too large. See `reason`, and open the address in a browser. |
+| `guide source failed, using placeholders` | The XMLTV address could not be downloaded or read, or is too large. See `reason`, and open the address in a browser. `copy` says why the last good copy was not used: `none`, `no current listings`, or the error reading it. |
 | `guide source failed, using the last good copy` | As above, or the source has no current shows (`reason="no current listings"`). Tellyard uses its copy from `saved_at`. A failed download is tried again in 15 minutes. |
 | `guide source copy not saved` | Tellyard cannot write to `/data/feeds`. Give user 1000 write access to the data folder. |
 | `guide not saved` | Tellyard cannot write to `/data`. `/healthz` reports it. Give user 1000 write access to the data folder, such as `sudo chown 1000:1000 ./data`. |

@@ -541,3 +541,93 @@ def test_retry_downloads_only_the_failed_sources(tmp_path: Path) -> None:
     assert reused.stat().st_mtime == 1_000_000_000
     cache.rebuild(both, NOW)
     assert sorted(calls) == ["https://a.example.com/x", "https://b.example.com/x"]
+
+
+def feed(*shows: tuple[str, str, str, str]) -> str:
+    entries = "".join(
+        f'<programme start="{start} +0000" stop="{stop} +0000" channel="{source_id}"><title>{title}</title></programme>'
+        for source_id, start, stop, title in shows
+    )
+    return f"<tv>{entries}</tv>"
+
+
+def two_channels() -> channels.Lineup:
+    entries = [
+        {
+            "number": number,
+            "name": name,
+            "logo": "https://example.com/logo.png",
+            "hls": "https://cdn.example.com/live.m3u8",
+            "guide": {"xmltv": "https://epg.example.com/tr.xml", "id": source_id},
+        }
+        for number, name, source_id in ((201, "atv", "ATV.tr"), (202, "kanal d", "KANALD.tr"))
+    ]
+    return channels.parse({"channel": entries})
+
+
+LONG_SHOWS = (
+    ("ATV.tr", "20261011150000", "20261011170000", "Dizi"),
+    ("ATV.tr", "20261011170000", "20261011230000", "Film"),
+    ("ATV.tr", "20261011230000", "20261012050000", "Gece"),
+    ("KANALD.tr", "20261011150000", "20261012050000", "Kanal D gece"),
+)
+LONG = feed(*LONG_SHOWS)
+
+
+def shows(data: bytes, channel_id: str, name: str) -> list[str]:
+    found = [item.findtext("title") or "" for item in programmes(data) if item.get("channel") == channel_id]
+    return [title for title in found if title != name]
+
+
+def test_shorter_source_keeps_later_shows_from_the_copy(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    guide.build(channel, NOW, 1, serving(LONG), saved)
+    short = feed(("ATV.tr", "20261011150000", "20261011180000", "Dizi long cut"))
+    caplog.set_level("INFO")
+    built = guide.build(channel, NOW, 1, serving(short), saved)
+    assert shows(built.data, "tellyard.201", "atv") == ["Dizi long cut", "Gece"]
+    assert "adding the later shows from the copy" in caplog.text
+    [kept] = saved.iterdir()
+    assert "Film" in kept.read_text()
+
+
+def test_channel_missing_from_the_source_keeps_its_shows_from_the_copy(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    saved = tmp_path / "feeds"
+    guide.build(two_channels(), NOW, 1, serving(LONG), saved)
+    built = guide.build(
+        two_channels(), NOW, 1, serving(feed(*[show for show in LONG_SHOWS if show[0] == "ATV.tr"])), saved
+    )
+    assert shows(built.data, "tellyard.202", "kanal d") == ["Kanal D gece"]
+    assert "no current listings" not in caplog.text
+
+
+def test_source_that_reaches_as_far_replaces_the_copy(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    guide.build(channel, NOW, 1, serving(LONG), saved)
+    newer = feed(("ATV.tr", "20261011150000", "20261012050000", "Maraton"))
+    built = guide.build(channel, NOW, 1, serving(newer), saved)
+    assert shows(built.data, "tellyard.201", "atv") == ["Maraton"]
+    [kept] = saved.iterdir()
+    assert "Maraton" in kept.read_text()
+
+
+def test_placeholder_warning_names_the_state_of_the_copy(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    def broken(url: str, destination: Path) -> None:
+        raise FetchError("epg.example.com: HTTP 521")
+
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    guide.build(channel, NOW, 1, broken, saved)
+    guide.build(channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011160000", "Short"))), saved)
+    guide.build(channel, NOW + timedelta(hours=3), 1, broken, saved)
+    for kept in saved.iterdir():
+        kept.write_text("<tv><")
+    guide.build(channel, NOW, 1, broken, saved)
+    copies = [record.__dict__["copy"] for record in caplog.records if record.getMessage().endswith("placeholders")]
+    assert copies[0] == "none"
+    assert copies[1] == "no current listings"
+    assert copies[2].startswith("unclosed token") or copies[2].startswith("no element found")

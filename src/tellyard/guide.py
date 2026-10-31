@@ -165,9 +165,30 @@ def _load(
             return _read_saved(kept, url, ids, span, error), isinstance(error, LASTING_ERRORS)
         if not found:
             return _read_saved(kept, url, ids, span) or found, True
-        if kept:
+        if kept and not _extend(found, kept, url, ids, span):
             _save(path, kept)
         return found, True
+
+
+def _extend(
+    found: dict[str, list[Slot]], kept: Path, url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime]
+) -> bool:
+    try:
+        saved = _read(kept, ids, *span)
+    except FEED_ERRORS:
+        return False
+    added = 0
+    for number, slots in saved.items():
+        last = max((slot.stop for slot in found.get(number, [])), default=None)
+        later = slots if last is None else [slot for slot in slots if slot.start >= last]
+        found.setdefault(number, []).extend(later)
+        added += len(later)
+    if added:
+        log.info(
+            "guide source ends before its last good copy, adding the later shows from the copy",
+            extra={"url": safe_url(url), "shows": added},
+        )
+    return added > 0
 
 
 def _reusing(downloader: Downloader, saved: Path, reuse: frozenset[str]) -> Downloader:
@@ -193,18 +214,22 @@ def _read_saved(
     error: Exception | None = None,
 ) -> dict[str, list[Slot]] | None:
     extra = {"url": safe_url(url), "reason": str(error) if error else "no current listings"}
+    copy = "none"
     if kept:
         try:
             found = _read(kept, ids, *span, url)
             saved_at = datetime.fromtimestamp(kept.stat().st_mtime, UTC).isoformat(timespec="seconds")
-        except FEED_ERRORS:
+        except FileNotFoundError:
             pass
+        except FEED_ERRORS as copy_error:
+            copy = getattr(copy_error, "strerror", None) or str(copy_error) or type(copy_error).__name__
         else:
             if found:
                 log.warning("guide source failed, using the last good copy", extra={**extra, "saved_at": saved_at})
                 return found
+            copy = "no current listings"
     if error:
-        log.warning("guide source failed, using placeholders", extra=extra)
+        log.warning("guide source failed, using placeholders", extra={**extra, "copy": copy})
     return None
 
 
@@ -262,7 +287,8 @@ def _read(
                 if kept > KEPT_LIMIT:
                     raise FeedError(f"the listings for these channels are larger than {KEPT_LIMIT // 1024 // 1024} MB")
             root.clear()
-    _report_unreadable(url, unreadable)
+    if url:
+        _report_unreadable(url, unreadable)
     return found
 
 

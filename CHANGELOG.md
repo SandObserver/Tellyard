@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Play streams and pass the container health check when `http_proxy` is set. Both sent requests meant for Tellyard itself to the proxy.
 - Refuse a guide source with an entry nested more than 8 levels deep. A few such entries made the guide hundreds of megabytes.
 - Play HLS streams whose master playlist starts with a blank line.
+- Keep the later shows of the last good copy of a guide source when a new download ends earlier or lacks a channel. Those hours showed placeholder blocks until the next rebuild.
+- Log why the last good copy of a guide source was not used when a channel falls back to placeholder blocks.
 
 ### Security
 
