@@ -66,7 +66,7 @@ Tellyard checks `channels.toml` for changes every time Plex asks for the line-up
 | `/stream/<number>` | One channel as MPEG-TS. Also at `/auto/v<number>`. |
 | `/guide.xml` | The XMLTV guide. Also at `/epg.xml`. |
 | `/playlist.m3u` | An M3U playlist for players such as VLC. |
-| `/healthz` | Status as JSON. Answers 503 with a `reason` when there are no channels, the guide has stopped updating, or the guide cannot be saved to `/data`. Also at `/health`. |
+| `/healthz` | Status as JSON. Answers 503 with a `reason` when there are no channels, the guide has stopped updating, the clock is earlier than the last guide build, or the guide cannot be saved to `/data`. Also at `/health`. |
 
 Tellyard handles up to 64 connections at once and closes any more. A request must arrive complete within 10 seconds and be smaller than 128 KB.
 
