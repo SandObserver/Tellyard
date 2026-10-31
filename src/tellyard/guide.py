@@ -1,5 +1,6 @@
 import contextlib
 import copy
+import gzip
 import hashlib
 import io
 import logging
@@ -28,6 +29,8 @@ ENTRY_ELEMENTS = 1000
 ENTRY_DEPTH = 8
 KEPT_LIMIT = 32 * 1024 * 1024
 ENTITY_DECLARATION = b"<!ENTITY"
+TV_END = b"</tv>"
+MERGE_TAIL = 64 * 1024
 
 type Downloader = Callable[[str, Path], None]
 # Strict XMLTV readers need this element order.
@@ -165,30 +168,35 @@ def _load(
             return _read_saved(kept, url, ids, span, error), isinstance(error, LASTING_ERRORS)
         if not found:
             return _read_saved(kept, url, ids, span) or found, True
-        if kept and not _extend(found, kept, url, ids, span):
-            _save(path, kept)
+        if kept:
+            _save(path, kept, _extend(found, kept, url, ids, span))
         return found, True
 
 
 def _extend(
     found: dict[str, list[Slot]], kept: Path, url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime]
-) -> bool:
+) -> bytes:
     try:
         saved = _read(kept, ids, *span)
     except FEED_ERRORS:
-        return False
+        return b""
     added = 0
+    borrowed: dict[bytes, None] = {}
     for number, slots in saved.items():
-        last = max((slot.stop for slot in found.get(number, [])), default=None)
-        later = slots if last is None else [slot for slot in slots if slot.start >= last]
+        # Borrow no show that starts before the window. Otherwise a long show stays in the copy forever.
+        last = max((slot.stop for slot in found.get(number, [])), default=span[0])
+        later = [slot for slot in slots if slot.start >= last]
         found.setdefault(number, []).extend(later)
         added += len(later)
+        for slot in later:
+            if slot.element is not None:
+                borrowed[ET.tostring(slot.element, encoding="us-ascii", xml_declaration=False).strip() + b"\n"] = None
     if added:
         log.info(
             "guide source ends before its last good copy, adding the later shows from the copy",
             extra={"url": safe_url(url), "shows": added},
         )
-    return added > 0
+    return b"".join(borrowed)
 
 
 def _reusing(downloader: Downloader, saved: Path, reuse: frozenset[str]) -> Downloader:
@@ -233,16 +241,33 @@ def _read_saved(
     return None
 
 
-def _save(path: Path, kept: Path) -> None:
+def _save(path: Path, kept: Path, borrowed: bytes = b"") -> None:
     partial = kept.with_name(kept.name + ".part")
     try:
         kept.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, partial)
+        if not (borrowed and _merge(path, partial, borrowed)):
+            shutil.copy2(path, partial)
         partial.replace(kept)
     except OSError as error:
         with contextlib.suppress(OSError):
             partial.unlink(missing_ok=True)
         log.warning("guide source copy not saved", extra={"reason": error.strerror or str(error)})
+
+
+def _merge(path: Path, target: Path, borrowed: bytes) -> bool:
+    with open_maybe_gzip(path) as source:
+        packed = isinstance(source, gzip.GzipFile)
+        with gzip.open(target, "wb") if packed else target.open("wb") as out:
+            held = b""
+            while chunk := source.read(1024 * 1024):
+                held += chunk
+                out.write(held[:-MERGE_TAIL])
+                held = held[-MERGE_TAIL:]
+            end = held.rfind(TV_END)
+            if end < 0:
+                return False
+            out.write(held[:end] + borrowed + held[end:])
+    return True
 
 
 def _forget_saved(saved: Path, keep: set[str]) -> None:

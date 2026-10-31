@@ -589,7 +589,9 @@ def test_shorter_source_keeps_later_shows_from_the_copy(tmp_path: Path, caplog: 
     assert shows(built.data, "tellyard.201", "atv") == ["Dizi long cut", "Gece"]
     assert "adding the later shows from the copy" in caplog.text
     [kept] = saved.iterdir()
-    assert "Film" in kept.read_text()
+    assert "Dizi long cut" in kept.read_text()
+    assert "Gece" in kept.read_text()
+    assert "Film" not in kept.read_text()
 
 
 def test_channel_missing_from_the_source_keeps_its_shows_from_the_copy(
@@ -631,3 +633,101 @@ def test_placeholder_warning_names_the_state_of_the_copy(tmp_path: Path, caplog:
     assert copies[0] == "none"
     assert copies[1] == "no current listings"
     assert copies[2].startswith("unclosed token") or copies[2].startswith("no element found")
+
+
+def test_retry_after_borrowing_keeps_the_newer_download(tmp_path: Path) -> None:
+    sources = {
+        "https://a.example.com/x": feed(("ATV.tr", "20261011150000", "20261011200000", "Old"), *LONG_SHOWS[2:3]),
+        "https://b.example.com/x": feed(LONG_SHOWS[3]),
+    }
+
+    def download(url: str, destination: Path) -> None:
+        if sources[url] == "down":
+            raise FetchError("b.example.com: HTTP 503")
+        destination.write_text(sources[url])
+
+    line = channels.parse(
+        {
+            "channel": [
+                {
+                    "number": number,
+                    "name": name,
+                    "logo": "https://example.com/logo.png",
+                    "hls": "https://cdn.example.com/live.m3u8",
+                    "guide": {"xmltv": url, "id": source_id},
+                }
+                for number, name, url, source_id in (
+                    (201, "atv", "https://a.example.com/x", "ATV.tr"),
+                    (202, "kanal d", "https://b.example.com/x", "KANALD.tr"),
+                )
+            ]
+        }
+    )
+    cache = guide.Guide(tmp_path / "guide.xml", 1, download)
+    cache.rebuild(line, NOW)
+    sources["https://a.example.com/x"] = feed(("ATV.tr", "20261011150000", "20261011190000", "New"))
+    sources["https://b.example.com/x"] = "down"
+    cache.rebuild(line, NOW)
+    assert cache.data is not None
+    assert shows(cache.data, "tellyard.201", "atv") == ["New", "Gece"]
+    cache.rebuild(line, NOW + timedelta(minutes=15), retry=True)
+    assert shows(cache.data, "tellyard.201", "atv") == ["New", "Gece"]
+
+
+def test_failed_download_after_borrowing_uses_the_newer_download(tmp_path: Path) -> None:
+    def broken(url: str, destination: Path) -> None:
+        raise FetchError("epg.example.com: HTTP 503")
+
+    saved = tmp_path / "feeds"
+    guide.build(two_channels(), NOW, 1, serving(LONG), saved)
+    newer = feed(
+        ("ATV.tr", "20261011150000", "20261011180000", "Yeni"),
+        ("KANALD.tr", "20261011150000", "20261012050000", "Yeni K"),
+    )
+    guide.build(two_channels(), NOW, 1, serving(newer), saved)
+    built = guide.build(two_channels(), NOW + timedelta(hours=1), 1, broken, saved)
+    assert shows(built.data, "tellyard.201", "atv") == ["Yeni", "Gece"]
+    assert shows(built.data, "tellyard.202", "kanal d") == ["Yeni K"]
+
+
+def test_dropped_channel_with_an_endless_show_is_not_kept_forever(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    first = feed(
+        ("ATV.tr", "20261011150000", "20261012150000", "ATV day"),
+        ("KANALD.tr", "20261011150000", "99991231000000", "Endless"),
+    )
+    guide.build(two_channels(), NOW, 1, serving(first), saved)
+    for day in (1, 2):
+        moment = NOW + timedelta(days=day)
+        fresh = feed(
+            ("ATV.tr", moment.strftime("%Y%m%d%H%M%S"), (moment + timedelta(days=2)).strftime("%Y%m%d%H%M%S"), "ATV")
+        )
+        built = guide.build(two_channels(), moment, 1, serving(fresh), saved)
+    assert shows(built.data, "tellyard.202", "kanal d") == []
+    [kept] = saved.iterdir()
+    assert "Endless" not in kept.read_text()
+
+
+def test_compressed_source_is_saved_compressed_with_the_borrowed_shows(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    longer = feed(*LONG_SHOWS[:2], ("ATV.tr", "20261011230000", "20261012050000", "Gece Şovu"))
+    guide.build(channel, NOW, 1, serving(longer, compress=True), saved)
+    short = feed(("ATV.tr", "20261011150000", "20261011180000", "Kesit"))
+    guide.build(channel, NOW, 1, serving(short, compress=True), saved)
+    [kept] = saved.iterdir()
+    text = gzip.decompress(kept.read_bytes()).decode()
+    assert "Kesit" in text
+    assert "Gece &#350;ovu" in text
+    assert text.rstrip().endswith("</tv>")
+
+
+def test_source_without_a_closing_tag_is_saved_as_downloaded(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    guide.build(channel, NOW, 1, serving(LONG), saved)
+    short = feed(("ATV.tr", "20261011150000", "20261011180000", "Short")).replace("</tv>", "</tv  >")
+    built = guide.build(channel, NOW, 1, serving(short), saved)
+    assert shows(built.data, "tellyard.201", "atv") == ["Short", "Gece"]
+    [kept] = saved.iterdir()
+    assert kept.read_text() == short
