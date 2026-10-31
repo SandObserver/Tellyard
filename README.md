@@ -80,7 +80,7 @@ mkdir -p ./data && sudo chown 1000:1000 ./data
 docker compose up -d
 ```
 
-Tellyard runs as user 1000 and writes only to `./data` and `/tmp`.
+Tellyard runs as user 1000 and writes only to `./data` and `/tmp`. To run it as another user, set `user:` in the compose file, or `--user` with `docker run`, and give that user write access to `./data`.
 
 <details>
 <summary>Without Compose</summary>

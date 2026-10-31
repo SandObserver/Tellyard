@@ -1,7 +1,10 @@
+import contextlib
 import html
 import json
 import logging
+import os
 import re
+import signal
 import subprocess
 import threading
 import urllib.parse
@@ -54,10 +57,21 @@ def is_twitch(url: str) -> bool:
     return host == TWITCH_HOSTS[0] or host.endswith(TWITCH_HOSTS[1])
 
 
+def kill_group(process: subprocess.Popen[str]) -> None:
+    # yt-dlp starts Deno. Killing yt-dlp alone leaves Deno running.
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(process.pid, signal.SIGKILL)
+
+
 def run_command(args: Sequence[str], timeout: float, cancel: threading.Event | None = None) -> str:
     try:
         process = subprocess.Popen(
-            args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            args,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
         )
     except FileNotFoundError as error:
         raise ResolveError(f"{args[0]} is not installed") from error
@@ -69,10 +83,10 @@ def run_command(args: Sequence[str], timeout: float, cancel: threading.Event | N
                 break
             except subprocess.TimeoutExpired:
                 if cancel is not None and cancel.is_set():
-                    process.kill()
+                    kill_group(process)
                     raise LookupCancelledError from None
                 if monotonic() > end:
-                    process.kill()
+                    kill_group(process)
                     raise ResolveError(f"{args[0]} took longer than {timeout:.0f} s") from None
     if process.returncode != 0:
         lines = [line for line in stderr.splitlines() if line.strip()]

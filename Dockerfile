@@ -46,7 +46,9 @@ ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 MALLOC_ARENA_MAX=2 \
 COPY --from=ffmpeg /ffmpeg /usr/local/bin/
 COPY --from=deno /deno /usr/local/bin/deno
 COPY --from=build /app/.venv /app/.venv
-RUN python -m compileall -q -j0 -x '/(site-packages|idlelib|tkinter|turtledemo|ensurepip|pydoc_data)/' \
+RUN apt-get update && apt-get install -y --no-install-recommends tini=0.19.0-3+b8 \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m compileall -q -j0 -x '/(site-packages|idlelib|tkinter|turtledemo|ensurepip|pydoc_data)/' \
       "$(python -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')" \
     && mkdir /config /data && chown 1000:1000 /data
 COPY channels.example.toml /config/channels.example.toml
@@ -55,4 +57,6 @@ VOLUME /data
 EXPOSE 5004
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s \
   CMD ["python", "-m", "tellyard.health"]
+# tini reaps the helpers yt-dlp leaves behind. -s also works under docker --init.
+ENTRYPOINT ["tini", "-s", "--"]
 CMD ["tellyard", "serve"]
