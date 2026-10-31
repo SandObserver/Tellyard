@@ -77,17 +77,20 @@ def run_command(args: Sequence[str], timeout: float, cancel: threading.Event | N
         raise ResolveError(f"{args[0]} is not installed") from error
     end = monotonic() + timeout
     with process:
-        while True:
-            try:
-                stdout, stderr = process.communicate(timeout=CANCEL_POLL)
-                break
-            except subprocess.TimeoutExpired:
-                if cancel is not None and cancel.is_set():
-                    kill_group(process)
-                    raise LookupCancelledError from None
-                if monotonic() > end:
-                    kill_group(process)
-                    raise ResolveError(f"{args[0]} took longer than {timeout:.0f} s") from None
+        try:
+            while True:
+                try:
+                    stdout, stderr = process.communicate(timeout=CANCEL_POLL)
+                    break
+                except subprocess.TimeoutExpired:
+                    if cancel is not None and cancel.is_set():
+                        raise LookupCancelledError from None
+                    if monotonic() > end:
+                        raise ResolveError(f"{args[0]} took longer than {timeout:.0f} s") from None
+        except BaseException:
+            # The lookup runs in its own session, so Ctrl-C does not reach it.
+            kill_group(process)
+            raise
     if process.returncode != 0:
         lines = [line for line in stderr.splitlines() if line.strip()]
         # yt-dlp prints hints after its error line.

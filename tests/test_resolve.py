@@ -307,16 +307,17 @@ def test_run_command_stops_when_cancelled() -> None:
     assert time.monotonic() - started < 3
 
 
-def test_run_command_stops_the_programs_it_started(tmp_path: Path) -> None:
-    pid_file = tmp_path / "helper.pid"
+def helper_program(pid_file: Path) -> list[str]:
     helper = (
         "import subprocess, sys, time\n"
         "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
         f"open({str(pid_file)!r}, 'w').write(str(p.pid))\n"
         "time.sleep(30)\n"
     )
-    with pytest.raises(ResolveError, match="took longer"):
-        run_command([sys.executable, "-c", helper], 1)
+    return [sys.executable, "-c", helper]
+
+
+def assert_stopped(pid_file: Path) -> None:
     pid = int(pid_file.read_text())
     for _ in range(50):
         try:
@@ -325,6 +326,31 @@ def test_run_command_stops_the_programs_it_started(tmp_path: Path) -> None:
             return
         time.sleep(0.1)
     pytest.fail("the helper process kept running")
+
+
+def test_run_command_stops_the_programs_it_started(tmp_path: Path) -> None:
+    pid_file = tmp_path / "helper.pid"
+    with pytest.raises(ResolveError, match="took longer"):
+        run_command(helper_program(pid_file), 1)
+    assert_stopped(pid_file)
+
+
+class Interrupted(threading.Event):
+    def __init__(self, pid_file: Path) -> None:
+        super().__init__()
+        self.pid_file = pid_file
+
+    def is_set(self) -> bool:
+        if self.pid_file.exists():
+            raise KeyboardInterrupt
+        return False
+
+
+def test_run_command_stops_the_programs_it_started_on_ctrl_c(tmp_path: Path) -> None:
+    pid_file = tmp_path / "helper.pid"
+    with pytest.raises(KeyboardInterrupt):
+        run_command(helper_program(pid_file), 30, Interrupted(pid_file))
+    assert_stopped(pid_file)
 
 
 def test_cancelled_youtube_lookup_skips_the_fallback(make_settings: Callable[..., Settings]) -> None:
