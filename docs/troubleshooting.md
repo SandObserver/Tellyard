@@ -31,8 +31,8 @@ Set `LOG_LEVEL=debug` to see every request Plex makes. `docker exec tellyard tel
 | `channel file has an error, keeping the previous channels` | Fix the mistake named in `reason`. `tellyard validate` checks the file. |
 | `guide source failed, using placeholders` | The XMLTV address could not be downloaded or read, or is too large. See `reason`, and open the address in a browser. `copy` says why the last good copy was not used: `none`, `no current listings`, or the error reading it. |
 | `guide source failed, using the last good copy` | As above, or the source has no current shows (`reason="no current listings"`). Tellyard uses its copy from `saved_at`. A failed download is tried again in 15 minutes. |
-| `guide source copy not saved` | Tellyard cannot write to `/data/feeds`. Give user 1000 write access to the data folder. |
-| `guide not saved` | Tellyard cannot write to `/data`. `/healthz` reports it. Give user 1000 write access to the data folder, such as `sudo chown 1000:1000 ./data`. |
+| `guide source copy not saved` | Tellyard cannot write to `/data/feeds`. Give the user Tellyard runs as write access to the data folder. |
+| `guide not saved` | Tellyard cannot write to `/data`. `/healthz` reports it. Give the user Tellyard runs as write access to the data folder, such as `sudo chown 1000:1000 ./data` for the default user 1000. |
 | `too many connections, refusing new ones` | More than 64 connections are open. Something on your network keeps connections open. |
 | `guide source has no current listings` | The source has no shows for the listed `ids` right now. Check each `id` against the `<channel id="...">` lines in the file. |
 | `HEARTBEAT_URL call failed` | The monitor did not answer. Check the address in `HEARTBEAT_URL`. |

@@ -1,9 +1,11 @@
 import json
 import logging
+import os
 import sys
 import threading
 import time
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 import pytest
 
@@ -303,6 +305,26 @@ def test_run_command_stops_when_cancelled() -> None:
     with pytest.raises(LookupCancelledError):
         run_command([sys.executable, "-c", "import time; time.sleep(30)"], 60, cancel)
     assert time.monotonic() - started < 3
+
+
+def test_run_command_stops_the_programs_it_started(tmp_path: Path) -> None:
+    pid_file = tmp_path / "helper.pid"
+    helper = (
+        "import subprocess, sys, time\n"
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
+        f"open({str(pid_file)!r}, 'w').write(str(p.pid))\n"
+        "time.sleep(30)\n"
+    )
+    with pytest.raises(ResolveError, match="took longer"):
+        run_command([sys.executable, "-c", helper], 1)
+    pid = int(pid_file.read_text())
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    pytest.fail("the helper process kept running")
 
 
 def test_cancelled_youtube_lookup_skips_the_fallback(make_settings: Callable[..., Settings]) -> None:
