@@ -594,6 +594,36 @@ def test_shorter_source_keeps_later_shows_from_the_copy(tmp_path: Path, caplog: 
     assert "Film" not in kept.read_text()
 
 
+def test_copy_keeps_the_shows_after_the_window_while_the_source_stays_short(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    days = feed(
+        ("ATV.tr", "20261011150000", "20261011200000", "Bir"),
+        ("ATV.tr", "20261012100000", "20261012200000", "Iki"),
+        ("ATV.tr", "20261013100000", "20261013200000", "Uc"),
+    )
+    guide.build(channel, NOW, 1, serving(days), saved)
+    built = guide.build(channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011180000", "Kisa"))), saved)
+    assert shows(built.data, "tellyard.201", "atv") == ["Kisa", "Iki"]
+    assert window(programmes(built.data))[1] == "20261012153000 +0000"
+    later = NOW + timedelta(days=1)
+    built = guide.build(
+        channel, later, 1, serving(feed(("ATV.tr", "20261012150000", "20261012180000", "Yarin"))), saved
+    )
+    assert shows(built.data, "tellyard.201", "atv") == ["Yarin", "Uc"]
+
+
+def test_copy_drops_shows_far_after_the_window(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    guide.build(
+        channel, NOW, 1, serving(feed(*LONG_SHOWS[:1], ("ATV.tr", "30001011150000", "30001011160000", "Uzak"))), saved
+    )
+    guide.build(channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011160000", "Kisa"))), saved)
+    [kept] = saved.iterdir()
+    assert "Uzak" not in kept.read_text()
+
+
 def test_channel_missing_from_the_source_keeps_its_shows_from_the_copy(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

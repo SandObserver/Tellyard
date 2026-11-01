@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Log why the last good copy of a guide source was not used when a channel falls back to placeholder blocks.
 - Keep the last good copy of a guide source readable when it holds shows with long text in a non-Latin script. Those channels showed placeholder blocks when the source failed.
 - Keep updating the guide when a guide source names a text encoding Python does not know. The guide stopped updating for all channels.
+- Keep the shows after the guide window in the last good copy of a guide source. While a source stayed shorter than its copy, the later shows ran out after one rebuild.
 - Stop the Deno helper when a channel lookup is cancelled or takes too long. It kept running.
 - Clean up finished helper processes when the container runs without `--init`. The image now starts with tini.
 - Stop yt-dlp and Deno when `tellyard check` or `tellyard serve` is stopped with Ctrl-C during a channel lookup.

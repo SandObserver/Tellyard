@@ -33,6 +33,7 @@ ENTITY_DECLARATION = b"<!ENTITY"
 TV_END = b"</tv>"
 XML_ENCODING = re.compile(rb"<\?xml[^>]*?encoding\s*=\s*[\"']([A-Za-z][\w.-]*)[\"']")
 MERGE_TAIL = 64 * 1024
+COPY_REACH = timedelta(days=30)
 
 type Downloader = Callable[[str, Path], None]
 # Strict XMLTV readers need this element order.
@@ -179,7 +180,8 @@ def _extend(
     found: dict[str, list[Slot]], kept: Path, url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime]
 ) -> list[ET.Element]:
     try:
-        saved = _read(kept, ids, *span)
+        # Read past the window, so the merged copy keeps the later days.
+        saved = _read(kept, ids, span[0], span[1] + COPY_REACH)
     except FEED_ERRORS:
         return []
     added = 0
@@ -188,8 +190,9 @@ def _extend(
         # Borrow no show that starts before the window. Otherwise a long show stays in the copy forever.
         last = max((slot.stop for slot in found.get(number, [])), default=span[0])
         later = [slot for slot in slots if slot.start >= last]
-        found.setdefault(number, []).extend(later)
-        added += len(later)
+        shown = [replace(slot, stop=min(slot.stop, span[1])) for slot in later if slot.start < span[1]]
+        found.setdefault(number, []).extend(shown)
+        added += len(shown)
         borrowed += [slot.element for slot in later if slot.element is not None]
     if added:
         log.info(
