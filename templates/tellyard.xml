@@ -13,11 +13,38 @@
   <Overview>A live TV tuner for Plex and Jellyfin that you'll forget is running.[br][br]Tellyard shows up in Plex and Jellyfin as a network tuner. You list your channels in one file. When someone tunes in, Tellyard finds the channel's live stream on YouTube, Twitch, a broadcaster's page or an HLS address and passes it on without re-encoding. When they stop watching, it stops. The guide merges XMLTV schedules with placeholder blocks, so it is never empty.[br][br]Tellyard ships no channels. It starts with an empty line-up: put your channels.toml in /mnt/user/appdata/tellyard/config and it is loaded within a minute. Then add the tuner in Plex at UNRAID-IP:5004 and the guide at http://UNRAID-IP:5004/guide.xml.</Overview>
   <Requires>Plex or Jellyfin, and a channels.toml listing the live streams you may watch. Tellyard ships no channels.</Requires>
   <Changes>
-### 0.1.2 - 2026-10-29
+### 0.1.3 - 2026-11-01
 
 #### Changed
 
-- Update yt-dlp to 2026.10.26.
+- Stop yt-dlp from sending a made-up address in another country to sites that limit streams by region. A `live` channel limited to another region now fails with the site's region error.
+- Start guide placeholder blocks at local midnight in `TZ` instead of UTC. A `TZ` that is not a known time zone name logs a warning and keeps UTC.
+
+#### Fixed
+
+- Report the error yt-dlp gives when a stream cannot be opened, such as a region limit, instead of its last hint line.
+- Read guide times that name their time zone as `UTC` or `GMT`. Log the entries whose times cannot be read.
+- Keep building the guide when a guide source lists a show that ends far in the future. All channels lost their guide.
+- Rebuild the guide after the system clock is set back. It stopped updating until the clock caught up.
+- Read guide times that have no space before the time zone offset. They were read as UTC.
+- Read guide times without seconds or minutes, such as `202610111530 +0300`. They were read at the wrong time.
+- Log the time the last good copy of a guide source was downloaded, also after a retry.
+- Play streams and pass the container health check when `http_proxy` is set. Both sent requests meant for Tellyard itself to the proxy.
+- Refuse a guide source with an entry nested more than 8 levels deep. A few such entries made the guide hundreds of megabytes.
+- Play HLS streams whose master playlist starts with a blank line.
+- Keep the later shows of the last good copy of a guide source when a new download ends earlier or lacks a channel. Those hours showed placeholder blocks until the next rebuild.
+- Log why the last good copy of a guide source was not used when a channel falls back to placeholder blocks.
+- Keep the last good copy of a guide source readable when it holds shows with long text in a non-Latin script. Those channels showed placeholder blocks when the source failed.
+- Keep updating the guide when a guide source names a text encoding Python does not know. The guide stopped updating for all channels.
+- Keep the shows after the guide window in the last good copy of a guide source. While a source stayed shorter than its copy, the later shows ran out after one rebuild.
+- Rebuild the guide when `channels.toml` changes while the guide is being built. New or renamed channels stayed out of the guide until the next scheduled rebuild.
+- Stop the Deno helper when a channel lookup is cancelled or takes too long. It kept running.
+- Clean up finished helper processes when the container runs without `--init`. The image now starts with tini.
+- Stop yt-dlp and Deno when `tellyard check` or `tellyard serve` is stopped with Ctrl-C during a channel lookup.
+
+#### Security
+
+- Update Python to 3.13.18, which rejects the compromised eMudhra intermediate certificates in every TLS connection (CVE-2026-115557).
   </Changes>
   <Category>MediaApp:Video MediaServer:Video</Category>
   <TemplateURL>https://raw.githubusercontent.com/SandObserver/Tellyard/main/templates/tellyard.xml</TemplateURL>
