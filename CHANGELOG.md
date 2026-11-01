@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-01
+
 ### Changed
 
 - Stop yt-dlp from sending a made-up address in another country to sites that limit streams by region. A `live` channel limited to another region now fails with the site's region error.
