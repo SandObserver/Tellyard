@@ -21,6 +21,9 @@ class ChannelStore:
         self.version = 1
 
     def current(self) -> Lineup:
+        return self.snapshot()[0]
+
+    def snapshot(self) -> tuple[Lineup, int]:
         with self._lock:
             stamp = self._read_stamp()
             if stamp != self._stamp:
@@ -35,7 +38,7 @@ class ChannelStore:
                 else:
                     self.version += 1
                     log.info("channels reloaded", extra={"channels": len(self._lineup.channels), "file": self._path})
-            return self._lineup
+            return self._lineup, self.version
 
     def _read_stamp(self) -> tuple[int, int] | None:
         try:

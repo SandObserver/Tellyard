@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from tellyard import server
-from tellyard.channels import Channel
+from tellyard.channels import Channel, Lineup
 from tellyard.guide import Guide
 from tellyard.relay import Relay
 from tellyard.resolve import LookupCancelledError, Resolved
@@ -247,6 +247,27 @@ def test_guide_refresh_schedule(app: App, channels_file: Path) -> None:
     channels_file.write_text(channels_file.read_text(encoding="utf-8").replace("Drama", "Comedy"), encoding="utf-8")
     app.refresh_guide(now + timedelta(hours=7, minutes=1))
     assert app.guide.built_at == now + timedelta(hours=7, minutes=1)
+
+
+def test_channel_change_during_a_guide_rebuild_is_built_next(
+    app: App, channels_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    built: list[list[str]] = []
+    rebuild = app.guide.rebuild
+
+    def edited_meanwhile(lineup: Lineup, now: datetime, retry: bool = False) -> None:
+        built.append([channel.name for channel in lineup.channels])
+        if len(built) == 1:
+            text = channels_file.read_text(encoding="utf-8")
+            channels_file.write_text(text.replace("Drama", "Comedy"), encoding="utf-8")
+            app.store.current()
+        rebuild(lineup, now, retry)
+
+    monkeypatch.setattr(app.guide, "rebuild", edited_meanwhile)
+    now = datetime(2026, 10, 11, 12, tzinfo=UTC)
+    app.refresh_guide(now)
+    app.refresh_guide(now + timedelta(minutes=1))
+    assert built == [["News One", "Drama"], ["News One", "Comedy"]]
 
 
 def test_failed_guide_source_is_retried_soon(app: App, monkeypatch: pytest.MonkeyPatch) -> None:

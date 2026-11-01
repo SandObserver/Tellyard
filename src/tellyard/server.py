@@ -182,7 +182,7 @@ class App:
 
     def refresh_guide(self, now: datetime | None = None) -> None:
         moment = now or datetime.now(UTC)
-        lineup = self.store.current()
+        lineup, version = self.store.snapshot()
         due, retry = self._guide_due(moment)
         if not due:
             return
@@ -195,7 +195,7 @@ class App:
             self._guide_failed_at = None
             if not retry:
                 self._guide_full_at = moment
-        self._guide_version = self.store.version
+        self._guide_version = version
 
     def start(self, stop: threading.Event) -> None:
         self._guide_thread = threading.Thread(target=self.guide_loop, args=(stop,), name="guide", daemon=True)
