@@ -48,8 +48,8 @@
       }
       *, *::before, *::after { box-sizing: border-box; }
       body { margin: 0; background: var(--bg); color: var(--label); font-family: var(--font); -webkit-font-smoothing: antialiased; }
-      a { color: var(--accent); text-decoration: none; }
-      a:hover { color: var(--accent-strong); }
+      a { color: var(--accent); text-decoration: none; transition: color 0.15s ease; }
+      @media (hover: hover) { a:hover { color: var(--accent-strong); } }
       .hero p a, .lede a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
       a:focus-visible, button:focus-visible, pre:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
       .skip { position: absolute; left: -9999px; top: 0; z-index: 50; padding: 10px 16px; border-radius: 0 0 10px 0; background: var(--accent-fill); color: var(--on-accent); font-weight: 600; }
@@ -64,9 +64,9 @@
       .pill { height: 40px; padding: 0 20px; border-radius: 20px; display: inline-flex; align-items: center; position: relative; font-size: 14px; font-weight: 600; }
       .pill::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); height: 44px; }
       .pill-solid { background: var(--label); color: #101012; }
-      .pill-solid:hover { color: #101012; background: #e5e5ea; }
+      @media (hover: hover) { .pill-solid:hover { color: #101012; background: #e5e5ea; } }
       .pill-ghost { background: var(--fill); color: var(--label); }
-      .pill-ghost:hover { background: var(--fill-hover); color: var(--label); }
+      @media (hover: hover) { .pill-ghost:hover { background: var(--fill-hover); color: var(--label); } }
 
       .hero { padding: 44px 0 44px; }
       .hero h1 { margin: 0; font-size: 64px; line-height: 1.05; letter-spacing: -0.025em; font-weight: 700; max-width: 22ch; text-wrap: balance; }
@@ -76,61 +76,58 @@
       .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
       .btn { height: 50px; padding: 0 26px; border-radius: 25px; display: inline-flex; align-items: center; font-size: 16px; font-weight: 600; }
       .btn-accent { background: var(--accent-fill); color: var(--on-accent); }
-      .btn-accent:hover { background: var(--accent-fill-hover); color: var(--on-accent); }
+      @media (hover: hover) { .btn-accent:hover { background: var(--accent-fill-hover); color: var(--on-accent); } }
       .btn-quiet { background: var(--fill); color: var(--label); }
-      .btn-quiet:hover { background: var(--fill-hover); color: var(--label); }
+      @media (hover: hover) { .btn-quiet:hover { background: var(--fill-hover); color: var(--label); } }
 
       .tv-band { padding: 8px 0 0; }
-      .tv { max-width: 1160px; margin: 0 auto; padding: 0 20px; }
+      .tv { max-width: 1160px; margin: 0 auto; padding: 0 40px; }
       .bezel { background: #141416; border: 1px solid rgba(255, 255, 255, 0.1); border-bottom: 0; border-radius: 26px 26px 0 0; padding: 12px 12px 0; box-shadow: 0 -2px 60px rgba(0, 0, 0, 0.5); }
       .screen { container-type: inline-size; position: relative; aspect-ratio: 5 / 2; overflow: hidden; border-radius: 14px 14px 0 0;
-        background: radial-gradient(90% 70% at 70% 0%, var(--glow, #26282a) 0%, #141414 55%, #0b0b0b 100%); transition: background 0.8s; }
+        background: radial-gradient(90% 70% at 70% 0%, var(--glow, #26282a) 0%, #141414 55%, #0b0b0b 100%); }
       .guide { position: absolute; inset: 3.4cqw 4cqw 0; display: grid; grid-template-columns: 15cqw minmax(0, 1fr); row-gap: 0.8cqw; column-gap: 1cqw; align-content: start; }
       .g-title { font-size: 2.1cqw; font-weight: 700; letter-spacing: -0.02em; align-self: end; white-space: nowrap; }
       .g-title small { margin-left: 0.6em; font-size: 0.62em; font-weight: 600; letter-spacing: 0; color: rgba(235, 235, 245, 0.6); }
-      .ruler { position: relative; height: 2.4cqw; font-size: 1.15cqw; color: rgba(235, 235, 245, 0.6); align-self: end; }
+      .ruler { position: relative; z-index: 2; height: 2.4cqw; font-size: max(1.15cqw, 11px); color: rgba(235, 235, 245, 0.6); align-self: end; }
       .ruler span { position: absolute; bottom: 0.4cqw; white-space: nowrap; font-variant-numeric: tabular-nums; }
       .ch { display: grid; grid-template-columns: 3.8cqw 9.4cqw; gap: 1.2cqw; align-items: center; height: 5.2cqw; }
       .logo { width: 9.4cqw; height: 4.4cqw; border-radius: 0.7cqw; background: linear-gradient(135deg, var(--tint), color-mix(in srgb, var(--tint) 55%, #000)); display: grid; place-content: center; text-align: center; line-height: 1; }
-      .logo b { font-size: 1.25cqw; font-weight: 800; letter-spacing: 0.04em; color: #fff; }
-      .logo i { font-style: normal; font-size: 0.75cqw; font-weight: 600; letter-spacing: 0.18em; color: rgba(255, 255, 255, 0.75); margin-top: 0.25cqw; }
+      .logo b { font-size: max(1.25cqw, 9px); font-weight: 800; letter-spacing: 0.04em; color: #fff; }
+      .logo i { font-style: normal; font-size: max(0.75cqw, 7px); font-weight: 600; letter-spacing: 0.18em; color: rgba(255, 255, 255, 0.75); margin-top: 0.25cqw; }
       .num { text-align: right; font-size: 1.35cqw; font-weight: 600; color: rgba(235, 235, 245, 0.78); font-variant-numeric: tabular-nums; }
       .row { position: relative; height: 5.2cqw; }
-      .cell { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; gap: 0.8cqw; min-width: 0; padding: 0 1.2cqw; border: 0 solid transparent; border-width: 0 0.2cqw; background-clip: padding-box; border-radius: 0.9cqw; background-color: rgba(255, 255, 255, 0.07); overflow: hidden; }
-      .cell.tiny { padding: 0; }
-      .cell.tiny > * { display: none; }
+      .cell { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; gap: 0.8cqw; min-width: 0; padding: 0 1.2cqw; border: 0 solid transparent; border-width: 0 0.2cqw; background-clip: padding-box; border-radius: 0.9cqw; background-color: rgba(255, 255, 255, 0.07); transition: background-color 0.2s ease; }
       .cell.on { background-color: rgba(255, 255, 255, 0.14); }
-      .cell .t { font-size: 1.3cqw; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .cell .t { position: relative; z-index: 2; font-size: max(1.3cqw, 11px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 0.2s ease; }
       .cell:not(.on) .t { color: rgba(235, 235, 245, 0.72); font-weight: 500; }
-      .live { flex: none; padding: 0.25cqw 0.55cqw; border-radius: 0.4cqw; background: var(--accent-fill); font-size: 0.85cqw; font-weight: 700; letter-spacing: 0.06em; }
-      .cell.focus { background-color: #f2f2f7; overflow: visible; }
+      .live { position: relative; z-index: 2; flex: none; padding: 0.25cqw 0.55cqw; border-radius: 0.4cqw; background: var(--accent-fill); font-size: max(0.85cqw, 8px); font-weight: 700; letter-spacing: 0.06em; }
+      .cell.focus { background-color: #f2f2f7; }
       .cell.focus .t { color: #101012; }
-      .focus::after { content: ""; position: absolute; inset: -0.45cqw -0.65cqw; border: 0.22cqw solid #fff; border-radius: 1.1cqw; }
-      .now { position: absolute; top: 0; bottom: 0; width: 0.18cqw; margin-left: -0.09cqw; background: var(--accent); pointer-events: none; }
-      .now::before { content: ""; position: absolute; top: -0.5cqw; left: -0.45cqw; width: 1.08cqw; height: 1.08cqw; border-radius: 50%; background: var(--accent); }
-      @media (prefers-reduced-motion: no-preference) { .now { transition: left 1s linear; } }
-      .lane { position: absolute; top: 0; bottom: 0; left: calc(15cqw + 1cqw); right: 0; pointer-events: none; }
+      .cell::after { content: ""; position: absolute; inset: -0.45cqw -0.65cqw; border: 0.22cqw solid #fff; border-radius: 1.1cqw; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
+      .cell.focus::after { opacity: 1; }
+      .now { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); pointer-events: none; }
+      .now::before { content: ""; position: absolute; top: -6px; left: -5px; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+      .lane { position: absolute; z-index: 1; top: 0; bottom: 0; left: calc(15cqw + 1cqw); right: 0; pointer-events: none; }
+      .filler .t { visibility: hidden; }
 
       @container (max-width: 640px) {
         .guide { inset: 5cqw 4cqw 0; grid-template-columns: 22cqw minmax(0, 1fr); row-gap: 2cqw; }
         .g-title { font-size: 4.6cqw; }
         .g-title small { display: none; }
-        .ruler { font-size: 2.8cqw; height: 5cqw; }
-        .ruler span:nth-child(even) { display: none; }
-        .cell:not(.focus) .live { display: none; }
+        .ruler { font-size: max(2.8cqw, 11px); height: 5cqw; width: 200%; }
+        .ruler .far { display: none; }
         .ch { height: 11cqw; grid-template-columns: 20cqw; }
         .logo { width: 20cqw; height: 9.5cqw; border-radius: 1.6cqw; }
-        .logo b { font-size: 2.7cqw; }
-        .logo i { font-size: 1.6cqw; }
+        .logo b { font-size: max(2.7cqw, 9px); }
+        .logo i { font-size: max(1.6cqw, 7px); }
         .num { display: none; }
-        .row { height: 11cqw; }
+        .row { height: 11cqw; width: 200%; }
         .cell { padding: 0 2.4cqw; border-radius: 1.6cqw; }
-        .cell .t { font-size: 3cqw; }
-        .live { font-size: 2cqw; padding: 0.5cqw 1cqw; border-radius: 0.8cqw; }
-        .focus::after { inset: -1cqw; border-width: 0.5cqw; border-radius: 2.4cqw; }
-        .lane { left: calc(22cqw + 1cqw); }
-        .now { width: 0.4cqw; }
-        .now::before { width: 2.2cqw; height: 2.2cqw; left: -0.9cqw; top: -1cqw; }
+        .cell .t { font-size: max(3cqw, 11px); }
+        .live { font-size: max(2cqw, 8px); padding: 0.5cqw 1cqw; border-radius: 0.8cqw; }
+        .cell::after { inset: -1cqw; border-width: 0.5cqw; border-radius: 2.4cqw; }
+        .lane { left: calc(22cqw + 1cqw); right: auto; width: 138cqw; }
+        .now::before { width: 8px; height: 8px; left: -3px; top: -4px; }
       }
 
       .features { background: var(--bg-2); padding: 64px 0 72px; }
@@ -150,11 +147,15 @@
       .setup-side { align-self: start; position: sticky; top: 24px; }
       .setup-side .lede { margin: 0; }
       .code { border: 1px solid var(--separator); border-radius: 12px; background: #0d1117; overflow: hidden; }
-      .code-bar { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px 4px 16px; border-bottom: 1px solid var(--separator); font-family: var(--mono); font-size: 12.5px; color: var(--dim); }
+      .code-bar { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px 4px 15px; border-bottom: 1px solid var(--separator); font-family: var(--mono); font-size: 12.5px; color: var(--dim); }
       .copy { position: relative; height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--label); font: 600 13px var(--font); cursor: pointer; }
       .copy::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%); }
-      .copy:hover { background: var(--fill); }
-      .code pre { margin: 0; padding: 10px 14px; overflow-x: auto; }
+      @media (hover: hover) { .copy:hover { background: var(--fill); } }
+      .copy { display: inline-grid; place-items: center; }
+      .copy span { grid-area: 1 / 1; transition: opacity 0.15s ease; }
+      .copy .copied, .copy.done .idle { opacity: 0; }
+      .copy.done .copied { opacity: 1; }
+      .code pre { margin: 0; padding: 10px 15px; overflow-x: auto; }
       .code pre code { font-family: var(--mono); background: none; padding: 0; font-size: 12.5px; line-height: 1.45; color: #e6edf3; }
       .code .c { color: rgba(235, 235, 245, 0.55); }
       .note { font-size: 13.5px; color: var(--dim); }
@@ -163,10 +164,12 @@
       .gs { display: grid; gap: 16px; align-content: start; min-width: 0; max-width: 860px; }
       .gs.morphing { overflow: hidden; }
       .sentence { margin: 0 0 4px; font-size: 22px; line-height: 2.1; font-weight: 600; letter-spacing: -0.02em; text-wrap: balance; }
-      .pop { display: inline-flex; align-items: center; gap: 4px; vertical-align: baseline; min-height: 40px; border: 0; margin: 0 1px; padding: 0 10px 0 16px; border-radius: 20px; background: var(--fill-3); color: var(--accent); font: inherit; letter-spacing: inherit; cursor: pointer; transition: background 0.15s ease; }
-      .pop:hover, .pop[aria-expanded="true"] { background: var(--fill-1); }
+      .pop { display: inline-flex; align-items: center; gap: 4px; vertical-align: baseline; min-height: 40px; border: 0; margin: 0 1px; padding: 0 10px 0 16px; border-radius: 20px; background: var(--fill-3); color: var(--accent); font: inherit; letter-spacing: inherit; cursor: pointer; transition: background 0.15s ease, transform 0.15s ease; }
+      .pop[aria-expanded="true"] { background: var(--fill-1); }
+      @media (hover: hover) { .pop:hover { background: var(--fill-1); } }
+      .pop span { min-width: 0; overflow: hidden; white-space: nowrap; }
       .pop svg { width: 20px; height: 20px; opacity: 0.85; flex-shrink: 0; }
-      .fill-note { margin: -4px 0 0; padding-inline: 4px; font-size: 13.5px; line-height: 1.5; color: var(--dim); }
+      .fill-note { margin: -4px 0 0; padding-inline: 16px; font-size: 13.5px; line-height: 1.5; color: var(--dim); }
       .fill-note a, .itext a { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
       .fill-note code, .itext code { font-family: var(--mono); font-size: 0.9em; background: var(--bg-3); padding: 0.12em 0.4em; border-radius: 6px; color: var(--label); }
       .menu { position: absolute; z-index: 30; margin: 0; padding: 10px 0; min-width: 230px; max-width: calc(100% - 16px); background: var(--menu-bg); -webkit-backdrop-filter: blur(32px) saturate(180%); backdrop-filter: blur(32px) saturate(180%); border: 0.5px solid var(--menu-rim); border-radius: 34px; box-shadow: var(--shadow-pop); opacity: 0; transform: scale(0.9); pointer-events: none; transition: opacity 0.14s ease, transform 0.14s ease; }
@@ -189,10 +192,10 @@
       .list-foot { padding-inline: 16px; margin: -6px 0 0; font-size: 13px; line-height: 1.38; color: var(--dim); }
 
       .pill, .btn, .copy { transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease; }
-      .pill:active, .btn:active, .copy:active { transform: scale(0.97); }
+      .pill:active, .btn:active, .copy:active, .pop:active { transform: scale(0.97); }
       .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
       @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
-      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } .menu, .menu.open { transform: none !important; } }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } .menu, .menu.open { transform: none !important; } }
       @media (forced-colors: active) { .pill, .copy, .pop { border: 1px solid ButtonText; } .menu [role="option"][aria-selected="true"] { outline: 2px solid Highlight; } }
 
       .footer { padding: 40px 0 48px; border-top: 1px solid var(--bg-2); }
@@ -216,7 +219,7 @@
       .credit-note { margin: 0; font-size: 12.5px; line-height: 1.5; color: rgba(255, 255, 255, 0.5); }
 
       @media (max-width: 1180px) {
-        .wrap { padding: 0 28px; }
+        .wrap, .tv { padding: 0 28px; }
         .hero h1 { font-size: 54px; }
       }
       @media (max-width: 900px) {
@@ -231,6 +234,9 @@
         .setup-side { position: static; }
         .foot { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "credits" "legal"; gap: 28px; }
       }
+      @media (max-width: 722px) {
+        .screen { aspect-ratio: 100 / 80; }
+      }
       @media (max-width: 600px) {
         .wrap { padding: 0 16px; }
         .nav { padding: 18px 0; }
@@ -244,7 +250,7 @@
         .btn { height: 46px; padding: 0 20px; font-size: 15px; }
         .tv { padding: 0 16px; }
         .bezel { border-radius: 18px 18px 0 0; padding: 7px 7px 0; }
-        .screen { aspect-ratio: 100 / 80; border-radius: 10px 10px 0 0; }
+        .screen { border-radius: 10px 10px 0 0; }
         .f-title { font-size: 26px; margin-bottom: 20px; }
         .sa { grid-template-columns: minmax(0, 1fr); }
         .saa { font-size: 34px; }
@@ -282,7 +288,7 @@
       <div class="tv-band">
         <div class="tv">
           <div class="bezel">
-            <div class="screen" id="guide" role="img" aria-label="A Plex Live TV guide with five fictional channels, the first one playing live">
+            <div class="screen" id="guide" role="img" aria-label="A Plex Live TV guide with fictional channels, the first one playing live">
               <div class="guide" aria-hidden="true">
                 <span class="g-title">Live TV</span>
                 <div class="ruler">{{guide_ruler}}</div>
@@ -318,7 +324,7 @@
             <p class="sentence">I use <button class="pop" type="button" aria-haspopup="listbox" aria-expanded="false" data-k="server" aria-label="Media server: Plex"><span>Plex</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 9l4-4 4 4M8 15l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button> and run containers with <button class="pop" type="button" aria-haspopup="listbox" aria-expanded="false" data-k="method" aria-label="Install method: Docker Compose"><span>Docker Compose</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 9l4-4 4 4M8 15l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>.</p>
             <div class="gs" id="g-blocks">{{install_blocks}}</div>
             <ul class="ilist" id="g-next">{{install_next}}</ul>
-            <p class="list-foot">Plex apps, guide refresh and log messages: <a href="{{repo}}/tree/main/docs">Full setup guide<span aria-hidden="true"> ›</span></a></p>
+            <p class="list-foot">Apps, guide refresh and log messages: <a href="{{repo}}/tree/main/docs">Full setup guide<span aria-hidden="true"> ›</span></a></p>
           </div>
         </div>
       </section>
@@ -378,6 +384,11 @@
       const clock = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
       const MINUTE = 60000;
       const SPAN = 120 * MINUTE;
+      const SLIVER = 0.12;
+      const PAGE = 30 * MINUTE;
+      const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
+      const lane = screen.querySelector(".lane");
+      let slideRun = null;
       const glow = (hour) => (hour < 5 ? "#16131f" : hour < 9 ? "#2b3646" : hour < 17 ? "#2a2f33" : hour < 21 ? "#3a2b22" : "#221c2a");
       let windowStart = 0;
       let minute = -1;
@@ -389,74 +400,151 @@
         );
         return starts.slice(0, -1).map((show, i) => ({ ...show, end: starts[i + 1].start })).filter((show) => show.end > from && show.start < to);
       }
-      function render(time) {
+      function absorbSlivers(found, from, to) {
+        const share = (show) => (Math.min(show.end, to) - Math.max(show.start, from)) / (to - from);
+        if (found.length > 1 && share(found[0]) < SLIVER) found[1].start = found.shift().start;
+        if (found.length > 1 && share(found.at(-1)) < SLIVER) found.at(-2).end = found.pop().end;
+        return found;
+      }
+      function pageStart(time) {
         const start = new Date(time);
         start.setMinutes(start.getMinutes() < 30 ? 0 : 30, 0, 0);
-        windowStart = start.getTime();
-        ruler.replaceChildren(...[0, 1, 2, 3].map((i) => {
+        return start.getTime();
+      }
+      function drawCell(show, floor) {
+        const from = Math.max(show.start, floor);
+        const to = Math.min(show.end, windowStart + SPAN);
+        const cell = document.createElement("div");
+        const name = document.createElement("span");
+        cell.className = "cell";
+        cell.style.left = `${((from - windowStart) / SPAN) * 100}%`;
+        cell.style.width = `${((to - from) / SPAN) * 100}%`;
+        name.className = "t";
+        name.textContent = show.name;
+        cell.append(name);
+        return cell;
+      }
+      function render(start, slide) {
+        windowStart = start;
+        const floor = slide ? windowStart - PAGE : windowStart;
+        ruler.replaceChildren(...(slide ? [-1, 0, 1, 2, 3] : [0, 1, 2, 3]).map((i) => {
           const label = document.createElement("span");
           label.style.left = `${i * 25}%`;
-          label.textContent = clock.format(windowStart + i * 30 * MINUTE);
+          label.textContent = clock.format(windowStart + i * PAGE);
+          if (i < 0) label.className = "past";
+          if (i > 1) label.className = "far";
           return label;
         }));
         cells = schedule.flatMap((channel, row) => {
-          const found = shows(channel, windowStart, windowStart + SPAN).map((show) => {
-            const from = Math.max(show.start, windowStart);
-            const to = Math.min(show.end, windowStart + SPAN);
-            const cell = document.createElement("div");
-            const name = document.createElement("span");
-            cell.className = (to - from) / SPAN < 0.06 ? "cell tiny" : "cell";
-            cell.style.left = `${((from - windowStart) / SPAN) * 100}%`;
-            cell.style.width = `${((to - from) / SPAN) * 100}%`;
-            name.className = "t";
-            name.textContent = show.name;
-            cell.append(name);
-            return { ...show, cell, row };
+          const all = shows(channel, floor, windowStart + SPAN);
+          const kept = absorbSlivers(all.filter((show) => show.end > windowStart), windowStart, windowStart + SPAN);
+          const past = (slide ? all.filter((show) => show.start < windowStart && !kept.includes(show)) : []).map((show) => {
+            const cell = drawCell(show, floor);
+            cell.classList.add("past");
+            return cell;
           });
-          lanes[row].replaceChildren(...found.map((show) => show.cell));
+          const found = kept.map((show) => ({ ...show, cell: drawCell(show, windowStart), row }));
+          lanes[row].replaceChildren(...past, ...found.map((show) => show.cell));
           return found;
         });
         minute = -1;
       }
-      function tick() {
-        const time = Date.now();
-        if (time - windowStart >= 30 * MINUTE || time < windowStart) render(time);
-        now.style.left = `${((time - windowStart) / SPAN) * 100}%`;
-        if (Math.floor(time / MINUTE) === minute) return;
-        minute = Math.floor(time / MINUTE);
+      function slideGuide(previous) {
+        const clip = { clipPath: ["inset(-1cqw -100cqw -1cqw calc(-25% - 0.8cqw))", "inset(-1cqw -100cqw -1cqw calc(0% - 0.8cqw))"] };
+        const move = { transform: ["translateX(25%)", "none"] };
+        const timing = { duration: 600, easing: EASE };
+        const run = [...lanes, ruler].map((part) => part.animate({ ...move, ...clip }, timing));
+        run.push(lane.animate(move, timing));
+        for (const show of cells) {
+          if (show.start >= windowStart) continue;
+          const full = lanes[show.row].offsetWidth;
+          const shift = full * (PAGE / SPAN);
+          const shown = previous.find((old) => old.row === show.row && old.end === show.end) ?? show;
+          const was = Math.max(0, ((shown.start - (windowStart - PAGE)) / SPAN) * full);
+          const width = show.cell.offsetWidth;
+          run.push(show.cell.animate({
+            transform: [`translateX(${was - shift}px)`, "none"],
+            width: [`${width + shift - was}px`, `${width}px`],
+          }, timing));
+        }
+        slideRun = run;
+        const done = () => {
+          if (slideRun !== run) return;
+          slideRun = null;
+          screen.querySelectorAll(".past").forEach((part) => part.remove());
+        };
+        Promise.all(run.map((animation) => animation.finished)).then(done, done);
+      }
+      function applyState(time, animate) {
+        const moving = animate && !reduce.matches;
         for (const show of cells) {
           const on = show.start <= time && time < show.end;
           show.cell.classList.toggle("on", on);
           show.cell.classList.toggle("focus", on && show.row === 0);
           const badge = show.cell.querySelector(".live");
-          if (on && !badge) {
-            const live = document.createElement("span");
-            live.className = "live";
-            live.textContent = "LIVE";
-            show.cell.append(live);
-          } else if (!on && badge) badge.remove();
+          const badged = on && show.row === 0;
+          if (badged && !badge) {
+            const tag = document.createElement("span");
+            tag.className = "live";
+            tag.textContent = "LIVE";
+            show.cell.append(tag);
+            if (moving) tag.animate({ opacity: [0, 1] }, { duration: 200, easing: "ease" });
+          } else if (!badged && badge) {
+            if (moving) badge.animate({ opacity: [1, 0] }, { duration: 200, easing: "ease" }).finished.finally(() => badge.remove());
+            else badge.remove();
+          }
         }
+      }
+      function placeNeedle(time) {
+        const dpr = devicePixelRatio || 1;
+        const snap = (px) => Math.round(px * dpr) / dpr;
+        now.style.width = `${snap(2)}px`;
+        now.style.left = `${snap(((time - windowStart) / SPAN) * lane.offsetWidth)}px`;
+      }
+      function tick() {
+        const time = Date.now();
+        if (time - windowStart >= PAGE || time < windowStart) {
+          const start = pageStart(time);
+          const slide = start - windowStart === PAGE && !reduce.matches && !document.hidden;
+          if (slideRun) {
+            const run = slideRun;
+            slideRun = null;
+            run.forEach((animation) => animation.cancel());
+          }
+          const previous = cells;
+          render(start, slide);
+          applyState(time, false);
+          if (slide) slideGuide(previous);
+        }
+        placeNeedle(time);
+        if (Math.floor(time / MINUTE) === minute) return;
+        minute = Math.floor(time / MINUTE);
+        applyState(time, true);
         const hour = new Date(time).getHours();
         screen.style.setProperty("--glow", glow(hour));
         title.innerHTML = hour < 5 ? "Live TV<small>Late night</small>" : "Live TV";
       }
       tick();
       setInterval(tick, 1000);
+      addEventListener("resize", () => placeNeedle(Date.now()));
+      const copyTimers = new WeakMap();
       document.addEventListener("click", async (event) => {
         const button = event.target.closest(".copy");
         if (button) {
           const code = button.closest(".code").querySelector("code");
+          button.dataset.label ??= button.getAttribute("aria-label");
+          const label = button.dataset.label;
           try {
             await copyText(code);
-            const label = button.getAttribute("aria-label");
-            button.textContent = "Copied";
+            clearTimeout(copyTimers.get(button));
+            button.classList.add("done");
             button.setAttribute("aria-label", "Copied");
             live.textContent = `Copied ${label.replace(/^Copy /, "")}`;
-            setTimeout(() => {
-              button.textContent = "Copy";
+            copyTimers.set(button, setTimeout(() => {
+              button.classList.remove("done");
               button.setAttribute("aria-label", label);
               live.textContent = "";
-            }, 1500);
+            }, 1500));
           } catch {
             getSelection().selectAllChildren(code);
           }
@@ -473,26 +561,60 @@
         for (const k of Object.keys(choice)) if (pickers[k].options[saved[k]]) choice[k] = saved[k];
       } catch {}
       const gs = document.getElementById("gs");
-      function morph(mutate, animate) {
+      const blocks = document.getElementById("g-blocks");
+      const next = document.getElementById("g-next");
+      const foot = gs.querySelector(".list-foot");
+      const drawn = { server: "plex", method: "compose" };
+      let drawRun = 0;
+      let heightMove = null;
+      function swapInstall(run, parts) {
+        if (run !== drawRun) return;
         const from = gs.offsetHeight;
-        mutate();
-        if (!animate || reduce.matches) return;
+        const movers = [next, foot].filter((part) => !parts.includes(part));
+        const tops = movers.map((part) => part.getBoundingClientRect().top);
+        heightMove?.cancel();
+        for (const part of parts) {
+          part.getAnimations().forEach((animation) => animation.cancel());
+          part.innerHTML = part === blocks ? install.methods[choice.method].html : install.servers[choice.server].html;
+        }
+        drawn.server = choice.server;
+        drawn.method = choice.method;
         const to = gs.offsetHeight;
-        if (from === to) return;
-        gs.classList.add("morphing");
-        gs.animate({ height: [`${from}px`, `${to}px`] }, { duration: Math.min(480, 260 + Math.abs(to - from) / 4), easing: "cubic-bezier(0.32, 0.72, 0, 1)" })
-          .finished.finally(() => gs.classList.remove("morphing"));
+        const duration = Math.min(480, 260 + Math.abs(to - from) / 4);
+        if (from !== to) {
+          gs.classList.add("morphing");
+          const move = gs.animate({ height: [`${from}px`, `${to}px`] }, { duration, easing: EASE });
+          heightMove = move;
+          const done = () => { if (heightMove === move) { heightMove = null; gs.classList.remove("morphing"); } };
+          move.finished.then(done, done);
+        }
+        movers.forEach((part, i) => {
+          const shift = tops[i] - part.getBoundingClientRect().top;
+          if (shift) part.animate({ transform: [`translateY(${shift}px)`, "none"] }, { duration, easing: EASE });
+        });
+        for (const part of parts) part.animate({ opacity: [0, 1], transform: ["translateY(8px)", "none"] }, { duration: 200, easing: "ease-out" });
       }
       function drawInstall(animate) {
-        morph(() => {
-          document.getElementById("g-blocks").innerHTML = install.methods[choice.method].html;
-          document.getElementById("g-next").innerHTML = install.servers[choice.server].html;
-          for (const b of gs.querySelectorAll(".pop")) {
-            const k = b.dataset.k, name = pickers[k].options[choice[k]].label;
-            b.querySelector("span").textContent = name;
-            b.setAttribute("aria-label", `${pickers[k].name}: ${name}`);
-          }
-        }, animate);
+        const moving = animate && !reduce.matches;
+        for (const b of gs.querySelectorAll(".pop")) {
+          const k = b.dataset.k, name = pickers[k].options[choice[k]].label;
+          const width = b.offsetWidth;
+          b.querySelector("span").textContent = name;
+          b.setAttribute("aria-label", `${pickers[k].name}: ${name}`);
+          if (moving && width !== b.offsetWidth) b.animate({ width: [`${width}px`, `${b.offsetWidth}px`] }, { duration: 260, easing: EASE });
+        }
+        const parts = [];
+        if (drawn.method !== choice.method) parts.push(blocks);
+        if (drawn.server !== choice.server) parts.push(next);
+        const run = ++drawRun;
+        if (moving) {
+          Promise.all(parts.map((part) => part.animate({ opacity: [1, 0] }, { duration: 90, easing: "ease-in", fill: "forwards" }).finished))
+            .then(() => swapInstall(run, parts), () => {});
+        } else {
+          for (const part of parts) part.innerHTML = part === blocks ? install.methods[choice.method].html : install.servers[choice.server].html;
+          drawn.server = choice.server;
+          drawn.method = choice.method;
+        }
         if (animate) live.textContent = `Install steps now show ${install.servers[choice.server].label} with ${install.methods[choice.method].label}.`;
       }
       let openMenu = null;
@@ -500,6 +622,7 @@
         if (!openMenu) return;
         const { list, btn } = openMenu;
         list.classList.remove("open");
+        list.removeAttribute("id");
         btn.setAttribute("aria-expanded", "false");
         btn.removeAttribute("aria-controls");
         setTimeout(() => list.remove(), 160);

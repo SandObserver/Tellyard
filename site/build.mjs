@@ -121,6 +121,8 @@ const channels = [
     day: '1:15 Classic Matches|4:30 Overnight Replay|6:00 Morning Kickoff|8:00 Ridgeline Daily|9:15 Training Ground|10:45 Highlights|11:35 Cup Preview|12:55 Matchday Live|15:05 Post-Match|16:00 Ridgeline Daily|17:20 Highlights|18:05 Matchday Live|20:20 Post-Match|21:10 Night Game|23:40 Highlights' },
   { number: '301', name: 'Atlas Docs', mark: 'ATLAS', sub: 'DOCS', tint: '#4f9b4a',
     day: '0:40 Night Owl|3:40 Deep Water|4:35 The Long Road|5:50 Wild Coast|6:45 Atlas Mornings|8:25 Deep Water|9:20 The Long Road|10:35 Built to Last|11:50 Wild Coast|12:45 Northern Lines|14:10 Deep Water|15:05 The Long Road|16:20 Built to Last|17:35 Wild Coast|18:30 Northern Lines|19:55 Deep Water|20:50 The Long Road|22:05 Built to Last|23:20 Northern Lines' },
+  { number: '', name: '', mark: '', sub: '', tint: '#3a3a3c', filler: true,
+    day: Array.from({ length: 16 }, (_, i) => `${Math.floor((i * 90 + 35) / 60)}:${String((i * 90 + 35) % 60).padStart(2, '0')} Filler`).join('|') },
 ].map(({ day, ...channel }) => {
   const slots = day.split('|').map((entry) => {
     const [, h, m, title] = entry.match(/^(\d{1,2}):(\d{2}) (.+)$/) ?? fail(`guide slot "${entry}" is not "H:MM Title"`);
@@ -138,6 +140,13 @@ function shows(channel, from, to) {
     .filter(({ start, end }) => end > from && start < to);
 }
 
+function absorbSlivers(found, from, to) {
+  const share = ({ start, end }) => (Math.min(end, to) - Math.max(start, from)) / (to - from);
+  if (found.length > 1 && share(found[0]) < 0.12) found[1].start = found.shift().start;
+  if (found.length > 1 && share(found.at(-1)) < 0.12) found.at(-2).end = found.pop().end;
+  return found;
+}
+
 function clock(minute) {
   const h = Math.floor(minute / 60) % 24;
   return `${h % 12 || 12}:${String(minute % 60).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
@@ -146,19 +155,19 @@ function clock(minute) {
 function guideRows() {
   return channels
     .map((channel, row) => {
-      const cells = shows(channel, STATIC_START, STATIC_START + WINDOW)
+      const cells = absorbSlivers(shows(channel, STATIC_START, STATIC_START + WINDOW), STATIC_START, STATIC_START + WINDOW)
         .map(({ title, start, end }) => {
           const a = Math.max(start, STATIC_START);
           const z = Math.min(end, STATIC_START + WINDOW);
           const live = start <= STATIC_NOW && STATIC_NOW < end;
           const classes = ['cell', live ? 'on' : '', live && row === 0 ? 'focus' : ''].filter(Boolean).join(' ');
           const style = `left: ${((a - STATIC_START) / WINDOW) * 100}%; width: ${((z - a) / WINDOW) * 100}%`;
-          return `<div class="${classes}" style="${style}"><span class="t">${escape(title)}</span>${live ? '<span class="live">LIVE</span>' : ''}</div>`;
+          return `<div class="${classes}" style="${style}"><span class="t">${escape(title)}</span>${live && row === 0 ? '<span class="live">LIVE</span>' : ''}</div>`;
         })
         .join('');
       return (
         `<div class="ch"><span class="num">${channel.number}</span><span class="logo" style="--tint: ${channel.tint}"><b>${escape(channel.mark)}</b><i>${escape(channel.sub)}</i></span></div>` +
-        `<div class="row">${cells}</div>`
+        `<div class="row${channel.filler ? ' filler' : ''}">${cells}</div>`
       );
     })
     .join('');
@@ -166,7 +175,7 @@ function guideRows() {
 
 function code(label, text, name) {
   return (
-    `<div class="code"><div class="code-bar"><span>${escape(label)}</span><button type="button" class="copy" aria-label="Copy the ${escape(name)}">Copy</button></div>` +
+    `<div class="code"><div class="code-bar"><span>${escape(label)}</span><button type="button" class="copy" aria-label="Copy the ${escape(name)}"><span class="idle">Copy</span><span class="copied">Copied</span></button></div>` +
     `<pre tabindex="0" role="region" aria-label="${escape(name[0].toUpperCase() + name.slice(1))}"><code>${highlight(text)}</code></pre></div>`
   );
 }
@@ -215,7 +224,7 @@ const install = {
     unraid: {
       label: 'Unraid',
       html:
-        code('Unraid', 'Apps tab › search "Tellyard" › Install', 'install steps') +
+        `<ul class="ilist">${row('tuner', 'Install from Apps', 'Open the <b>Apps</b> tab, search for Tellyard and install it.')}</ul>` +
         code('Unraid terminal', `${codeBlock('Unraid', 'sh')}\n${unraidCheck}`, 'channel commands') +
         note(
           `Tellyard starts with no channels and loads <code>channels.toml</code> within a minute. Replace the examples with your channels. ${everyOption}.`,
@@ -251,7 +260,7 @@ const values = {
   year: String(new Date().getFullYear()),
   schema: JSON.stringify(schema).replaceAll('<', '\\u003c'),
   guide_rows: guideRows(),
-  guide_ruler: [0, 30, 60, 90].map((m) => `<span style="left: ${(m / WINDOW) * 100}%">${clock(STATIC_START + m)}</span>`).join(''),
+  guide_ruler: [0, 30, 60, 90].map((m) => `<span${m > 30 ? ' class="far"' : ''} style="left: ${(m / WINDOW) * 100}%">${clock(STATIC_START + m)}</span>`).join(''),
   guide_data: JSON.stringify(channels.map(({ number, slots }) => ({ number, slots }))).replaceAll('<', '\\u003c'),
   now_left: String(((STATIC_NOW - STATIC_START) / WINDOW) * 100),
   install_blocks: install.methods.compose.html,

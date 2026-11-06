@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Clean up the landing page guide, its animations and the install section. The time line keeps one thickness, the guide no longer jumps every half hour, and the guide fits at every screen width.
+
 ## [0.1.3] - 2026-11-01
 
 ### Changed
