@@ -230,7 +230,7 @@ class _Handler(BaseHTTPRequestHandler):
             headers = (*headers, ("Range", span))
         started = False
         try:
-            with net.open_url(url, headers, feed.trust, deadline=SEGMENT_DEADLINE) as response:
+            with net.open_url(url, headers, feed.trust, limits=net.Limits(total=SEGMENT_DEADLINE)) as response:
                 # ffmpeg logs a body without a length as cut short. Chunked encoding marks the end.
                 chunked = response.headers.get("Content-Length") is None
                 self.send_response(response.status)

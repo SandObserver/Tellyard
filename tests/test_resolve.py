@@ -2,6 +2,7 @@ import contextlib
 import json
 import logging
 import os
+import socket
 import sys
 import threading
 import time
@@ -10,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from tellyard import channels
+from tellyard import channels, resolve
 from tellyard.channels import Channel, Headers
-from tellyard.net import FetchError, Trust, trust_of
-from tellyard.resolve import LookupCancelledError, Resolved, ResolveError, Resolver, Runner, run_command
+from tellyard.net import Cancel, FetchError, Trust, trust_of
+from tellyard.resolve import Fetcher, LookupCancelledError, Resolved, ResolveError, Resolver, Runner, run_command
 from tellyard.settings import Settings
 
 MASTER = (
@@ -27,8 +28,8 @@ def channel(**source: object) -> Channel:
     return channels.parse({"channel": [entry]}).channels[0]
 
 
-def pages(mapping: dict[str, str]) -> Callable[[str, Headers, Trust], tuple[str, str]]:
-    def fetch(url: str, headers: Headers, trust: Trust) -> tuple[str, str]:
+def pages(mapping: dict[str, str]) -> Fetcher:
+    def fetch(url: str, headers: Headers, trust: Trust, *, cancel: Cancel | None = None) -> tuple[str, str]:
         if url not in mapping:
             raise FetchError(f"{url}: HTTP 404")
         return url, mapping[url]
@@ -78,7 +79,7 @@ def test_rejects_a_non_playlist(make_settings: Callable[..., Settings]) -> None:
 def test_retries_a_hanging_playlist_request(make_settings: Callable[..., Settings]) -> None:
     attempts: list[str] = []
 
-    def flaky(url: str, headers: Headers, trust: Trust) -> tuple[str, str]:
+    def flaky(url: str, headers: Headers, trust: Trust, *, cancel: Cancel | None = None) -> tuple[str, str]:
         attempts.append(url)
         if len(attempts) < 3:
             raise FetchError("cdn.example.com: The read operation timed out")
@@ -135,7 +136,7 @@ def test_page_url_needs_a_host_before_the_playlist(make_settings: Callable[..., 
 def test_unexpected_lookup_errors_become_resolve_errors(
     make_settings: Callable[..., Settings], caplog: pytest.LogCaptureFixture
 ) -> None:
-    def broken(url: str, headers: Headers, trust: Trust) -> tuple[str, str]:
+    def broken(url: str, headers: Headers, trust: Trust, *, cancel: Cancel | None = None) -> tuple[str, str]:
         raise ValueError("bad value")
 
     with pytest.raises(ResolveError, match="failed unexpectedly"):
@@ -153,7 +154,7 @@ def test_youtube_uses_the_live_manifest(make_settings: Callable[..., Settings]) 
     assert resolved.height == 1080
     assert seen[0][0] == "/opt/yt-dlp"
     assert seen[0][-5:] == ["--extractor-args", "youtube:x", "--proxy", PROXY, "https://www.youtube.com/@news/live"]
-    assert seen[0][2:4] == ["--xff", "never"]
+    assert seen[0][1:6] == ["--ignore-config", "--no-plugin-dirs", "--no-warnings", "--xff", "never"]
 
 
 def test_youtube_falls_back_to_format_manifests(make_settings: Callable[..., Settings]) -> None:
@@ -249,7 +250,7 @@ def test_youtube_match_picks_the_stream_by_title(make_settings: Callable[..., Se
     resolved = resolver.resolve(channel(youtube="https://www.youtube.com/@LiveNOWFOX/live", match="24/7"))
     assert resolved.height == 1080
     assert seen[1][-1] == "https://www.youtube.com/watch?v=main"
-    assert all(args[2:4] == ["--xff", "never"] for args in seen)
+    assert all(args[1:6] == ["--ignore-config", "--no-plugin-dirs", "--no-warnings", "--xff", "never"] for args in seen)
 
 
 @pytest.mark.parametrize("listing", [json.dumps({"entries": []}), None])
@@ -277,7 +278,7 @@ def test_hls_token_signs_the_url_before_each_tune(make_settings: Callable[..., S
     reply = json.dumps({"Success": True, "Url": "https://cdn.example.com/atv/atv.m3u8?st=abc&e=1"})
     table = {SIGNED_REQUEST: reply, "https://cdn.example.com/atv/atv.m3u8?st=abc&e=1": MASTER}
 
-    def fetch(url: str, headers: Headers, trust: Trust) -> tuple[str, str]:
+    def fetch(url: str, headers: Headers, trust: Trust, *, cancel: Cancel | None = None) -> tuple[str, str]:
         seen.append((url, headers))
         return url, table[url]
 
@@ -376,10 +377,45 @@ def test_cancelled_youtube_lookup_skips_the_fallback(make_settings: Callable[...
 
 
 def test_a_set_cancel_stops_before_the_playlist_request(make_settings: Callable[..., Settings]) -> None:
-    cancel = threading.Event()
+    cancel = Cancel()
     cancel.set()
     fetch = pages({"https://cdn.example.com/live/master.m3u8": MASTER})
     with pytest.raises(LookupCancelledError):
         Resolver(make_settings(), fetcher=fetch).resolve(
             channel(hls="https://cdn.example.com/live/master.m3u8"), cancel
         )
+
+
+def test_run_command_stops_output_that_is_too_large(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(resolve, "OUTPUT_LIMIT", 1000)
+    pid_file = tmp_path / "helper.pid"
+    helper = (
+        "import subprocess, sys, time\n"
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
+        f"open({str(pid_file)!r}, 'w').write(str(p.pid))\n"
+        "sys.stdout.write('x' * 5000)\n"
+        "sys.stdout.flush()\n"
+        "time.sleep(30)\n"
+    )
+    started = time.monotonic()
+    with pytest.raises(ResolveError, match="returned more than"):
+        run_command([sys.executable, "-c", helper], 30)
+    assert time.monotonic() - started < 5
+    assert_stopped(pid_file)
+
+
+def test_run_command_keeps_the_last_error_of_long_output() -> None:
+    script = "import sys; sys.stderr.write('noise\\n' * 50000 + 'ERROR: the real reason\\n'); sys.exit(1)"
+    with pytest.raises(ResolveError, match=r"^ERROR: the real reason$"):
+        run_command([sys.executable, "-c", script], 10)
+
+
+def test_leaving_during_a_playlist_request_stops_it(make_settings: Callable[..., Settings]) -> None:
+    listener = socket.create_server(("127.0.0.1", 0))
+    url = f"http://127.0.0.1:{listener.getsockname()[1]}/live/master.m3u8"
+    cancel = Cancel()
+    threading.Timer(0.3, cancel.set).start()
+    started = time.monotonic()
+    with listener, pytest.raises(LookupCancelledError):
+        Resolver(make_settings()).resolve(channel(hls=url), cancel)
+    assert time.monotonic() - started < 2

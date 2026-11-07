@@ -1,4 +1,5 @@
 import logging
+import os
 import queue
 import subprocess
 import threading
@@ -265,6 +266,14 @@ class SecondSignalStops:
 
     def kill(self) -> None:
         raise AssertionError("killed")
+
+
+def test_ffmpeg_runs_in_its_own_session() -> None:
+    process = Process(["sleep", "5"], "7 Seven")
+    try:
+        assert os.getpgid(process._process.pid) == process._process.pid
+    finally:
+        process.close()
 
 
 def test_close_signals_twice_when_ffmpeg_finishes_its_read_first(monkeypatch: pytest.MonkeyPatch) -> None:

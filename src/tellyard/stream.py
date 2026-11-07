@@ -10,7 +10,7 @@ from types import TracebackType
 from typing import Self
 
 from tellyard.channels import Channel
-from tellyard.net import redact, without_proxies
+from tellyard.net import Cancel, redact, without_proxies
 from tellyard.relay import Feed, Relay
 from tellyard.resolve import LookupCancelledError, Resolved, ResolveError, Resolver
 
@@ -77,8 +77,14 @@ class Process:
         self._closed = threading.Event()
         self._queue: queue.Queue[bytes | None] = queue.Queue(maxsize=QUEUE_CHUNKS)
         try:
+            # Its own session keeps Ctrl-C from ffmpeg. Tellyard stops it itself.
             self._process = subprocess.Popen(
-                args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=ffmpeg_env()
+                args,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=ffmpeg_env(),
+                start_new_session=True,
             )
         except FileNotFoundError as error:
             raise StreamError(f"{args[0]} is not installed") from error
@@ -150,7 +156,7 @@ class Session:
         self._started = 0.0
         self._attempts = 0
         self.height: int | None = None
-        self.cancel = threading.Event()
+        self.cancel = Cancel()
 
     @property
     def label(self) -> str:

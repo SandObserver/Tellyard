@@ -437,3 +437,31 @@ def test_connects_to_the_checked_public_addresses(monkeypatch: pytest.MonkeyPatc
 def test_origins_of_unusable_addresses(url: str) -> None:
     assert net.origin_of(url) is None
     assert net.trust_of([url], [("256.1.1.1", 80)]) == net.Trust()
+
+
+def test_fetch_text_stops_when_cancelled(base: str) -> None:
+    cancel = net.Cancel()
+    threading.Timer(0.3, cancel.set).start()
+    started = time.monotonic()
+    with pytest.raises(FetchError, match="cancelled"):
+        net.fetch_text(f"{base}/slow", trust=net.trust_of([base]), cancel=cancel)
+    assert time.monotonic() - started < 2
+
+
+def test_fetch_text_does_not_start_when_already_cancelled(base: str) -> None:
+    cancel = net.Cancel()
+    cancel.set()
+    with pytest.raises(FetchError, match="cancelled"):
+        net.fetch_text(f"{base}/page", trust=net.trust_of([base]), cancel=cancel)
+
+
+def test_cancel_runs_hooks_only_while_they_are_registered() -> None:
+    cancel = net.Cancel()
+    calls: list[str] = []
+    with cancel.on_set(lambda: calls.append("during")):
+        pass
+    with cancel.on_set(lambda: calls.append("set")):
+        cancel.set()
+    with cancel.on_set(lambda: calls.append("already set")):
+        pass
+    assert calls == ["set", "already set"]
