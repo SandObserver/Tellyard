@@ -26,15 +26,15 @@ During a reconnect the picture freezes. In the worst case, a YouTube channel can
 
 ## Addresses Tellyard reaches
 
-Tellyard fetches every page, playlist, key and video segment itself. ffmpeg receives them from Tellyard over a private address inside the container.
+Tellyard fetches every page, playlist, key and video segment itself. ffmpeg receives them from Tellyard over a private address inside the container. yt-dlp, which opens `live` channels, connects only through a proxy inside Tellyard. The same rules apply to all three.
 
 - Only `http` and `https` addresses are used, also after a redirect.
-- An address on your home network, on the host itself or in another private range is reached only when its host is written in that channel's `live`, `page`, `hls` or `token`, is a guide source, or is `HEARTBEAT_URL`. A stream, page or redirect that points at any other private address fails. The log then says `refused <address>: private addresses need a host named in the configuration`.
-- `Authorization` and `Cookie` headers go only to the hosts written in the channel. Other `headers` go to every host the stream uses.
+- An address on your home network, on the host itself or in another private range is reached only on a host and port written in that channel's `live`, `page`, `hls`, `token` or `allow`, in a guide source, or in `HEARTBEAT_URL`. An `http` address on port 80 also covers `https` on port 443 of the same host. A stream, page or redirect that points at any other private address fails. The log then says `refused <address>: private addresses need a host and port named in the configuration`.
+- A private address also counts when it is written another way, such as `2130706433` or `127.1`, or inside an IPv6 address, such as `::ffff:192.168.1.1`. Cloud metadata addresses are refused.
+- The IPv6 networks of the container's own network interfaces count as your home network. On Docker's default network, the container does not see the host's IPv6 networks.
+- `Authorization` and `Cookie` headers go only to the scheme, host and port written in the channel. Other `headers` go to every host the stream uses.
 - Each request has a time limit: 30 seconds for a page, playlist or token answer when a stream starts, 15 seconds for a playlist during playback, 60 seconds for a video segment and 10 minutes for a guide download.
-- With `http_proxy` or `https_proxy` set, requests go through the proxy. Tellyard then refuses private addresses written as numbers, such as `192.168.1.1`. A name that points to a private address is up to the proxy. Requests inside the container, from ffmpeg to Tellyard and from the health check, skip the proxy.
-
-yt-dlp opens `live` channels on its own.
+- With `http_proxy` or `https_proxy` set, requests go through the proxy. Tellyard then refuses private addresses written as numbers, such as `192.168.1.1`. A name that points to a private address is up to the proxy. yt-dlp's requests reach the proxy as `CONNECT` tunnels. Other proxy settings, such as `all_proxy`, are not used. Requests inside the container, from ffmpeg and yt-dlp to Tellyard and from the health check, skip the proxy.
 
 ## The guide
 

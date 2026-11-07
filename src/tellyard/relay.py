@@ -11,7 +11,7 @@ from typing import Any
 
 from tellyard import net
 from tellyard.channels import Headers
-from tellyard.net import FetchError, Hosts
+from tellyard.net import FetchError, Trust
 from tellyard.resolve import Resolved
 
 log = logging.getLogger(__name__)
@@ -124,7 +124,7 @@ class Feed:
         self._ids: dict[str, int] = {}
         self._next = 0
         self.headers: Headers = resolved.headers
-        self.trusted: Hosts = resolved.trusted
+        self.trust: Trust = resolved.trust
         self.label = label
         self.closed = threading.Event()
         self.video = self.address(resolved.video, True)
@@ -215,7 +215,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _playlist(self, feed: Feed, url: str) -> None:
         try:
-            final, text = net.fetch_text(url, feed.headers, feed.trusted, deadline=PLAYLIST_DEADLINE)
+            final, text = net.fetch_text(url, feed.headers, feed.trust, deadline=PLAYLIST_DEADLINE)
             if not text.lstrip().startswith("#EXTM3U"):
                 raise PlaylistError("the stream URL did not return an HLS playlist")
             body = rewrite(live_edge(text), final, feed.address).encode()
@@ -230,7 +230,7 @@ class _Handler(BaseHTTPRequestHandler):
             headers = (*headers, ("Range", span))
         started = False
         try:
-            with net.open_url(url, headers, feed.trusted, deadline=SEGMENT_DEADLINE) as response:
+            with net.open_url(url, headers, feed.trust, deadline=SEGMENT_DEADLINE) as response:
                 # ffmpeg logs a body without a length as cut short. Chunked encoding marks the end.
                 chunked = response.headers.get("Content-Length") is None
                 self.send_response(response.status)

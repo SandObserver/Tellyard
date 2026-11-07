@@ -74,6 +74,9 @@ def test_empty_values_mean_the_defaults() -> None:
         ({"BASE_URL": "http://host:1/path"}, "no path"),
         ({"LOG_LEVEL": "loud"}, "LOG_LEVEL"),
         ({"YTDLP_ARGS": "'unclosed"}, "cannot be parsed"),
+        ({"YTDLP_ARGS": "--proxy http://p:1"}, "cannot set a proxy"),
+        ({"YTDLP_ARGS": "--prox=http://p:1"}, "cannot set a proxy"),
+        ({"YTDLP_ARGS": "--geo-verification-proxy http://p:1"}, "cannot set a proxy"),
         ({"HEARTBEAT_URL": "example.com/ping"}, "HEARTBEAT_URL"),
     ],
 )

@@ -9,6 +9,7 @@ from typing import ClassVar
 import pytest
 
 from tellyard import relay as relay_module
+from tellyard.net import trust_of
 from tellyard.relay import Feed, PlaylistError, Relay, rewrite
 from tellyard.resolve import Resolved
 
@@ -78,7 +79,7 @@ def upstream() -> Iterator[str]:
 
 def feed_for(relay: Relay, url: str) -> Feed:
     headers = (("Referer", "https://tv.example.com/"), ("Cookie", "c=1"))
-    return relay.open(Resolved(url, None, 1080, headers, frozenset({"127.0.0.1"})), "7 Seven")
+    return relay.open(Resolved(url, None, 1080, headers, trust_of([url])), "7 Seven")
 
 
 def get(url: str, headers: dict[str, str] | None = None) -> tuple[int, dict[str, str], bytes]:
@@ -231,7 +232,7 @@ def test_relay_refuses_private_addresses_the_owner_did_not_name(
     with caplog.at_level(logging.WARNING):
         assert get(segment)[0] == 502
     reasons = [getattr(record, "reason", "") for record in caplog.records]
-    assert any("private addresses need a host named" in reason for reason in reasons)
+    assert any("private addresses need a host and port named" in reason for reason in reasons)
     assert len(Upstream.seen) == 1
 
 
