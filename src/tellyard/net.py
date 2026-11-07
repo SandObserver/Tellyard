@@ -15,7 +15,7 @@ import urllib.request
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import override
+from typing import NamedTuple, override
 
 from tellyard.channels import Headers
 
@@ -25,8 +25,10 @@ USER_AGENT = (
 )
 TEXT_LIMIT = 4 * 1024 * 1024
 TEXT_DEADLINE = 30.0
+READ_TIMEOUT = 10.0
 DOWNLOAD_LIMIT = 256 * 1024 * 1024
 DOWNLOAD_DEADLINE = 600.0
+DOWNLOAD_READ_TIMEOUT = 60.0
 CHUNK = 256 * 1024
 GZIP_MAGIC = b"\x1f\x8b"
 SCHEMES = frozenset({"http", "https"})
@@ -58,12 +60,49 @@ class FetchError(Exception):
     pass
 
 
+class Limits(NamedTuple):
+    read: float = READ_TIMEOUT
+    total: float = TEXT_DEADLINE
+
+
+TEXT = Limits()
+
+
 class TooLargeError(FetchError):
     pass
 
 
 class BlockedAddressError(OSError):
     pass
+
+
+class Cancel(threading.Event):
+    def __init__(self) -> None:
+        super().__init__()
+        self._hooks_lock = threading.Lock()
+        self._hooks: list[Callable[[], None]] = []
+
+    @override
+    def set(self) -> None:
+        super().set()
+        with self._hooks_lock:
+            hooks, self._hooks = self._hooks, []
+        for hook in hooks:
+            hook()
+
+    @contextlib.contextmanager
+    def on_set(self, hook: Callable[[], None]) -> Iterator[None]:
+        with self._hooks_lock:
+            waiting = not self.is_set()
+            if waiting:
+                self._hooks.append(hook)
+        if not waiting:
+            hook()
+        try:
+            yield
+        finally:
+            with self._hooks_lock, contextlib.suppress(ValueError):
+                self._hooks.remove(hook)
 
 
 @dataclass(frozen=True)
@@ -168,10 +207,12 @@ def open_url(
     url: str,
     headers: Headers = (),
     trust: Trust = NOBODY,
-    timeout: float = 10.0,
-    deadline: float = TEXT_DEADLINE,
+    *,
+    limits: Limits = TEXT,
+    cancel: Cancel | None = None,
 ) -> Iterator[http.client.HTTPResponse]:
-    # The socket timeout applies to each read. The deadline closes the connection to bound the whole request.
+    # The read limit applies to each read. The total limit closes the connection to bound the whole request.
+    deadline = limits.total
     try:
         scheme = urllib.parse.urlsplit(url).scheme.lower()
     except ValueError:
@@ -181,28 +222,29 @@ def open_url(
     watch = _Deadline()
     timer = threading.Timer(deadline, watch.expire)
     timer.start()
+    stop = cancel.on_set(watch.abort) if cancel is not None else contextlib.nullcontext()
     try:
-        with _opener(watch, trust).open(request(url, headers, trust), timeout=timeout) as response:
+        with stop, _opener(watch, trust).open(request(url, headers, trust), timeout=limits.read) as response:
             yield response
     except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException, ValueError) as error:
-        if watch.expired:
-            raise FetchError(f"{safe_url(url)}: response took longer than {deadline:.0f} s") from error
-        raise FetchError(f"{safe_url(url)}: {_reason(error)}") from error
+        raise FetchError(f"{safe_url(url)}: {watch.reason(deadline) or _reason(error)}") from error
     finally:
         timer.cancel()
-    if watch.expired:
-        raise FetchError(f"{safe_url(url)}: response took longer than {deadline:.0f} s")
+    # A shut connection reads as a short body.
+    if reason := watch.reason(deadline):
+        raise FetchError(f"{safe_url(url)}: {reason}")
 
 
 def fetch_text(
     url: str,
     headers: Headers = (),
     trust: Trust = NOBODY,
-    timeout: float = 10.0,
+    *,
     deadline: float = TEXT_DEADLINE,
+    cancel: Cancel | None = None,
 ) -> tuple[str, str]:
     body = bytearray()
-    with open_url(url, headers, trust, timeout, deadline) as response:
+    with open_url(url, headers, trust, limits=Limits(READ_TIMEOUT, deadline), cancel=cancel) as response:
         final = response.geturl()
         while len(body) <= TEXT_LIMIT and (block := read_block(response, TEXT_LIMIT + 1 - len(body))):
             body += block
@@ -220,13 +262,14 @@ def download(
     url: str,
     destination: Path,
     trust: Trust = NOBODY,
-    timeout: float = 60.0,
+    *,
     deadline: float = DOWNLOAD_DEADLINE,
 ) -> None:
     partial = destination.with_name(destination.name + ".part")
     total = 0
     try:
-        with open_url(url, (), trust, timeout, deadline) as response, partial.open("wb") as out:
+        limits = Limits(DOWNLOAD_READ_TIMEOUT, deadline)
+        with open_url(url, (), trust, limits=limits) as response, partial.open("wb") as out:
             while chunk := response.read1(CHUNK):
                 total += len(chunk)
                 if total > DOWNLOAD_LIMIT:
@@ -430,6 +473,7 @@ class _Deadline:
         self._lock = threading.Lock()
         self._sockets: list[socket.socket] = []
         self.expired = False
+        self.aborted = False
 
     def connection(
         self, base: type[http.client.HTTPConnection], trust: Trust, proxy: bool
@@ -451,14 +495,29 @@ class _Deadline:
     def add(self, sock: socket.socket) -> None:
         with self._lock:
             self._sockets.append(sock)
-            if self.expired:
+            if self.expired or self.aborted:
                 _shut(sock)
 
     def expire(self) -> None:
         with self._lock:
             self.expired = True
-            for sock in self._sockets:
-                _shut(sock)
+            self._shut_all()
+
+    def abort(self) -> None:
+        with self._lock:
+            self.aborted = True
+            self._shut_all()
+
+    def reason(self, deadline: float) -> str | None:
+        if self.aborted:
+            return "cancelled"
+        if self.expired:
+            return f"response took longer than {deadline:.0f} s"
+        return None
+
+    def _shut_all(self) -> None:
+        for sock in self._sockets:
+            _shut(sock)
 
 
 class _HttpHandler(urllib.request.HTTPHandler):

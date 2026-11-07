@@ -63,7 +63,7 @@
   <Config Name="Base URL" Target="BASE_URL" Default="" Mode="" Description="Address Plex should use, such as http://192.168.1.10:5004. Set it when the address Plex connects with is not reachable for streams." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
   <Config Name="Guide Days" Target="GUIDE_DAYS" Default="3" Mode="" Description="Days of listings to publish." Type="Variable" Display="advanced" Required="false" Mask="false">3</Config>
   <Config Name="Guide Refresh Hours" Target="GUIDE_REFRESH_HOURS" Default="6" Mode="" Description="How often the guide is rebuilt." Type="Variable" Display="advanced" Required="false" Mask="false">6</Config>
-  <Config Name="yt-dlp Arguments" Target="YTDLP_ARGS" Default="" Mode="" Description="Extra yt-dlp arguments, for example extractor options. Proxy options are refused: set http_proxy or https_proxy." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="yt-dlp Arguments" Target="YTDLP_ARGS" Default="" Mode="" Description="Extra yt-dlp arguments, for example extractor options. yt-dlp loads no config file or plugin, so set its options here. Proxy options are refused: set http_proxy or https_proxy." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
   <Config Name="Heartbeat URL" Target="HEARTBEAT_URL" Default="" Mode="" Description="Address Tellyard calls once a minute while it is healthy, for a monitor such as Uptime Kuma or Healthchecks." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
   <Config Name="Log Level" Target="LOG_LEVEL" Default="info" Mode="" Description="debug, info, warning or error." Type="Variable" Display="advanced" Required="false" Mask="false">info</Config>
 </Container>

@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import resource
@@ -421,6 +422,54 @@ def test_viewer_leaving_before_video_flows_frees_the_tuner(
         server.shutdown()
         server.server_close()
         relay.close()
+
+
+@contextlib.contextmanager
+def slow_lookup_server(settings: Settings, tmp_path: Path) -> Iterator[tuple[App, Server, SlowResolver]]:
+    relay = Relay()
+    resolver = SlowResolver(settings, 1)
+    ffmpeg = str(fake_ffmpeg(tmp_path))
+    guide = Guide(tmp_path / "data" / "guide.xml", 1, downloader=lambda url, path: None)
+    app = App(
+        settings, ChannelStore(settings.channels_file), guide, lambda channel: Session(channel, resolver, ffmpeg, relay)
+    )
+    server = Server(("127.0.0.1", 0), app)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield app, server, resolver
+    finally:
+        server.shutdown()
+        server.server_close()
+        relay.close()
+
+
+def test_viewer_who_sent_more_than_the_request_is_seen_leaving(
+    make_settings: Callable[..., Settings], tmp_path: Path
+) -> None:
+    with slow_lookup_server(make_settings(TUNERS="1"), tmp_path) as (app, server, resolver):
+        client = socket.create_connection(("127.0.0.1", server.server_address[1]))
+        client.sendall(b"GET /stream/101 HTTP/1.1\r\nHost: tellyard\r\n\r\n")
+        assert wait_for(lambda: app.streams == 1, 5)
+        client.sendall(b"\r\n")
+        threading.Event().wait(0.2)
+        client.close()
+        assert wait_for(lambda: app.streams == 0, 3)
+        assert resolver.cancelled.is_set()
+
+
+def test_close_stops_every_stream_and_refuses_new_ones(make_settings: Callable[..., Settings], tmp_path: Path) -> None:
+    with slow_lookup_server(make_settings(TUNERS="1"), tmp_path) as (app, server, resolver):
+        client = socket.create_connection(("127.0.0.1", server.server_address[1]))
+        client.sendall(b"GET /stream/101 HTTP/1.1\r\nHost: tellyard\r\n\r\n")
+        assert wait_for(lambda: app.streams == 1, 5)
+        started = time.monotonic()
+        app.close()
+        assert time.monotonic() - started < 3
+        assert resolver.cancelled.is_set()
+        assert wait_for(lambda: app.streams == 0, 3)
+        with app.session(app.store.current().channels[0]) as session:
+            assert session.cancel.is_set()
+        client.close()
 
 
 def test_streams_when_the_connection_has_a_high_file_descriptor(base: str) -> None:

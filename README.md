@@ -184,7 +184,7 @@ Set these as environment variables.
 | `GUIDE_DAYS` | Days of listings to publish. | `3` |
 | `GUIDE_REFRESH_HOURS` | How often the guide is rebuilt. | `6` |
 | `TZ` | Time zone name, such as `America/New_York`. Placeholder blocks in the guide start at midnight in this time zone. Other values keep UTC and log a warning. Logs stay in UTC. | UTC |
-| `YTDLP_ARGS` | Extra yt-dlp arguments, for example extractor options. Proxy options are refused: set `http_proxy` or `https_proxy`. | |
+| `YTDLP_ARGS` | Extra yt-dlp arguments, for example extractor options. yt-dlp loads no config file or plugin, so set its options here. Proxy options are refused: set `http_proxy` or `https_proxy`. | |
 | `LOG_LEVEL` | `debug`, `info`, `warning` or `error`. | `info` |
 | `HEARTBEAT_URL` | Address Tellyard calls once a minute while it is healthy, for a monitor such as Uptime Kuma or Healthchecks. | |
 | `LISTEN_PORT` | Port inside the container. If you change it, change the right side of `ports:` too. | `5004` |

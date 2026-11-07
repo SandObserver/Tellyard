@@ -13,10 +13,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Refuse proxy options in `YTDLP_ARGS`. yt-dlp now uses `http_proxy` or `https_proxy` through Tellyard, and no longer `all_proxy`.
+- Stop yt-dlp from loading its config files and plugins. Set yt-dlp options in `YTDLP_ARGS`.
+- Stop every stream when Tellyard stops, and wait up to 8 seconds for them to end.
 
 ### Fixed
 
 - Accept a proxy setting without `http://`, such as `http_proxy=192.168.1.5:3128`. Every request was refused.
+- Free the tuner within a second when the viewer leaves during a page, token or playlist request. It stayed taken for up to 30 seconds.
+- See a viewer leave who sent anything after the request. The lookup and reconnects ran on for nobody.
+- Stop yt-dlp lookups and keep ffmpeg away from Ctrl-C when Tellyard stops outside Docker. A lookup kept running, and Ctrl-C started a new one.
 - Clean up the landing page guide, its animations and the install section. The time line keeps one thickness, the guide no longer jumps every half hour, and the guide fits at every screen width.
 
 ### Security
@@ -26,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Refuse private addresses written as other numbers behind a proxy, such as `2130706433` or `127.1`.
 - Reach a named private address only on its own port, and send `Authorization` and `Cookie` only to the scheme, host and port written in the channel.
 - Refuse IPv4 addresses inside IPv6 addresses, the container's own IPv6 networks and Azure's metadata address.
+- Stop a `live` channel lookup whose yt-dlp output passes 16 MB. A large answer could use up the container's memory.
 
 ## [0.1.3] - 2026-11-01
 

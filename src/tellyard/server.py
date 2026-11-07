@@ -8,7 +8,7 @@ import select
 import socket
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -38,6 +38,8 @@ REQUEST_DEADLINE = 10.0
 REQUEST_LIMIT = 128 * 1024
 REFUSAL_LOG_SECONDS = 60.0
 WATCH_INTERVAL = 0.5
+WATCH_READ = 4096
+SHUTDOWN_WAIT = 8.0
 
 type SessionFactory = Callable[[Channel], Session]
 
@@ -64,6 +66,9 @@ class App:
         self._make_session = session_factory
         self._tuners = threading.BoundedSemaphore(settings.tuners)
         self._lock = threading.Lock()
+        self._stopped = threading.Condition(self._lock)
+        self._sessions: set[Session] = set()
+        self._closing = False
         self._streams = 0
         self._guide_version = 0
         self._guide_failed_at: datetime | None = None
@@ -173,10 +178,30 @@ class App:
             self._streams -= 1
         self._tuners.release()
 
-    def session(self, channel: Channel) -> Session:
-        return self._make_session(channel)
+    @contextlib.contextmanager
+    def session(self, channel: Channel) -> Iterator[Session]:
+        session = self._make_session(channel)
+        with self._lock:
+            self._sessions.add(session)
+            if self._closing:
+                session.cancel.set()
+        try:
+            with session:
+                yield session
+        finally:
+            with self._lock:
+                self._sessions.discard(session)
+                self._stopped.notify_all()
 
     def close(self) -> None:
+        with self._lock:
+            self._closing = True
+            sessions = list(self._sessions)
+        for session in sessions:
+            session.cancel.set()
+        with self._lock:
+            if not self._stopped.wait_for(lambda: not self._sessions, SHUTDOWN_WAIT):
+                log.warning("streams still stopping at exit", extra={"streams": len(self._sessions)})
         if self._relay is not None:
             self._relay.close()
 
@@ -359,13 +384,13 @@ class Handler(BaseHTTPRequestHandler):
             app.release_tuner()
 
     def _watch(self, cancel: threading.Event, done: threading.Event) -> None:
-        # Clients send nothing after the request, so a readable socket with no data means the viewer left.
+        # A closed connection reads empty. Bytes a client sends after its request are read and dropped.
         poller = select.poll()
         poller.register(self.connection, select.POLLIN)
         while not done.is_set():
             try:
                 readable = poller.poll(WATCH_INTERVAL * 1000)
-                if readable and not self.connection.recv(1, socket.MSG_PEEK):
+                if readable and not self.connection.recv(WATCH_READ):
                     break
             except OSError:
                 break
