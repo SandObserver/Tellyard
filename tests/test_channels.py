@@ -95,6 +95,14 @@ def test_xmltv_guide_accepts_a_url() -> None:
     assert channel.xmltv.url == "https://epg.example.com/a.xml"
 
 
+def test_allow_and_named_urls() -> None:
+    hls = entry(live=None, hls="http://192.168.1.20:8080/a.m3u8", token="https://t.example/s?u={url}")
+    channel = parse(hls | {"allow": ["192.168.1.20:8081", "[fd00::5]:9000"]}).channels[0]
+    assert channel.allow == (("192.168.1.20", 8081), ("fd00::5", 9000))
+    assert channel.named_urls == ("http://192.168.1.20:8080/a.m3u8", "https://t.example/s?u=")
+    assert parse(entry()).channels[0].named_urls == ("https://www.youtube.com/@n/live",)
+
+
 def test_min_height_is_optional_per_channel() -> None:
     lineup = parse(entry(number=1), entry(number=2, min_height=720))
     assert [channel.min_height for channel in lineup.channels] == [None, 720]
@@ -136,6 +144,11 @@ def test_min_height_is_optional_per_channel() -> None:
         ({"channel": [entry(live=None, hls="https://a.example/x", token="nope")]}, "token must be an http"),
         ({"channel": [entry()], "guide_sources": {"Bad Name": "https://x/"}}, "lowercase"),
         ({"channel": ["not a table"]}, "must be a table"),
+        ({"channel": [entry(allow="192.168.1.20:8081")]}, "allow must be a list"),
+        ({"channel": [entry(allow=["192.168.1.20"])]}, "must be host:port"),
+        ({"channel": [entry(allow=["http://192.168.1.20:8081/x"])]}, "must be host:port"),
+        ({"channel": [entry(allow=["192.168.1.20:99999"])]}, "must be host:port"),
+        ({"channel": [entry(allow=[8081])]}, "must be host:port"),
     ],
 )
 def test_rejects_mistakes(data: dict[str, Any], message: str) -> None:

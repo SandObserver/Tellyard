@@ -19,7 +19,7 @@ from xml.sax.saxutils import escape
 from tellyard import __version__
 from tellyard.channels import Channel
 from tellyard.guide import Guide
-from tellyard.net import FetchError, fetch_text, hosts_of
+from tellyard.net import FetchError, fetch_text, trust_of
 from tellyard.relay import Relay
 from tellyard.resolve import Resolver
 from tellyard.settings import Settings
@@ -217,7 +217,7 @@ class App:
             return
         self._last_heartbeat = now
         try:
-            fetch_text(url, trusted=hosts_of([url]))
+            fetch_text(url, trust=trust_of([url]))
         except FetchError as error:
             log.warning("HEARTBEAT_URL call failed", extra={"reason": str(error)})
 

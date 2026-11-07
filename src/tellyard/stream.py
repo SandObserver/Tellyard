@@ -10,7 +10,7 @@ from types import TracebackType
 from typing import Self
 
 from tellyard.channels import Channel
-from tellyard.net import redact
+from tellyard.net import redact, without_proxies
 from tellyard.relay import Feed, Relay
 from tellyard.resolve import LookupCancelledError, Resolved, ResolveError, Resolver
 
@@ -26,7 +26,6 @@ SECOND_SIGNAL = 0.2
 STOP_GRACE = 5.0
 CANCEL_POLL = 1.0
 READ_TIMEOUT_US = "15000000"
-PROXY_VARIABLES = frozenset({"http_proxy", "https_proxy", "all_proxy"})
 # Twitch ad breaks hand over frames stamped with the stream's uptime. Re-encoding players freeze on them.
 TIMESTAMP_REPAIR = (
     "setts=pts='if(gt(N,0)*gt(abs(PTS-PREV_OUTPTS)*TB,10),PREV_OUTPTS+1/(30*TB),PTS)'"
@@ -64,7 +63,7 @@ def input_options() -> list[str]:
 
 def ffmpeg_env() -> dict[str, str]:
     # ffmpeg reads only the relay on 127.0.0.1. A proxy cannot reach that address.
-    return {key: value for key, value in os.environ.items() if key.lower() not in PROXY_VARIABLES}
+    return without_proxies(os.environ)
 
 
 def local(resolved: Resolved, feed: Feed) -> Resolved:

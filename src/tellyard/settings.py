@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 DEVICE_ID = re.compile(r"^[0-9A-F]{8}$")
 BASE_URL = re.compile(r"^https?://[^\s/]+$")
+YTDLP_PROXY_OPTIONS = ("--proxy", "--geo-verification-proxy", "--cn-verification-proxy")
 
 
 class SettingsError(Exception):
@@ -63,6 +64,8 @@ class Settings:
             ytdlp_args = tuple(shlex.split(env.get("YTDLP_ARGS", "")))
         except ValueError as error:
             raise SettingsError(f"YTDLP_ARGS cannot be parsed: {error}") from error
+        if any(_sets_proxy(arg) for arg in ytdlp_args):
+            raise SettingsError("YTDLP_ARGS cannot set a proxy. Set http_proxy or https_proxy instead")
         zone_name = env.get("TZ", "").strip().removeprefix(":")
         zone = _time_zone(zone_name)
         return cls(
@@ -84,6 +87,12 @@ class Settings:
             time_zone=zone,
             unknown_time_zone=zone_name if zone_name and zone is None else "",
         )
+
+
+def _sets_proxy(arg: str) -> bool:
+    # yt-dlp accepts any unique start of a long option, such as --prox.
+    name = arg.partition("=")[0]
+    return len(name) > 2 and name.startswith("--") and any(option.startswith(name) for option in YTDLP_PROXY_OPTIONS)
 
 
 def _device_id(name: str) -> str:

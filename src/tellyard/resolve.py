@@ -9,13 +9,14 @@ import subprocess
 import threading
 import urllib.parse
 from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from time import monotonic
 from typing import Any
 
-from tellyard import hls
+from tellyard import egress, hls
 from tellyard.channels import Channel, Headers, HlsSource, LiveSource, PageSource
-from tellyard.net import FetchError, Hosts, fetch_text, redact, safe_url
+from tellyard.net import NOBODY, FetchError, Trust, fetch_text, redact, safe_url, trust_of
 from tellyard.settings import Settings
 
 log = logging.getLogger(__name__)
@@ -30,7 +31,8 @@ TWITCH_HOSTS = ("twitch.tv", ".twitch.tv")
 YTDLP_BASE = ("--no-warnings", "--xff", "never")
 
 type Runner = Callable[[Sequence[str], float, threading.Event | None], str]
-type Fetcher = Callable[[str, Headers, Hosts], tuple[str, str]]
+type Fetcher = Callable[[str, Headers, Trust], tuple[str, str]]
+type Proxy = Callable[[Trust, str], AbstractContextManager[str]]
 
 
 class ResolveError(Exception):
@@ -48,7 +50,7 @@ class Resolved:
     audio: str | None
     height: int | None
     headers: Headers
-    trusted: Hosts = frozenset()
+    trust: Trust = NOBODY
     repair_timestamps: bool = False
 
 
@@ -100,10 +102,17 @@ def run_command(args: Sequence[str], timeout: float, cancel: threading.Event | N
 
 
 class Resolver:
-    def __init__(self, settings: Settings, runner: Runner = run_command, fetcher: Fetcher = fetch_text) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        runner: Runner = run_command,
+        fetcher: Fetcher = fetch_text,
+        proxy: Proxy = egress.serve,
+    ) -> None:
         self._settings = settings
         self._run = runner
         self._fetch = fetcher
+        self._proxy = proxy
 
     def resolve(self, channel: Channel, cancel: threading.Event | None = None) -> Resolved:
         try:
@@ -115,22 +124,23 @@ class Resolver:
             raise ResolveError(f"the stream lookup failed unexpectedly ({type(error).__name__})") from error
 
     def _resolve(self, channel: Channel, cancel: threading.Event) -> Resolved:
-        source, trusted = channel.source, channel.hosts
+        source, trust = channel.source, trust_of(channel.named_urls, channel.allow)
         match source:
             case HlsSource(token=token) if token:
-                return self._pick(self._signed(source, trusted), source.headers, trusted, cancel)
+                return self._pick(self._signed(source, trust), source.headers, trust, cancel)
             case HlsSource(url=url, headers=headers):
-                return self._pick(url, headers, trusted, cancel)
+                return self._pick(url, headers, trust, cancel)
             case PageSource():
-                return self._pick(self._from_page(source, trusted), source.headers, trusted, cancel)
+                return self._pick(self._from_page(source, trust), source.headers, trust, cancel)
             case LiveSource():
-                manifest = self._from_ytdlp(self._youtube_target(source, cancel), cancel)
-                return replace(self._pick(manifest, (), trusted, cancel), repair_timestamps=is_twitch(source.url))
+                with self._proxy(trust, channel.number) as proxy:
+                    manifest = self._from_ytdlp(self._youtube_target(source, cancel, proxy), cancel, proxy)
+                return replace(self._pick(manifest, (), trust, cancel), repair_timestamps=is_twitch(source.url))
 
-    def _signed(self, source: HlsSource, trusted: Hosts) -> str:
+    def _signed(self, source: HlsSource, trust: Trust) -> str:
         address = source.token.replace("{url}", urllib.parse.quote(source.url, safe=""))
         try:
-            _, text = self._fetch(address, source.headers, trusted)
+            _, text = self._fetch(address, source.headers, trust)
             data = json.loads(text)
         except FetchError as error:
             raise ResolveError(f"the token service failed: {error}") from error
@@ -143,9 +153,9 @@ class Resolver:
             raise ResolveError(f"the token service returned no {source.token_field!r} URL")
         return signed
 
-    def _from_page(self, source: PageSource, trusted: Hosts) -> str:
+    def _from_page(self, source: PageSource, trust: Trust) -> str:
         try:
-            _, text = self._fetch(source.url, source.headers, trusted)
+            _, text = self._fetch(source.url, source.headers, trust)
         except FetchError as error:
             raise ResolveError(f"could not load the channel page: {error}") from error
         for found in PAGE_URL.finditer(text):
@@ -155,12 +165,12 @@ class Resolver:
         hint = f" containing {source.match!r}" if source.match else ""
         raise ResolveError(f"no playlist URL{hint} on the channel page")
 
-    def _youtube_target(self, source: LiveSource, cancel: threading.Event) -> str:
+    def _youtube_target(self, source: LiveSource, cancel: threading.Event, proxy: str) -> str:
         if not source.match:
             return source.url
         channel = source.url.rstrip("/").removesuffix("/live")
         args = [self._settings.ytdlp, *YTDLP_BASE, "--flat-playlist", "--playlist-end", str(STREAM_SCAN), "-J"]
-        args += [*self._settings.ytdlp_args, f"{channel}/streams"]
+        args += [*self._settings.ytdlp_args, "--proxy", proxy, f"{channel}/streams"]
         try:
             listing = _json(self._run(args, YTDLP_TIMEOUT, cancel))
         except LookupCancelledError:
@@ -181,9 +191,9 @@ class Resolver:
         log.info("no live stream matches, using the live page", extra={"url": safe_url(channel), "match": source.match})
         return source.url
 
-    def _from_ytdlp(self, url: str, cancel: threading.Event) -> str:
+    def _from_ytdlp(self, url: str, cancel: threading.Event, proxy: str) -> str:
         args = [self._settings.ytdlp, *YTDLP_BASE, "--no-playlist", "--skip-download", "-J"]
-        args += [*self._settings.ytdlp_args, url]
+        args += [*self._settings.ytdlp_args, "--proxy", proxy, url]
         info = _json(self._run(args, YTDLP_TIMEOUT, cancel))
         if info.get("live_status") != "is_live":
             raise ResolveError(f"the channel is not live right now ({info.get('live_status') or 'unknown'})")
@@ -199,26 +209,26 @@ class Resolver:
             raise ResolveError("yt-dlp returned no HLS playlist for the stream")
         return manifest
 
-    def _pick(self, url: str, headers: Headers, trusted: Hosts, cancel: threading.Event) -> Resolved:
-        final, text = self._fetch_with_retry(url, headers, trusted, cancel)
+    def _pick(self, url: str, headers: Headers, trust: Trust, cancel: threading.Event) -> Resolved:
+        final, text = self._fetch_with_retry(url, headers, trust, cancel)
         if not hls.is_master(text):
             if not text.lstrip().startswith("#EXTM3U"):
                 raise ResolveError("the stream URL did not return an HLS playlist")
-            return Resolved(final, None, None, headers, trusted)
+            return Resolved(final, None, None, headers, trust)
         try:
             variants, renditions = hls.parse_master(text, final)
         except hls.PlaylistError as error:
             raise ResolveError(str(error)) from error
         choice = hls.choose(variants, renditions)
-        return Resolved(choice.video, choice.audio, choice.height, headers, trusted)
+        return Resolved(choice.video, choice.audio, choice.height, headers, trust)
 
-    def _fetch_with_retry(self, url: str, headers: Headers, trusted: Hosts, cancel: threading.Event) -> tuple[str, str]:
+    def _fetch_with_retry(self, url: str, headers: Headers, trust: Trust, cancel: threading.Event) -> tuple[str, str]:
         # Some CDNs hang on some requests. A new connection usually answers.
         for attempt in range(1, FETCH_ATTEMPTS + 1):
             if cancel.is_set():
                 raise LookupCancelledError
             try:
-                return self._fetch(url, headers, trusted)
+                return self._fetch(url, headers, trust)
             except FetchError as error:
                 if attempt == FETCH_ATTEMPTS:
                     raise ResolveError(f"could not load the playlist: {error}") from error

@@ -6,9 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Add `allow` for a channel: other `host:port` addresses on your home network that its stream uses.
+
+### Changed
+
+- Refuse proxy options in `YTDLP_ARGS`. yt-dlp now uses `http_proxy` or `https_proxy` through Tellyard, and no longer `all_proxy`.
+
 ### Fixed
 
+- Accept a proxy setting without `http://`, such as `http_proxy=192.168.1.5:3128`. Every request was refused.
 - Clean up the landing page guide, its animations and the install section. The time line keeps one thickness, the guide no longer jumps every half hour, and the guide fits at every screen width.
+
+### Security
+
+- Send `live` channel lookups through a proxy inside Tellyard. yt-dlp followed redirects and page links to private addresses the channel does not name.
+- Stop trusting the host of every proxy setting for direct requests. A proxy only for https, `all_proxy` or `no_proxy` made that host reachable on every port.
+- Refuse private addresses written as other numbers behind a proxy, such as `2130706433` or `127.1`.
+- Reach a named private address only on its own port, and send `Authorization` and `Cookie` only to the scheme, host and port written in the channel.
+- Refuse IPv4 addresses inside IPv6 addresses, the container's own IPv6 networks and Azure's metadata address.
 
 ## [0.1.3] - 2026-11-01
 

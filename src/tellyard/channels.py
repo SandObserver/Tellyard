@@ -24,6 +24,7 @@ CHANNEL_KEYS = frozenset(
         "token_field",
         "guide",
         "min_height",
+        "allow",
     }
 )
 GUIDE_KEYS = frozenset({"xmltv", "id", "title", "description", "category", "hours"})
@@ -86,17 +87,17 @@ class Channel:
     placeholder: Placeholder
     xmltv: XmltvGuide | None
     min_height: int | None
+    allow: tuple[tuple[str, int], ...] = ()
 
     @property
     def guide_id(self) -> str:
         return f"tellyard.{self.number}"
 
     @property
-    def hosts(self) -> frozenset[str]:
-        urls = [self.source.url]
+    def named_urls(self) -> tuple[str, ...]:
         if isinstance(self.source, HlsSource) and self.source.token:
-            urls.append(self.source.token.replace("{url}", ""))
-        return frozenset(host for url in urls if (host := _host(url)))
+            return self.source.url, self.source.token.replace("{url}", "")
+        return (self.source.url,)
 
 
 @dataclass(frozen=True)
@@ -173,7 +174,8 @@ def _channel(value: Any, index: int, sources: Mapping[str, str]) -> Channel:
     placeholder, xmltv = _guide(guide, name, where, sources)
     raw_height = entry.get("min_height")
     height = None if raw_height is None else _positive_int(raw_height, f"{where} min_height")
-    return Channel(number_text, name, logo, source, placeholder, xmltv, height)
+    allow = _allow(entry.get("allow", []), where)
+    return Channel(number_text, name, logo, source, placeholder, xmltv, height, allow)
 
 
 def _source(entry: Mapping[str, Any], where: str) -> Source:
@@ -272,11 +274,20 @@ def _url(value: Any, where: str) -> str:
     return text
 
 
-def _host(url: str) -> str:
-    try:
-        return urllib.parse.urlsplit(url).hostname or ""
-    except ValueError:
-        return ""
+def _allow(value: Any, where: str) -> tuple[tuple[str, int], ...]:
+    if not isinstance(value, list):
+        raise ChannelError(f'{where}: allow must be a list such as ["192.168.1.20:8081"]')
+    addresses: list[tuple[str, int]] = []
+    for item in value:
+        try:
+            parts = urllib.parse.urlsplit(f"//{item}") if isinstance(item, str) else None
+            host, port = (parts.hostname, parts.port) if parts else (None, None)
+        except ValueError:
+            host, port = None, None
+        if not host or not port or parts is None or parts.path or parts.query or parts.fragment or parts.username:
+            raise ChannelError(f"{where}: allow entry {item!r} must be host:port, such as 192.168.1.20:8081")
+        addresses.append((host, port))
+    return tuple(addresses)
 
 
 def _positive_int(value: Any, where: str) -> int:

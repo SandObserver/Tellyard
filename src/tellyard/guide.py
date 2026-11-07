@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 
 from tellyard.channels import Channel, Lineup
-from tellyard.net import FetchError, TooLargeError, download, hosts_of, open_maybe_gzip, safe_url
+from tellyard.net import FetchError, TooLargeError, download, open_maybe_gzip, safe_url, trust_of
 
 log = logging.getLogger(__name__)
 XMLTV_TIME = "%Y%m%d%H%M%S %z"
@@ -90,7 +90,7 @@ def parse_time(text: str) -> datetime | None:
 
 
 def fetch_feed(url: str, destination: Path) -> None:
-    download(url, destination, hosts_of([url]))
+    download(url, destination, trust_of([url]))
 
 
 @dataclass(frozen=True)
