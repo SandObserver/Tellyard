@@ -23,11 +23,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - See a viewer leave who sent anything after the request. The lookup and reconnects ran on for nobody.
 - Stop yt-dlp lookups and keep ffmpeg away from Ctrl-C when Tellyard stops outside Docker. A lookup kept running, and Ctrl-C started a new one.
 - Clean up the landing page guide, its animations and the install section. The time line keeps one thickness, the guide no longer jumps every half hour, and the guide fits at every screen width.
+- Keep sound in sync on channels whose audio is a separate track. It could run seconds ahead of or behind the picture.
+- Reconnect when the separate audio track of a channel fails. The picture played on without sound.
+- Play streams whose segment addresses have no file extension, such as `/seg/5`. They never started.
+- Give up after three tries on a source that keeps freezing after a few seconds of video. It was retried forever.
+- Report a failed ffmpeg start during a reconnect and try again. The stream ended without a log line.
+- Report in `tellyard check` the height of the video that plays. A source with several video streams reported the tallest one.
+- Skip a variant with a malformed address. The whole channel failed.
+- Refuse playlists that list more than 1024 addresses. Reading one took up to 16 seconds per request.
 
 ### Security
 
 - Send `live` channel lookups through a proxy inside Tellyard. yt-dlp followed redirects and page links to private addresses the channel does not name.
 - Stop trusting the host of every proxy setting for direct requests. A proxy only for https, `all_proxy` or `no_proxy` made that host reachable on every port.
+- Check every address in a playlist that a source lists twice, once as a key and once as a playlist. ffmpeg fetched the addresses inside it directly, without the private-address rules.
 - Refuse private addresses written as other numbers behind a proxy, such as `2130706433` or `127.1`.
 - Reach a named private address only on its own port, and send `Authorization` and `Cookie` only to the scheme, host and port written in the channel.
 - Refuse IPv4 addresses inside IPv6 addresses, the container's own IPv6 networks and Azure's metadata address.

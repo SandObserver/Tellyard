@@ -236,6 +236,25 @@ def test_relay_refuses_private_addresses_the_owner_did_not_name(
     assert len(Upstream.seen) == 1
 
 
+def test_relay_rewrites_a_playlist_first_listed_as_a_key(relay: Relay, upstream: str) -> None:
+    feed = feed_for(relay, f"{upstream}/live/media.m3u8")
+    inner = f"{upstream}/live/elsewhere.m3u8"
+    as_key = feed.address(inner, False)
+    as_playlist = feed.address(inner, True)
+    assert as_key != as_playlist
+    assert get(as_playlist)[2].decode().splitlines()[-1].startswith(f"{relay.base}/")
+
+
+def test_rewrite_refuses_more_addresses_than_the_feed_holds(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(relay_module, "ENTRIES", 3)
+    base = "https://cdn.example.com/live/media.m3u8"
+    repeated = "#EXTM3U\n" + "#EXT-X-BYTERANGE:10\nall.ts\n" * 10
+    assert rewrite(repeated, base, lambda url, playlist: "r").count("r") == 10
+    distinct = "#EXTM3U\n" + "".join(f"#EXTINF:2.0,\ns{number}.ts\n" for number in range(4))
+    with pytest.raises(PlaylistError, match="more than 3 addresses"):
+        rewrite(distinct, base, lambda url, playlist: url)
+
+
 def test_relay_answers_errors(relay: Relay, upstream: str) -> None:
     assert get(f"{relay.base}/nothing")[0] == 404
     assert get(f"{relay.base}/{'a' * 22}/0/x.m3u8")[0] == 404

@@ -21,7 +21,7 @@ At least one output file must be specified
 """
 
 
-def test_probe_height_reads_ffmpeg_stream_details(relay: Relay) -> None:
+def test_probe_height_reads_the_stream_that_plays(relay: Relay) -> None:
     seen: list[Sequence[str]] = []
 
     def runner(args: Sequence[str], timeout: float, cancel: threading.Event | None) -> str:
@@ -29,7 +29,7 @@ def test_probe_height_reads_ffmpeg_stream_details(relay: Relay) -> None:
         return FFMPEG_OUTPUT
 
     resolved = Resolved("https://v.example.com/a.m3u8", None, 1080, (("Referer", "https://r.example.com/"),))
-    assert check.probe_height("ffmpeg", relay, resolved, runner) == 1080
+    assert check.probe_height("ffmpeg", relay, resolved, runner) == 720
     assert seen[0][-1].startswith(f"{relay.base}/")
     assert "-headers" not in seen[0]
     assert check.probe_height("ffmpeg", relay, resolved, lambda args, timeout, cancel: "") is None

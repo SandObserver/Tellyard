@@ -44,6 +44,16 @@ class PlaylistError(Exception):
 
 
 def rewrite(text: str, base: str, address: Address) -> str:
+    seen: dict[tuple[str, bool], str] = {}
+
+    def local(url: str, playlist: bool) -> str:
+        # The feed holds ENTRIES addresses. A longer list would push out addresses ffmpeg still needs.
+        if (url, playlist) not in seen:
+            if len(seen) >= ENTRIES:
+                raise PlaylistError(f"the playlist lists more than {ENTRIES} addresses")
+            seen[url, playlist] = address(url, playlist)
+        return seen[url, playlist]
+
     lines: list[str] = []
     variant = False
     # ffmpeg also ends a line at NUL. A line it splits there must not reach it unchecked.
@@ -52,11 +62,11 @@ def rewrite(text: str, base: str, address: Address) -> str:
         if not line:
             continue
         if not line.startswith("#"):
-            lines.append(address(_join(base, line), variant))
+            lines.append(local(_join(base, line), variant))
             variant = False
             continue
         if "URI=" in line:
-            line = _rewrite_attribute(line, base, address)
+            line = _rewrite_attribute(line, base, local)
         if line.startswith(VARIANT_TAG):
             variant = True
         lines.append(line)
@@ -121,7 +131,8 @@ class Feed:
         self._token = token
         self._lock = threading.Lock()
         self._entries: OrderedDict[int, tuple[str, bool]] = OrderedDict()
-        self._ids: dict[str, int] = {}
+        # A source can list one address as a segment and as a playlist. Each kind gets its own entry.
+        self._ids: dict[tuple[str, bool], int] = {}
         self._next = 0
         self.headers: Headers = resolved.headers
         self.trust: Trust = resolved.trust
@@ -132,13 +143,13 @@ class Feed:
 
     def address(self, url: str, playlist: bool) -> str:
         with self._lock:
-            number = self._ids.get(url)
+            number = self._ids.get((url, playlist))
             if number is None:
                 number, self._next = self._next, self._next + 1
-                self._ids[url] = number
+                self._ids[url, playlist] = number
                 self._entries[number] = (url, playlist)
                 while len(self._entries) > ENTRIES:
-                    _, (old, _) = self._entries.popitem(last=False)
+                    _, old = self._entries.popitem(last=False)
                     del self._ids[old]
             else:
                 self._entries.move_to_end(number)

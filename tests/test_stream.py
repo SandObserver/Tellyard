@@ -60,6 +60,17 @@ def test_ffmpeg_args_with_separate_audio() -> None:
     args = ffmpeg_args("ffmpeg", resolved)
     assert args.count("-i") == 2
     assert "1:a:0" in args
+    assert args.index("-copyts") < args.index("-i")
+    assert args.index("-shortest") > args.index("-c")
+    single = ffmpeg_args("ffmpeg", Resolved("http://127.0.0.1:9/t/0/v.m3u8", None, 1080, ()))
+    assert "-copyts" not in single
+    assert "-shortest" not in single
+
+
+def test_ffmpeg_accepts_segment_names_without_an_extension() -> None:
+    args = ffmpeg_args("ffmpeg", Resolved("http://127.0.0.1:9/t/0/v.m3u8", "http://127.0.0.1:9/t/1/a.m3u8", 1080, ()))
+    assert args.count("-extension_picky") == 2
+    assert all(args[index + 1] == "0" for index, arg in enumerate(args) if arg == "-extension_picky")
 
 
 def test_ffmpeg_reads_only_through_the_relay(relay: Relay) -> None:
@@ -174,6 +185,43 @@ def test_stalled_source_is_restarted(
         chunks = list(islice(session.chunks(), 2))
     assert chunks == [b"first", b"after"]
     assert resolver.calls == 2
+
+
+def test_ffmpeg_that_cannot_start_is_a_stream_error(tmp_path: Path) -> None:
+    with pytest.raises(StreamError, match="did not start"):
+        Process([str(tmp_path)], "7 Seven")
+
+
+def test_a_source_that_stalls_after_data_gives_up(
+    relay: Relay,
+    make_settings: Callable[..., Settings],
+    channel: channels.Channel,
+    ffmpeg: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(stream, "STALL_TIMEOUT", 0.3)
+    monkeypatch.setattr(stream, "QUICK_DROP", 0.2)
+    resolver = FakeResolver(make_settings())
+
+    class Stalling(Process):
+        def __init__(self, args: Sequence[str], label: str) -> None:
+            self.sent = False
+
+        def read(self, timeout: float) -> bytes | None:
+            if not self.sent:
+                self.sent = True
+                return b"data"
+            threading.Event().wait(timeout)
+            raise queue.Empty
+
+        def close(self) -> None:
+            pass
+
+    with Session(channel, resolver, ffmpeg, relay, starter=Stalling) as session:
+        session.open()
+        chunks = list(session.chunks())
+    assert resolver.calls == 1 + stream.MAX_ATTEMPTS
+    assert len(chunks) == 1 + stream.MAX_ATTEMPTS
 
 
 def test_missing_ffmpeg_is_reported(

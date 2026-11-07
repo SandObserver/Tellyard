@@ -135,3 +135,15 @@ def test_blank_lines_before_and_between_tags_are_skipped() -> None:
     text = "\n\n#EXTM3U\n\n#EXT-X-STREAM-INF:BANDWIDTH=1,RESOLUTION=1920x1080\n\nv.m3u8\n"
     variants, _ = hls.parse_master(text, "https://a.example.com/")
     assert variants == [hls.Variant("https://a.example.com/v.m3u8", 1, 1080, None)]
+
+
+def test_a_malformed_variant_address_is_skipped() -> None:
+    text = (
+        "#EXTM3U\n"
+        "#EXT-X-STREAM-INF:BANDWIDTH=9,RESOLUTION=1920x1080\n"
+        "http://[cdn/1080.m3u8\n"
+        "#EXT-X-STREAM-INF:BANDWIDTH=5,RESOLUTION=1280x720\n"
+        "720.m3u8\n"
+    )
+    variants, _ = hls.parse_master(text, "https://a.example.com/live/master.m3u8")
+    assert [variant.uri for variant in variants] == ["https://a.example.com/live/720.m3u8"]
