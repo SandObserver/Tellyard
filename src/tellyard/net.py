@@ -367,10 +367,16 @@ def without_proxies(env: Mapping[str, str]) -> dict[str, str]:
 
 def connect_out(host: str, port: int, trust: Trust, timeout: float) -> socket.socket:
     refuse_private_number(host, port, trust)
-    proxy = _proxy_for(host, port)
-    if proxy is None:
+    proxies = _proxies_for(host, port)
+    if not proxies:
         return _connector(trust, proxy=False)((host, port), timeout, None)
-    return _tunnel(proxy, host, port, timeout)
+    last: OSError | None = None
+    for proxy in proxies:
+        try:
+            return _tunnel(proxy, host, port, timeout)
+        except OSError as error:
+            last = error
+    raise last or OSError("no proxy to connect through")
 
 
 def refuse_private_number(host: str, port: int, trust: Trust) -> None:
@@ -444,13 +450,14 @@ def _connector(trust: Trust, proxy: bool, watch: "_Deadline | None" = None) -> C
     return connect
 
 
-def _proxy_for(host: str, port: int) -> urllib.parse.SplitResult | None:
+def _proxies_for(host: str, port: int) -> list[urllib.parse.SplitResult]:
+    # A tunnel request has a host and port but no scheme, so the port only sets which proxy goes first.
     proxies = urllib.request.getproxies()
     order = ("http", "https") if port == DEFAULT_PORTS["http"] else ("https", "http")
-    value = next((proxies[name] for name in order if proxies.get(name)), None)
-    if value is None or urllib.request.proxy_bypass(host):
-        return None
-    return urllib.parse.urlsplit(value if "://" in value else f"http://{value}")
+    values = dict.fromkeys(proxies[name] for name in order if proxies.get(name))
+    if not values or urllib.request.proxy_bypass(host):
+        return []
+    return [urllib.parse.urlsplit(value if "://" in value else f"http://{value}") for value in values]
 
 
 def _tunnel(proxy: urllib.parse.SplitResult, host: str, port: int, timeout: float) -> socket.socket:

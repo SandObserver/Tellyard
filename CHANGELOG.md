@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Treat a response that ends before its declared length as a failed request. A cut playlist was used as if it were whole.
 - Ignore the body of a redirect. A large one could use all of Tellyard's memory.
+- Try the other proxy when `http_proxy` and `https_proxy` differ and the first one refuses a connection.
 - Keep every address of channels with a separate audio track and long playlists. The audio addresses pushed out the first video segments.
 - Use the new title of a last show without an end time. The last good copy kept the old one.
 - Stop downloading a guide source that is too large or unreadable on every retry when it has no saved copy.

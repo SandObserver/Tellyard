@@ -4,6 +4,7 @@ import socket
 import threading
 import time
 import tracemalloc
+import urllib.parse
 import urllib.request
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -419,6 +420,24 @@ def test_the_home_ipv6_network_is_not_public(tmp_path: Path, monkeypatch: pytest
     monkeypatch.setattr(net, "LOCAL", net._Interfaces(tmp_path / "missing"))
     assert net.LOCAL.networks() == ()
     assert net.is_public("2606:4700::1111")
+
+
+def test_a_refusing_proxy_falls_back_to_the_other_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    tried: list[str | None] = []
+    answer = socket.socket()
+
+    def tunnel(proxy: urllib.parse.SplitResult, host: str, port: int, timeout: float) -> socket.socket:
+        tried.append(proxy.hostname)
+        if proxy.hostname == "secure.example.com":
+            raise OSError("the proxy refused the target")
+        return answer
+
+    monkeypatch.setenv("https_proxy", "http://secure.example.com:3128")
+    monkeypatch.setenv("http_proxy", "http://plain.example.com:3128")
+    monkeypatch.setattr(net, "_tunnel", tunnel)
+    with answer:
+        assert net.connect_out("site.example.com", 8080, net.NOBODY, 1.0) is answer
+    assert tried == ["secure.example.com", "plain.example.com"]
 
 
 def test_without_proxies() -> None:
