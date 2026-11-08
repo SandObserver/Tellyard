@@ -443,6 +443,15 @@ def test_entity_declarations_stop_the_feed(tmp_path: Path) -> None:
         read_feed(path)
 
 
+def test_entity_declarations_stop_a_utf16_feed(tmp_path: Path) -> None:
+    path = tmp_path / "feed.xml"
+    path.write_bytes(
+        '<?xml version="1.0" encoding="utf-16"?><!DOCTYPE tv [<!ENTITY a "AAAA">]><tv></tv>'.encode("utf-16")
+    )
+    with pytest.raises(guide.FeedError, match="declares its own XML entities"):
+        guide._read(path, {"ATV.tr": ["201"]}, (NOW, NOW + timedelta(days=1)))
+
+
 def test_doctype_without_entities_is_read(tmp_path: Path) -> None:
     path = tmp_path / "feed.xml.gz"
     bulk(path, [b'<?xml version="1.0"?>\n<!DOCTYPE tv SYSTEM "xmltv.dtd">\n<tv>', ENTRY, b"</tv>"])

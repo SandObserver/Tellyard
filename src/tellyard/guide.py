@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
+from xml.parsers import expat
 
 from tellyard.channels import Channel, Lineup
 from tellyard.net import FetchError, TooLargeError, download, open_maybe_gzip, safe_url, trust_of
@@ -30,7 +31,6 @@ ENTRY_LIMIT = 64 * 1024
 ENTRY_ELEMENTS = 1000
 ENTRY_DEPTH = 8
 KEPT_LIMIT = 32 * 1024 * 1024
-ENTITY_DECLARATION = b"<!ENTITY"
 TV_END = b"</tv>"
 XML_ENCODING = re.compile(rb"<\?xml[^>]*?encoding\s*=\s*[\"']([A-Za-z][\w.-]*)[\"']")
 MERGE_TAIL = 64 * 1024
@@ -433,7 +433,9 @@ class _Counted(io.RawIOBase):
         self.count = 0
         self.mark = 0
         self.prolog = True
-        self._tail = b""
+        self._declarations = expat.ParserCreate()
+        self._declarations.EntityDeclHandler = self._refuse_entity
+        self._declarations.StartElementHandler = self._end_prolog
 
     def readable(self) -> bool:
         return True
@@ -446,12 +448,18 @@ class _Counted(io.RawIOBase):
         if self.count - self.mark > ENTRY_LIMIT + len(data):
             raise FeedError(f"a guide entry is larger than {ENTRY_LIMIT // 1024} KB")
         if self.prolog:
-            # Entities declared in the source expand past every size limit here.
-            window = self._tail + data
-            if ENTITY_DECLARATION in window:
-                raise FeedError("the guide source declares its own XML entities")
-            self._tail = window[-len(ENTITY_DECLARATION) :]
+            # Entities declared in the source expand past every size limit here. A byte search misses other encodings.
+            try:
+                self._declarations.Parse(data, False)
+            except expat.ExpatError:
+                self.prolog = False
         return data
+
+    def _refuse_entity(self, *_: object) -> None:
+        raise FeedError("the guide source declares its own XML entities")
+
+    def _end_prolog(self, *_: object) -> None:
+        self.prolog = False
 
 
 def _close(slots: list[Slot], block: timedelta, start: datetime, end: datetime) -> list[Slot]:
