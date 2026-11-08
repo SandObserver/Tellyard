@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Accept a proxy setting without `http://`, such as `http_proxy=192.168.1.5:3128`. Every request was refused.
 - Free the tuner within a second when the viewer leaves during a page, token or playlist request. It stayed taken for up to 30 seconds.
+- Free the tuner within a second when the viewer leaves while Tellyard connects to a source that does not answer. It stayed taken for 10 seconds per address of the source.
 - See a viewer leave who sent anything after the request. The lookup and reconnects ran on for nobody.
 - Stop yt-dlp lookups and keep ffmpeg away from Ctrl-C when Tellyard stops outside Docker. A lookup kept running, and Ctrl-C started a new one.
 - Clean up the landing page guide, its animations and the install section. The time line keeps one thickness, the guide no longer jumps every half hour, and the guide fits at every screen width.

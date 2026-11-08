@@ -1,10 +1,13 @@
 import base64
 import contextlib
+import errno
 import gzip
 import http.client
 import io
 import ipaddress
+import os
 import re
+import select
 import socket
 import ssl
 import threading
@@ -15,7 +18,7 @@ import urllib.request
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple, override
+from typing import Any, NamedTuple, override
 
 from tellyard.channels import Headers
 
@@ -403,13 +406,15 @@ def _proxied(req: urllib.request.Request) -> bool:
     return req.has_proxy() or getattr(req, "_tunnel_host", None) is not None
 
 
-def _connector(trust: Trust, proxy: bool) -> Connect:
+def _connector(trust: Trust, proxy: bool, watch: "_Deadline | None" = None) -> Connect:
+    dial: Connect = socket.create_connection if watch is None else watch.dial
+
     def connect(
         address: tuple[str, int], timeout: float | None = None, source: tuple[str, int] | None = None
     ) -> socket.socket:
         host, port = address
         if proxy or trust.reaches(host, port):
-            return socket.create_connection(address, timeout, source)
+            return dial(address, timeout, source)
         # Connect to the checked addresses, not the name, so a second DNS answer cannot change the target.
         addresses = [str(info[4][0]) for info in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)]
         for item in addresses:
@@ -418,8 +423,10 @@ def _connector(trust: Trust, proxy: bool) -> Connect:
         last: OSError | None = None
         for item in addresses:
             try:
-                return socket.create_connection((item, port), timeout, source)
+                return dial((item, port), timeout, source)
             except OSError as error:
+                if watch is not None and watch.stopped:
+                    raise
                 last = error
         raise last or OSError("no address to connect to")
 
@@ -479,24 +486,80 @@ class _Deadline:
         self, base: type[http.client.HTTPConnection], trust: Trust, proxy: bool
     ) -> type[http.client.HTTPConnection]:
         watch = self
-        connect = _connector(trust, proxy)
+        connect = _connector(trust, proxy, watch)
 
         class Watched(base):  # type: ignore[valid-type,misc]
+            sock: socket.socket
+
             def __init__(self, *args: object, **kwargs: object) -> None:
                 super().__init__(*args, **kwargs)
                 self._create_connection = connect
 
             def connect(self) -> None:
-                super().connect()
-                watch.add(self.sock)
+                if not isinstance(self, http.client.HTTPSConnection):
+                    super().connect()
+                    return
+                # A stop shuts only watched sockets. Watch the TLS socket before the handshake waits on the server.
+                http.client.HTTPConnection.connect(self)
+                tls: ssl.SSLSocket = self._context.wrap_socket(
+                    self.sock,
+                    server_hostname=self._tunnel_host or self.host,
+                    do_handshake_on_connect=False,
+                )
+                self.sock = tls
+                watch.add(tls)
+                tls.do_handshake()
 
         return Watched
+
+    @property
+    def stopped(self) -> bool:
+        return self.expired or self.aborted
 
     def add(self, sock: socket.socket) -> None:
         with self._lock:
             self._sockets.append(sock)
-            if self.expired or self.aborted:
+            if self.stopped:
                 _shut(sock)
+
+    def dial(
+        self, address: tuple[str, int], timeout: float | None = None, source: tuple[str, int] | None = None
+    ) -> socket.socket:
+        last: OSError | None = None
+        for family, kind, proto, _, target in socket.getaddrinfo(*address, type=socket.SOCK_STREAM):
+            sock = socket.socket(family, kind, proto)
+            try:
+                if source is not None:
+                    sock.bind(source)
+                self._connect(sock, target, timeout)
+            except BaseException as error:
+                sock.close()
+                if self.stopped or not isinstance(error, OSError):
+                    raise
+                last = error
+            else:
+                sock.settimeout(timeout)
+                return sock
+        raise last or OSError("no address to connect to")
+
+    def _connect(self, sock: socket.socket, target: tuple[Any, ...], timeout: float | None) -> None:
+        # A stop shuts only watched sockets. Start the connect under the lock so a stop cannot fall between.
+        sock.setblocking(False)
+        with self._lock:
+            if self.stopped:
+                raise OSError("the request was stopped")
+            self._sockets.append(sock)
+            code = sock.connect_ex(target)
+        if code == errno.EINPROGRESS:
+            poller = select.poll()
+            poller.register(sock, select.POLLOUT)
+            if not poller.poll(None if timeout is None else timeout * 1000):
+                raise TimeoutError("timed out")
+            code = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        if code:
+            raise OSError(code, os.strerror(code))
+        if self.stopped:
+            raise OSError("the request was stopped")
 
     def expire(self) -> None:
         with self._lock:

@@ -455,6 +455,72 @@ def test_fetch_text_does_not_start_when_already_cancelled(base: str) -> None:
         net.fetch_text(f"{base}/page", trust=net.trust_of([base]), cancel=cancel)
 
 
+@pytest.fixture
+def unanswered() -> str:
+    probe = socket.socket()
+    probe.settimeout(0.5)
+    try:
+        probe.connect(("192.0.2.1", 9))
+    except TimeoutError:
+        return "http://192.0.2.1:9/live.m3u8"
+    except OSError as error:
+        pytest.skip(f"this network refuses 192.0.2.1 at once: {error}")
+    finally:
+        probe.close()
+    pytest.skip("192.0.2.1 answered")
+
+
+@pytest.fixture
+def silent_tls() -> Iterator[str]:
+    with socket.create_server(("127.0.0.1", 0)) as server:
+        yield f"https://127.0.0.1:{server.getsockname()[1]}/live.m3u8"
+
+
+def test_cancel_stops_a_connect_that_gets_no_answer(unanswered: str) -> None:
+    cancel = net.Cancel()
+    threading.Timer(0.3, cancel.set).start()
+    started = time.monotonic()
+    with pytest.raises(FetchError, match="cancelled"):
+        net.fetch_text(unanswered, trust=net.trust_of([unanswered]), cancel=cancel)
+    assert time.monotonic() - started < 2
+
+
+def test_deadline_stops_a_connect_that_gets_no_answer(unanswered: str) -> None:
+    started = time.monotonic()
+    with pytest.raises(FetchError, match="longer than"):
+        net.fetch_text(unanswered, trust=net.trust_of([unanswered]), deadline=0.3)
+    assert time.monotonic() - started < 2
+
+
+def test_cancel_stops_a_tls_handshake_that_gets_no_answer(silent_tls: str) -> None:
+    cancel = net.Cancel()
+    threading.Timer(0.3, cancel.set).start()
+    started = time.monotonic()
+    with pytest.raises(FetchError, match="cancelled"):
+        net.fetch_text(silent_tls, trust=net.trust_of([silent_tls]), cancel=cancel)
+    assert time.monotonic() - started < 2
+
+
+def test_dial_tries_the_next_address_until_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
+    with socket.create_server(("127.0.0.1", 0)) as server:
+        port = server.getsockname()[1]
+        closed = socket.create_server(("127.0.0.1", 0))
+        closed_port = closed.getsockname()[1]
+        closed.close()
+        answers = [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", closed_port)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", port)),
+        ]
+        monkeypatch.setattr(socket, "getaddrinfo", lambda *args, **kwargs: answers)
+        watch = net._Deadline()
+        with watch.dial(("cdn.example.com", port), 1.0) as sock:
+            assert sock.getpeername()[1] == port
+            assert sock.gettimeout() == 1.0
+        watch.abort()
+        with pytest.raises(OSError, match="stopped"):
+            watch.dial(("cdn.example.com", port), 1.0)
+
+
 def test_cancel_runs_hooks_only_while_they_are_registered() -> None:
     cancel = net.Cancel()
     calls: list[str] = []
