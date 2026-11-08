@@ -4,7 +4,8 @@ import urllib.error
 import urllib.request
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import ClassVar
+from types import SimpleNamespace
+from typing import ClassVar, cast
 
 import pytest
 
@@ -80,6 +81,15 @@ def upstream() -> Iterator[str]:
 def feed_for(relay: Relay, url: str) -> Feed:
     headers = (("Referer", "https://tv.example.com/"), ("Cookie", "c=1"))
     return relay.open(Resolved(url, None, 1080, headers, trust_of([url])), "7 Seven")
+
+
+def test_separate_audio_does_not_push_out_video_addresses() -> None:
+    resolved = Resolved("http://x.example.com/v.m3u8", "http://x.example.com/a.m3u8", 1080, ())
+    feed = Feed(cast(Relay, SimpleNamespace(base="http://relay")), "token", resolved, "7 Seven")
+    for kind in ("v", "a"):
+        for index in range(relay_module.ENTRIES):
+            feed.address(f"http://x.example.com/{kind}{index}.ts", False)
+    assert feed.entry(3) == ("http://x.example.com/v1.ts", False)
 
 
 def get(url: str, headers: dict[str, str] | None = None) -> tuple[int, dict[str, str], bytes]:

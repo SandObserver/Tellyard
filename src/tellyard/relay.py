@@ -142,6 +142,7 @@ class Feed:
         self.trust: Trust = resolved.trust
         self.label = label
         self.closed = threading.Event()
+        self._capacity = ENTRIES * 2 if resolved.audio else ENTRIES
         self.video = self.address(resolved.video, True)
         self.audio = self.address(resolved.audio, True) if resolved.audio else None
 
@@ -152,7 +153,7 @@ class Feed:
                 number, self._next = self._next, self._next + 1
                 self._ids[url, playlist] = number
                 self._entries[number] = (url, playlist)
-                while len(self._entries) > ENTRIES:
+                while len(self._entries) > self._capacity:
                     _, old = self._entries.popitem(last=False)
                     del self._ids[old]
             else:
