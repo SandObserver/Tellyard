@@ -93,5 +93,9 @@ def _rendition(media: dict[str, str], base: str) -> Rendition | None:
 
 
 def _join(base: str, reference: str) -> str | None:
-    uri = urllib.parse.urljoin(base, reference)
-    return uri if urllib.parse.urlsplit(uri).scheme in SCHEMES else None
+    try:
+        uri = urllib.parse.urljoin(base, reference)
+        scheme = urllib.parse.urlsplit(uri).scheme
+    except ValueError:
+        return None
+    return uri if scheme in SCHEMES else None

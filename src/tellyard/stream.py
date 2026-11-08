@@ -47,18 +47,25 @@ def pause(cancel: threading.Event, seconds: float) -> bool:
 
 def ffmpeg_args(ffmpeg: str, resolved: Resolved) -> list[str]:
     args = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error"]
+    if resolved.audio:
+        # Without the source clock, ffmpeg starts each input at zero and the sound drifts off the picture.
+        args.append("-copyts")
     args += [*input_options(), "-i", resolved.video]
     if resolved.audio:
         args += [*input_options(), "-i", resolved.audio]
     audio_map = "1:a:0" if resolved.audio else "0:a:0?"
     args += ["-map", "0:v:0", "-map", audio_map, "-c", "copy"]
+    if resolved.audio:
+        # ffmpeg keeps streaming when one input ends. Ending the output starts a reconnect.
+        args.append("-shortest")
     if resolved.repair_timestamps:
         args += ["-bsf:v", TIMESTAMP_REPAIR]
     return [*args, "-f", "mpegts", "pipe:1"]
 
 
 def input_options() -> list[str]:
-    return ["-rw_timeout", READ_TIMEOUT_US]
+    # Relay names keep the source's file name, which can lack a media extension. The relay checks every address.
+    return ["-rw_timeout", READ_TIMEOUT_US, "-extension_picky", "0"]
 
 
 def ffmpeg_env() -> dict[str, str]:
@@ -88,6 +95,8 @@ class Process:
             )
         except FileNotFoundError as error:
             raise StreamError(f"{args[0]} is not installed") from error
+        except OSError as error:
+            raise StreamError(f"{args[0]} did not start: {error.strerror or error}") from error
         threading.Thread(target=self._pump, name=f"pump {label}", daemon=True).start()
         threading.Thread(target=self._drain, name=f"log {label}", daemon=True).start()
 
@@ -154,6 +163,7 @@ class Session:
         self._feed: Feed | None = None
         self._pending: bytes | None = None
         self._started = 0.0
+        self._fed = 0.0
         self._attempts = 0
         self.height: int | None = None
         self.cancel = Cancel()
@@ -183,6 +193,7 @@ class Session:
             if self.cancel.is_set():
                 return
             if chunk_or_end:
+                self._fed = monotonic()
                 yield chunk_or_end
             elif not self._restart():
                 return
@@ -230,7 +241,7 @@ class Session:
         self._process = process
         self._feed = feed
         self._pending = first
-        self._started = monotonic()
+        self._started = self._fed = monotonic()
 
     def _read(self, process: Process, timeout: float) -> bytes | None:
         end = monotonic() + timeout
@@ -245,7 +256,8 @@ class Session:
         return None
 
     def _restart(self) -> bool:
-        ran = monotonic() - self._started
+        # A stall is noticed only after STALL_TIMEOUT. Count the run until the last data.
+        ran = self._fed - self._started
         self.close()
         if self.cancel.is_set():
             return False

@@ -53,9 +53,9 @@ def probe_height(ffmpeg: str, relay: Relay, resolved: Resolved, runner: Runner =
         output = runner(args, PROBE_TIMEOUT, None)
     finally:
         feed.close()
-    heights = [int(found.group(2)) for found in VIDEO_SIZE.finditer(output)]
-    if heights:
-        return max(heights)
+    # Streaming plays the first video stream.
+    if found := VIDEO_SIZE.search(output):
+        return int(found.group(2))
     if OPEN_ERROR in output:
         lines = [line.strip() for line in output.splitlines() if line.strip()]
         raise ResolveError(redact(lines[-1]))
