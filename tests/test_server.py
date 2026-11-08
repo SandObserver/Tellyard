@@ -201,6 +201,29 @@ def test_heartbeat_is_called_once_a_minute_while_healthy(
     assert seen == ["/ok", "/fail"]
 
 
+def test_heartbeat_runs_while_the_guide_rebuilds(
+    make_settings: Callable[..., Settings],
+    channels_file: Path,
+    tmp_path: Path,
+    pings: tuple[str, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url, seen = pings
+    app = make_app(make_settings(HEARTBEAT_URL=f"{url}/ok"), channels_file, tmp_path)
+    release = threading.Event()
+    monkeypatch.setattr(app, "refresh_guide", lambda: release.wait(10))
+    stop = threading.Event()
+    app.start(stop)
+    try:
+        deadline = datetime.now(UTC) + timedelta(seconds=5)
+        while not seen and datetime.now(UTC) < deadline:
+            threading.Event().wait(0.01)
+        assert seen == ["/ok"]
+    finally:
+        stop.set()
+        release.set()
+
+
 def test_streams_a_channel_and_frees_the_tuner(base: str, app: App) -> None:
     with urllib.request.urlopen(f"{base}/auto/v101", timeout=10) as response:
         assert response.headers["Content-Type"] == "video/mp2t"

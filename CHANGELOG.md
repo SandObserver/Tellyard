@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Keep the last good copy of a guide source whole when the source has a comment after its end.
 - Rebuild the guide 15 minutes after a failed rebuild that followed a change to `channels.toml`. New channels were missing until the next scheduled rebuild.
 - Log `guide source has no current listings` for an id the source dropped, also when the last good copy still has shows for it.
+- Call `HEARTBEAT_URL` once a minute also while the guide downloads. A slow guide source delayed it by up to 10 minutes per source.
 
 ### Security
 
