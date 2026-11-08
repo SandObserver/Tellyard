@@ -1,3 +1,4 @@
+import bisect
 import codecs
 import contextlib
 import copy
@@ -12,7 +13,7 @@ import xml.etree.ElementTree as ET
 import zlib
 from collections import defaultdict
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 
@@ -34,6 +35,7 @@ TV_END = b"</tv>"
 XML_ENCODING = re.compile(rb"<\?xml[^>]*?encoding\s*=\s*[\"']([A-Za-z][\w.-]*)[\"']")
 MERGE_TAIL = 64 * 1024
 COPY_REACH = timedelta(days=30)
+OPEN_REACH = timedelta(days=1)
 
 type Downloader = Callable[[str, Path], None]
 # Strict XMLTV readers need this element order.
@@ -94,6 +96,12 @@ def fetch_feed(url: str, destination: Path) -> None:
 
 
 @dataclass(frozen=True)
+class Copies:
+    folder: Path
+    reuse: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True)
 class Built:
     data: bytes
     failed: int
@@ -101,12 +109,12 @@ class Built:
 
 
 def build(
-    lineup: Lineup, now: datetime, days: int, downloader: Downloader = fetch_feed, saved: Path | None = None
+    lineup: Lineup, now: datetime, days: int, downloader: Downloader = fetch_feed, copies: Copies | None = None
 ) -> Built:
     # Placeholder blocks follow the clock in the time zone of now.
     start = now.astimezone(UTC) - HISTORY
     end = start + HISTORY + timedelta(days=days)
-    schedules, failed, loaded = _external(lineup.channels, start, end, downloader, saved)
+    schedules, failed, loaded = _external(lineup.channels, start, end, downloader, copies)
     root = ET.Element("tv", {"generator-info-name": "Tellyard"})
     for channel in lineup.channels:
         element = ET.SubElement(root, "channel", {"id": channel.guide_id})
@@ -115,10 +123,9 @@ def build(
         ET.SubElement(element, "icon", {"src": channel.logo})
     for channel in lineup.channels:
         try:
-            entries = [
-                _programme(channel, slot)
-                for slot in _fill(channel, schedules.get(channel.number, []), start, end, now.tzinfo)
-            ]
+            block = timedelta(minutes=channel.placeholder.block_minutes)
+            slots = _close(schedules.get(channel.number, []), block, start, end)
+            entries = [_programme(channel, slot) for slot in _fill(channel, slots, start, end, now.tzinfo)]
         except (ArithmeticError, ValueError) as error:
             # One bad entry must not stop the guide for every channel.
             log.warning(
@@ -131,7 +138,7 @@ def build(
 
 
 def _external(
-    channels: Iterable[Channel], start: datetime, end: datetime, downloader: Downloader, saved: Path | None
+    channels: Iterable[Channel], start: datetime, end: datetime, downloader: Downloader, copies: Copies | None
 ) -> tuple[dict[str, list[Slot]], int, frozenset[str]]:
     wanted: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
     for channel in channels:
@@ -141,21 +148,19 @@ def _external(
     failed = 0
     loaded: set[str] = set()
     for url, ids in wanted.items():
-        kept = saved / _saved_name(url) if saved else None
-        found, ok = _load(url, ids, (start, end), downloader, kept)
+        kept = copies.folder / _saved_name(url) if copies else None
+        if copies and kept and url in copies.reuse and kept.is_file():
+            found, ok = _load(url, ids, (start, end), _copying(kept), None)
+        else:
+            found, ok = _load(url, ids, (start, end), downloader, kept)
         if ok:
             loaded.add(url)
         else:
             failed += 1
-        if found is None:
-            continue
-        for number, slots in found.items():
+        for number, slots in (found or {}).items():
             schedules[number].extend(slots)
-        missing = sorted(source_id for source_id, numbers in ids.items() if not any(n in found for n in numbers))
-        if missing:
-            log.warning("guide source has no current listings", extra={"url": safe_url(url), "ids": ",".join(missing)})
-    if saved:
-        _forget_saved(saved, {_saved_name(url) for url in wanted})
+    if copies:
+        _forget_saved(copies.folder, {_saved_name(url) for url in wanted})
     return schedules, failed, frozenset(loaded)
 
 
@@ -164,51 +169,60 @@ def _load(
 ) -> tuple[dict[str, list[Slot]] | None, bool]:
     with tempfile.TemporaryDirectory(prefix="tellyard-guide-") as scratch:
         path = Path(scratch) / "source.xml"
+        ends: dict[str, datetime] = {}
         try:
             downloader(url, path)
-            found = _read(path, ids, *span, url)
+            found = _read(path, ids, span, url, ends)
         except FEED_ERRORS as error:
-            return _read_saved(kept, url, ids, span, error), isinstance(error, LASTING_ERRORS)
+            return _checked(url, ids, _read_saved(kept, url, ids, span, error)), isinstance(error, LASTING_ERRORS)
         if not found:
-            return _read_saved(kept, url, ids, span) or found, True
+            return _checked(url, ids, _read_saved(kept, url, ids, span) or found), True
+        _checked(url, ids, found)
         if kept:
-            _save(path, kept, _extend(found, kept, url, ids, span))
+            added, borrowed = _extend(ends, kept, url, ids, span)
+            for number, slots in added.items():
+                found[number].extend(slots)
+            _save(path, kept, borrowed)
         return found, True
 
 
+def _checked(url: str, ids: dict[str, list[str]], found: dict[str, list[Slot]] | None) -> dict[str, list[Slot]] | None:
+    if found is not None:
+        missing = sorted(source_id for source_id, numbers in ids.items() if not any(n in found for n in numbers))
+        if missing:
+            log.warning("guide source has no current listings", extra={"url": safe_url(url), "ids": ",".join(missing)})
+    return found
+
+
 def _extend(
-    found: dict[str, list[Slot]], kept: Path, url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime]
-) -> list[ET.Element]:
+    ends: dict[str, datetime], kept: Path, url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime]
+) -> tuple[dict[str, list[Slot]], list[ET.Element]]:
     try:
         # Read past the window, so the merged copy keeps the later days.
-        saved = _read(kept, ids, span[0], span[1] + COPY_REACH)
+        saved = _read(kept, ids, (span[0], span[1] + COPY_REACH))
     except FEED_ERRORS:
-        return []
-    added = 0
+        return {}, []
+    added: dict[str, list[Slot]] = {}
     borrowed: list[ET.Element] = []
     for number, slots in saved.items():
-        # Borrow no show that starts before the window. Otherwise a long show stays in the copy forever.
-        last = max((slot.stop for slot in found.get(number, [])), default=span[0])
+        # Borrow only shows after the end of the new download and inside the window, or dropped and old shows return.
+        last = max(ends.get(number, span[0]), span[0])
         later = [slot for slot in slots if slot.start >= last]
         shown = [replace(slot, stop=min(slot.stop, span[1])) for slot in later if slot.start < span[1]]
-        found.setdefault(number, []).extend(shown)
-        added += len(shown)
+        if shown:
+            added[number] = shown
         borrowed += [slot.element for slot in later if slot.element is not None]
     if added:
         log.info(
             "guide source ends before its last good copy, adding the later shows from the copy",
-            extra={"url": safe_url(url), "shows": added},
+            extra={"url": safe_url(url), "shows": sum(len(slots) for slots in added.values())},
         )
-    return borrowed
+    return added, borrowed
 
 
-def _reusing(downloader: Downloader, saved: Path, reuse: frozenset[str]) -> Downloader:
+def _copying(kept: Path) -> Downloader:
     def fetch(url: str, destination: Path) -> None:
-        kept = saved / _saved_name(url)
-        if url in reuse and kept.is_file():
-            shutil.copy2(kept, destination)
-        else:
-            downloader(url, destination)
+        shutil.copyfile(kept, destination)
 
     return fetch
 
@@ -228,7 +242,7 @@ def _read_saved(
     copy = "none"
     if kept:
         try:
-            found = _read(kept, ids, *span, url)
+            found = _read(kept, ids, span, url)
             saved_at = datetime.fromtimestamp(kept.stat().st_mtime, UTC).isoformat(timespec="seconds")
         except FileNotFoundError:
             pass
@@ -272,7 +286,8 @@ def _merge(path: Path, target: Path, elements: list[ET.Element]) -> bool:
                 out.write(held[:-MERGE_TAIL])
                 held = held[-MERGE_TAIL:]
             end = held.rfind(TV_END)
-            if end < 0:
+            # Text after the end tag, such as a comment, would hide the inserted shows.
+            if end < 0 or held[end + len(TV_END) :].strip():
                 return False
             out.write(held[:end] + borrowed + held[end:])
     return True
@@ -306,11 +321,28 @@ def _forget_saved(saved: Path, keep: set[str]) -> None:
 
 
 def _read(
-    path: Path, ids: dict[str, list[str]], start: datetime, end: datetime, url: str = ""
+    path: Path,
+    ids: dict[str, list[str]],
+    span: tuple[datetime, datetime],
+    url: str = "",
+    ends: dict[str, datetime] | None = None,
+) -> dict[str, list[Slot]]:
+    scan = _Scan(ends={} if ends is None else ends)
+    try:
+        found = _parse(path, ids, span, scan)
+    except ValueError as error:
+        # pyexpat refuses multi-byte encodings such as Shift_JIS with ValueError.
+        raise FeedError(f"the guide source cannot be read: {error}") from error
+    if url:
+        _report_unreadable(url, scan)
+    return found
+
+
+def _parse(
+    path: Path, ids: dict[str, list[str]], span: tuple[datetime, datetime], scan: "_Scan"
 ) -> dict[str, list[Slot]]:
     # Feeds are untrusted and may be compressed. Every limit here bounds memory, not only time.
     found: dict[str, list[Slot]] = defaultdict(list)
-    unreadable = _Unreadable()
     with open_maybe_gzip(path) as raw:
         stream = _Counted(raw)
         root: ET.Element | None = None
@@ -336,26 +368,25 @@ def _read(
                 raise FeedError(f"a guide entry is larger than {ENTRY_LIMIT // 1024} KB")
             numbers = ids.get(element.get("channel", "")) if element.tag == "programme" else None
             if numbers:
-                kept += _keep(element, numbers, (start, end), found, unreadable)
+                kept += _keep(element, numbers, span, found, scan)
                 if kept > KEPT_LIMIT:
                     raise FeedError(f"the listings for these channels are larger than {KEPT_LIMIT // 1024 // 1024} MB")
             root.clear()
-    if url:
-        _report_unreadable(url, unreadable)
     return found
 
 
 @dataclass
-class _Unreadable:
-    count: int = 0
+class _Scan:
+    unreadable: int = 0
     example: str = ""
+    ends: dict[str, datetime] = field(default_factory=dict)
 
 
-def _report_unreadable(url: str, unreadable: _Unreadable) -> None:
-    if unreadable.count:
+def _report_unreadable(url: str, scan: _Scan) -> None:
+    if scan.unreadable:
         log.warning(
             "guide source has entries with unreadable times",
-            extra={"url": safe_url(url), "entries": unreadable.count, "example": unreadable.example},
+            extra={"url": safe_url(url), "entries": scan.unreadable, "example": scan.example},
         )
 
 
@@ -371,17 +402,25 @@ def _keep(
     numbers: list[str],
     span: tuple[datetime, datetime],
     found: dict[str, list[Slot]],
-    unreadable: _Unreadable,
+    scan: _Scan,
 ) -> int:
-    stamps = element.get("start", ""), element.get("stop", "")
-    begin, stop = (parse_time(stamp) for stamp in stamps)
-    if begin is None or stop is None:
-        if not unreadable.count:
-            unreadable.example = (stamps[0] if begin is None else stamps[1])[:40]
-        unreadable.count += 1
+    start_text, stop_text = element.get("start", ""), element.get("stop")
+    begin = parse_time(start_text)
+    stop = None if stop_text is None else parse_time(stop_text)
+    if begin is None or (stop_text is not None and stop is None):
+        if not scan.unreadable:
+            scan.example = (start_text if begin is None else stop_text or "")[:40]
+        scan.unreadable += 1
         return 0
+    for number in numbers:
+        scan.ends[number] = max(scan.ends.get(number, begin), stop or begin)
     start, end = span
-    if not (begin < stop and stop > start and begin < end):
+    if stop is None:
+        # _close ends it at the next show, so it can start before the window.
+        if not start - OPEN_REACH <= begin < end:
+            return 0
+        stop = begin
+    elif not (begin < stop and stop > start and begin < end):
         return 0
     for number in numbers:
         found[number].append(Slot(begin, min(stop, end), copy.deepcopy(element)))
@@ -413,6 +452,20 @@ class _Counted(io.RawIOBase):
                 raise FeedError("the guide source declares its own XML entities")
             self._tail = window[-len(ENTITY_DECLARATION) :]
         return data
+
+
+def _close(slots: list[Slot], block: timedelta, start: datetime, end: datetime) -> list[Slot]:
+    starts = sorted(slot.start for slot in slots)
+    closed: list[Slot] = []
+    for slot in slots:
+        if slot.element is None or slot.element.get("stop") is not None:
+            closed.append(slot)
+            continue
+        after = bisect.bisect_right(starts, slot.start)
+        stop = min(starts[after] if after < len(starts) else slot.start + block, end)
+        if stop > start:
+            closed.append(replace(slot, stop=stop))
+    return closed
 
 
 def _fill(channel: Channel, slots: list[Slot], start: datetime, end: datetime, zone: tzinfo | None) -> list[Slot]:
@@ -512,7 +565,7 @@ class Guide:
         saved = self._path.parent / "feeds"
         reuse = self._loaded if retry else frozenset()
         local = moment.astimezone(self._zone) if self._zone else moment
-        built = build(lineup, local, self._days, _reusing(self._downloader, saved, reuse), saved)
+        built = build(lineup, local, self._days, self._downloader, Copies(saved, reuse))
         self._loaded = reuse | built.loaded
         data = built.data
         self._data = data

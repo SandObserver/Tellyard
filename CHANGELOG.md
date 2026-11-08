@@ -32,6 +32,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Report in `tellyard check` the height of the video that plays. A source with several video streams reported the tallest one.
 - Skip a variant with a malformed address. The whole channel failed.
 - Refuse playlists that list more than 1024 addresses. Reading one took up to 16 seconds per request.
+- Keep the guide of every channel when one guide source uses a multi-byte encoding such as Shift_JIS or GBK. The whole guide stopped updating.
+- Read guide shows without an end time. They end when the next show starts. Such a source gave only placeholder blocks.
+- Stop the last good copy of a guide source from bringing back shows that the source moved or dropped.
+- Stop the last good copy of a guide source from growing with every retry.
+- Keep the last good copy of a guide source whole when the source has a comment after its end.
+- Rebuild the guide 15 minutes after a failed rebuild that followed a change to `channels.toml`. New channels were missing until the next scheduled rebuild.
+- Log `guide source has no current listings` for an id the source dropped, also when the last good copy still has shows for it.
 
 ### Security
 

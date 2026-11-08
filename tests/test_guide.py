@@ -127,9 +127,9 @@ def test_failed_source_uses_the_last_good_copy(tmp_path: Path, caplog: pytest.Lo
 
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
-    fresh = guide.build(channel, NOW, 1, serving(SOURCE), saved)
+    fresh = guide.build(channel, NOW, 1, serving(SOURCE), guide.Copies(saved))
     assert fresh.failed == 0
-    later = guide.build(channel, NOW, 1, broken, saved)
+    later = guide.build(channel, NOW, 1, broken, guide.Copies(saved))
     assert later.failed == 1
     assert later.data == fresh.data
     assert "using the last good copy" in caplog.text
@@ -139,19 +139,19 @@ def test_failed_source_uses_the_last_good_copy(tmp_path: Path, caplog: pytest.Lo
 def test_unreadable_copy_falls_back_to_placeholders(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
-    guide.build(channel, NOW, 1, serving(SOURCE), saved)
+    guide.build(channel, NOW, 1, serving(SOURCE), guide.Copies(saved))
     for kept in saved.iterdir():
         kept.write_text("<tv><")
-    items = programmes(guide.build(channel, NOW, 1, serving("<tv><"), saved).data)
+    items = programmes(guide.build(channel, NOW, 1, serving("<tv><"), guide.Copies(saved)).data)
     assert {item.findtext("title") for item in items} == {"atv"}
     assert "using placeholders" in caplog.text
 
 
 def test_copies_of_removed_sources_are_deleted(tmp_path: Path) -> None:
     saved = tmp_path / "feeds"
-    guide.build(lineup(xmltv="https://a.example.com/x", id="ATV.tr"), NOW, 1, serving(SOURCE), saved)
+    guide.build(lineup(xmltv="https://a.example.com/x", id="ATV.tr"), NOW, 1, serving(SOURCE), guide.Copies(saved))
     first = {kept.name for kept in saved.iterdir()}
-    guide.build(lineup(xmltv="https://b.example.com/x", id="ATV.tr"), NOW, 1, serving(SOURCE), saved)
+    guide.build(lineup(xmltv="https://b.example.com/x", id="ATV.tr"), NOW, 1, serving(SOURCE), guide.Copies(saved))
     second = {kept.name for kept in saved.iterdir()}
     assert len(first) == len(second) == 1
     assert first != second
@@ -160,7 +160,9 @@ def test_copies_of_removed_sources_are_deleted(tmp_path: Path) -> None:
 def test_copy_not_saved_is_logged(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     saved = tmp_path / "feeds"
     saved.write_text("not a folder")
-    data = guide.build(lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr"), NOW, 1, serving(SOURCE), saved)
+    data = guide.build(
+        lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr"), NOW, 1, serving(SOURCE), guide.Copies(saved)
+    )
     assert data.failed == 0
     assert "guide source copy not saved" in caplog.text
 
@@ -338,7 +340,7 @@ def bulk(path: Path, parts: list[bytes]) -> None:
 
 
 def read_feed(path: Path) -> list[str]:
-    found = guide._read(path, {"ATV.tr": ["201"]}, NOW - timedelta(days=1), NOW + timedelta(days=1))
+    found = guide._read(path, {"ATV.tr": ["201"]}, (NOW - timedelta(days=1), NOW + timedelta(days=1)))
     return [slot.element.findtext("title") or "" for slot in found["201"] if slot.element is not None]
 
 
@@ -477,7 +479,9 @@ def test_unreadable_copies_folder_falls_back(tmp_path: Path) -> None:
     saved.mkdir()
     saved.chmod(0o000)
     try:
-        built = guide.build(lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr"), NOW, 1, broken, saved)
+        built = guide.build(
+            lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr"), NOW, 1, broken, guide.Copies(saved)
+        )
     finally:
         saved.chmod(0o755)
     assert built.failed == 1
@@ -486,13 +490,13 @@ def test_unreadable_copies_folder_falls_back(tmp_path: Path) -> None:
 def test_source_without_listings_keeps_the_last_good_copy(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
-    fresh = guide.build(channel, NOW, 1, serving(SOURCE), saved)
-    empty = guide.build(channel, NOW, 1, serving("<tv></tv>"), saved)
+    fresh = guide.build(channel, NOW, 1, serving(SOURCE), guide.Copies(saved))
+    empty = guide.build(channel, NOW, 1, serving("<tv></tv>"), guide.Copies(saved))
     assert empty.data == fresh.data
     assert empty.failed == 0
     reasons = [record.__dict__.get("reason") for record in caplog.records if "unreadable" not in record.getMessage()]
     assert reasons == ["no current listings"]
-    assert guide.build(channel, NOW, 1, serving("<tv><"), saved).data == fresh.data
+    assert guide.build(channel, NOW, 1, serving("<tv><"), guide.Copies(saved)).data == fresh.data
 
 
 def test_sources_that_fail_the_same_way_again_are_not_retried_soon() -> None:
@@ -582,10 +586,10 @@ def shows(data: bytes, channel_id: str, name: str) -> list[str]:
 def test_shorter_source_keeps_later_shows_from_the_copy(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
-    guide.build(channel, NOW, 1, serving(LONG), saved)
+    guide.build(channel, NOW, 1, serving(LONG), guide.Copies(saved))
     short = feed(("ATV.tr", "20261011150000", "20261011180000", "Dizi long cut"))
     caplog.set_level("INFO")
-    built = guide.build(channel, NOW, 1, serving(short), saved)
+    built = guide.build(channel, NOW, 1, serving(short), guide.Copies(saved))
     assert shows(built.data, "tellyard.201", "atv") == ["Dizi long cut", "Gece"]
     assert "adding the later shows from the copy" in caplog.text
     [kept] = saved.iterdir()
@@ -602,13 +606,15 @@ def test_copy_keeps_the_shows_after_the_window_while_the_source_stays_short(tmp_
         ("ATV.tr", "20261012100000", "20261012200000", "Iki"),
         ("ATV.tr", "20261013100000", "20261013200000", "Uc"),
     )
-    guide.build(channel, NOW, 1, serving(days), saved)
-    built = guide.build(channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011180000", "Kisa"))), saved)
+    guide.build(channel, NOW, 1, serving(days), guide.Copies(saved))
+    built = guide.build(
+        channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011180000", "Kisa"))), guide.Copies(saved)
+    )
     assert shows(built.data, "tellyard.201", "atv") == ["Kisa", "Iki"]
     assert window(programmes(built.data))[1] == "20261012153000 +0000"
     later = NOW + timedelta(days=1)
     built = guide.build(
-        channel, later, 1, serving(feed(("ATV.tr", "20261012150000", "20261012180000", "Yarin"))), saved
+        channel, later, 1, serving(feed(("ATV.tr", "20261012150000", "20261012180000", "Yarin"))), guide.Copies(saved)
     )
     assert shows(built.data, "tellyard.201", "atv") == ["Yarin", "Uc"]
 
@@ -617,9 +623,15 @@ def test_copy_drops_shows_far_after_the_window(tmp_path: Path) -> None:
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
     guide.build(
-        channel, NOW, 1, serving(feed(*LONG_SHOWS[:1], ("ATV.tr", "30001011150000", "30001011160000", "Uzak"))), saved
+        channel,
+        NOW,
+        1,
+        serving(feed(*LONG_SHOWS[:1], ("ATV.tr", "30001011150000", "30001011160000", "Uzak"))),
+        guide.Copies(saved),
     )
-    guide.build(channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011160000", "Kisa"))), saved)
+    guide.build(
+        channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011160000", "Kisa"))), guide.Copies(saved)
+    )
     [kept] = saved.iterdir()
     assert "Uzak" not in kept.read_text()
 
@@ -628,20 +640,24 @@ def test_channel_missing_from_the_source_keeps_its_shows_from_the_copy(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     saved = tmp_path / "feeds"
-    guide.build(two_channels(), NOW, 1, serving(LONG), saved)
+    guide.build(two_channels(), NOW, 1, serving(LONG), guide.Copies(saved))
     built = guide.build(
-        two_channels(), NOW, 1, serving(feed(*[show for show in LONG_SHOWS if show[0] == "ATV.tr"])), saved
+        two_channels(),
+        NOW,
+        1,
+        serving(feed(*[show for show in LONG_SHOWS if show[0] == "ATV.tr"])),
+        guide.Copies(saved),
     )
     assert shows(built.data, "tellyard.202", "kanal d") == ["Kanal D gece"]
-    assert "no current listings" not in caplog.text
+    assert "no current listings" in caplog.text
 
 
 def test_source_that_reaches_as_far_replaces_the_copy(tmp_path: Path) -> None:
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
-    guide.build(channel, NOW, 1, serving(LONG), saved)
+    guide.build(channel, NOW, 1, serving(LONG), guide.Copies(saved))
     newer = feed(("ATV.tr", "20261011150000", "20261012050000", "Maraton"))
-    built = guide.build(channel, NOW, 1, serving(newer), saved)
+    built = guide.build(channel, NOW, 1, serving(newer), guide.Copies(saved))
     assert shows(built.data, "tellyard.201", "atv") == ["Maraton"]
     [kept] = saved.iterdir()
     assert "Maraton" in kept.read_text()
@@ -653,12 +669,14 @@ def test_placeholder_warning_names_the_state_of_the_copy(tmp_path: Path, caplog:
 
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
-    guide.build(channel, NOW, 1, broken, saved)
-    guide.build(channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011160000", "Short"))), saved)
-    guide.build(channel, NOW + timedelta(hours=3), 1, broken, saved)
+    guide.build(channel, NOW, 1, broken, guide.Copies(saved))
+    guide.build(
+        channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011160000", "Short"))), guide.Copies(saved)
+    )
+    guide.build(channel, NOW + timedelta(hours=3), 1, broken, guide.Copies(saved))
     for kept in saved.iterdir():
         kept.write_text("<tv><")
-    guide.build(channel, NOW, 1, broken, saved)
+    guide.build(channel, NOW, 1, broken, guide.Copies(saved))
     copies = [record.__dict__["copy"] for record in caplog.records if record.getMessage().endswith("placeholders")]
     assert copies[0] == "none"
     assert copies[1] == "no current listings"
@@ -709,13 +727,13 @@ def test_failed_download_after_borrowing_uses_the_newer_download(tmp_path: Path)
         raise FetchError("epg.example.com: HTTP 503")
 
     saved = tmp_path / "feeds"
-    guide.build(two_channels(), NOW, 1, serving(LONG), saved)
+    guide.build(two_channels(), NOW, 1, serving(LONG), guide.Copies(saved))
     newer = feed(
         ("ATV.tr", "20261011150000", "20261011180000", "Yeni"),
         ("KANALD.tr", "20261011150000", "20261012050000", "Yeni K"),
     )
-    guide.build(two_channels(), NOW, 1, serving(newer), saved)
-    built = guide.build(two_channels(), NOW + timedelta(hours=1), 1, broken, saved)
+    guide.build(two_channels(), NOW, 1, serving(newer), guide.Copies(saved))
+    built = guide.build(two_channels(), NOW + timedelta(hours=1), 1, broken, guide.Copies(saved))
     assert shows(built.data, "tellyard.201", "atv") == ["Yeni", "Gece"]
     assert shows(built.data, "tellyard.202", "kanal d") == ["Yeni K"]
 
@@ -726,13 +744,13 @@ def test_dropped_channel_with_an_endless_show_is_not_kept_forever(tmp_path: Path
         ("ATV.tr", "20261011150000", "20261012150000", "ATV day"),
         ("KANALD.tr", "20261011150000", "99991231000000", "Endless"),
     )
-    guide.build(two_channels(), NOW, 1, serving(first), saved)
+    guide.build(two_channels(), NOW, 1, serving(first), guide.Copies(saved))
     for day in (1, 2):
         moment = NOW + timedelta(days=day)
         fresh = feed(
             ("ATV.tr", moment.strftime("%Y%m%d%H%M%S"), (moment + timedelta(days=2)).strftime("%Y%m%d%H%M%S"), "ATV")
         )
-        built = guide.build(two_channels(), moment, 1, serving(fresh), saved)
+        built = guide.build(two_channels(), moment, 1, serving(fresh), guide.Copies(saved))
     assert shows(built.data, "tellyard.202", "kanal d") == []
     [kept] = saved.iterdir()
     assert "Endless" not in kept.read_text()
@@ -742,9 +760,9 @@ def test_compressed_source_is_saved_compressed_with_the_borrowed_shows(tmp_path:
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
     longer = feed(*LONG_SHOWS[:2], ("ATV.tr", "20261011230000", "20261012050000", "Gece Şovu"))
-    guide.build(channel, NOW, 1, serving(longer, compress=True), saved)
+    guide.build(channel, NOW, 1, serving(longer, compress=True), guide.Copies(saved))
     short = feed(("ATV.tr", "20261011150000", "20261011180000", "Kesit"))
-    guide.build(channel, NOW, 1, serving(short, compress=True), saved)
+    guide.build(channel, NOW, 1, serving(short, compress=True), guide.Copies(saved))
     [kept] = saved.iterdir()
     text = gzip.decompress(kept.read_bytes()).decode()
     assert "Kesit" in text
@@ -756,11 +774,13 @@ def test_borrowed_shows_keep_the_encoding_of_the_source(tmp_path: Path, caplog: 
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
     persian = "شب " * 7000
-    guide.build(channel, NOW, 1, serving(feed(LONG_SHOWS[0], (*LONG_SHOWS[2][:3], persian))), saved)
-    guide.build(channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011180000", "Kesit"))), saved)
+    guide.build(channel, NOW, 1, serving(feed(LONG_SHOWS[0], (*LONG_SHOWS[2][:3], persian))), guide.Copies(saved))
+    guide.build(
+        channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011180000", "Kesit"))), guide.Copies(saved)
+    )
     [kept] = saved.iterdir()
     assert len(kept.read_bytes()) < 2 * len(persian.encode())
-    built = guide.build(channel, NOW, 1, failing, saved)
+    built = guide.build(channel, NOW, 1, failing, guide.Copies(saved))
     assert shows(built.data, "tellyard.201", "atv") == ["Kesit", persian]
     assert "placeholders" not in caplog.text
 
@@ -776,24 +796,26 @@ def test_borrowed_shows_in_a_single_byte_encoding(tmp_path: Path) -> None:
 
         return download
 
-    guide.build(channel, NOW, 1, latin(feed(LONG_SHOWS[0], (*LONG_SHOWS[2][:3], "Gece Şovu"))), saved)
-    guide.build(channel, NOW, 1, latin(feed(("ATV.tr", "20261011150000", "20261011180000", "Kesit"))), saved)
+    guide.build(channel, NOW, 1, latin(feed(LONG_SHOWS[0], (*LONG_SHOWS[2][:3], "Gece Şovu"))), guide.Copies(saved))
+    guide.build(
+        channel, NOW, 1, latin(feed(("ATV.tr", "20261011150000", "20261011180000", "Kesit"))), guide.Copies(saved)
+    )
     [kept] = saved.iterdir()
     assert "Gece Şovu".encode("iso8859-9") in kept.read_bytes()
-    built = guide.build(channel, NOW, 1, failing, saved)
+    built = guide.build(channel, NOW, 1, failing, guide.Copies(saved))
     assert shows(built.data, "tellyard.201", "atv") == ["Kesit", "Gece Şovu"]
 
 
 def test_source_in_a_two_byte_encoding_is_saved_as_downloaded(tmp_path: Path) -> None:
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
-    guide.build(channel, NOW, 1, serving(LONG), saved)
+    guide.build(channel, NOW, 1, serving(LONG), guide.Copies(saved))
     short = '<?xml version="1.0" encoding="UTF-16"?>' + feed(("ATV.tr", "20261011150000", "20261011180000", "S"))
 
     def download(url: str, destination: Path) -> None:
         destination.write_text(short, "utf-16")
 
-    built = guide.build(channel, NOW, 1, download, saved)
+    built = guide.build(channel, NOW, 1, download, guide.Copies(saved))
     assert shows(built.data, "tellyard.201", "atv") == ["S", "Gece"]
     [kept] = saved.iterdir()
     assert kept.read_text("utf-16") == short
@@ -802,9 +824,9 @@ def test_source_in_a_two_byte_encoding_is_saved_as_downloaded(tmp_path: Path) ->
 def test_source_in_an_unknown_encoding_falls_back_to_the_copy(tmp_path: Path) -> None:
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
-    guide.build(channel, NOW, 1, serving(LONG), saved)
+    guide.build(channel, NOW, 1, serving(LONG), guide.Copies(saved))
     unknown = '<?xml version="1.0" encoding="x-unknown"?>' + feed(LONG_SHOWS[0])
-    built = guide.build(channel, NOW, 1, serving(unknown), saved)
+    built = guide.build(channel, NOW, 1, serving(unknown), guide.Copies(saved))
     assert shows(built.data, "tellyard.201", "atv") == ["Dizi", "Film", "Gece"]
 
 
@@ -812,9 +834,11 @@ def test_borrowed_show_that_grows_past_the_entry_limit_is_left_out(tmp_path: Pat
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
     arrows = ">" * 30000
-    guide.build(channel, NOW, 1, serving(feed(LONG_SHOWS[0], (*LONG_SHOWS[2][:3], arrows))), saved)
-    guide.build(channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011180000", "Kesit"))), saved)
-    built = guide.build(channel, NOW, 1, failing, saved)
+    guide.build(channel, NOW, 1, serving(feed(LONG_SHOWS[0], (*LONG_SHOWS[2][:3], arrows))), guide.Copies(saved))
+    guide.build(
+        channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011180000", "Kesit"))), guide.Copies(saved)
+    )
+    built = guide.build(channel, NOW, 1, failing, guide.Copies(saved))
     assert shows(built.data, "tellyard.201", "atv") == ["Kesit"]
 
 
@@ -825,9 +849,77 @@ def failing(url: str, destination: Path) -> None:
 def test_source_without_a_closing_tag_is_saved_as_downloaded(tmp_path: Path) -> None:
     saved = tmp_path / "feeds"
     channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
-    guide.build(channel, NOW, 1, serving(LONG), saved)
+    guide.build(channel, NOW, 1, serving(LONG), guide.Copies(saved))
     short = feed(("ATV.tr", "20261011150000", "20261011180000", "Short")).replace("</tv>", "</tv  >")
-    built = guide.build(channel, NOW, 1, serving(short), saved)
+    built = guide.build(channel, NOW, 1, serving(short), guide.Copies(saved))
     assert shows(built.data, "tellyard.201", "atv") == ["Short", "Gece"]
+    [kept] = saved.iterdir()
+    assert kept.read_text() == short
+
+
+@pytest.mark.parametrize("encoding", ["Shift_JIS", "GBK", "Big5", "EUC-KR"])
+def test_multi_byte_encoding_fails_only_its_source(encoding: str, caplog: pytest.LogCaptureFixture) -> None:
+    source = f'<?xml version="1.0" encoding="{encoding}"?>' + feed(LONG_SHOWS[0])
+    built = guide.build(two_channels(), NOW, 1, serving(source))
+    assert shows(built.data, "tellyard.201", "atv") == []
+    reasons = [record.__dict__.get("reason", "") for record in caplog.records]
+    assert any("multi-byte encodings are not supported" in reason for reason in reasons)
+
+
+def test_copy_does_not_bring_back_a_show_the_source_moved(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    later = ("20261012160000", "20261012170000")
+    guide.build(channel, NOW, 1, serving(feed(LONG_SHOWS[0], ("ATV.tr", *later, "Moved"))), guide.Copies(saved))
+    guide.build(channel, NOW, 1, serving(feed(LONG_SHOWS[0], ("ATV.tr", *later, "Current"))), guide.Copies(saved))
+    [kept] = saved.iterdir()
+    assert "Current" in kept.read_text()
+    assert "Moved" not in kept.read_text()
+
+
+def test_show_without_stop_ends_at_the_next_show(caplog: pytest.LogCaptureFixture) -> None:
+    source = (
+        '<tv><programme start="20261011120000 +0000" channel="ATV.tr"><title>Sabah</title></programme>'
+        '<programme start="20261011160000 +0000" channel="ATV.tr"><title>Dizi</title></programme>'
+        '<programme start="20261011170000 +0000" channel="ATV.tr"><title>Haber</title></programme></tv>'
+    )
+    built = guide.build(lineup(xmltv="https://e.example.com/x", id="ATV.tr", hours=1), NOW, 1, serving(source))
+    listed = [(item.findtext("title"), item.get("start"), item.get("stop")) for item in programmes(built.data)]
+    assert listed[:3] == [
+        ("Sabah", "20261011120000 +0000", "20261011160000 +0000"),
+        ("Dizi", "20261011160000 +0000", "20261011170000 +0000"),
+        ("Haber", "20261011170000 +0000", "20261011180000 +0000"),
+    ]
+    assert "unreadable" not in caplog.text
+
+
+def test_retry_reads_a_reused_copy_without_changing_it(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    url = "https://epg.example.com/tr.xml"
+    channel = lineup(xmltv=url, id="ATV.tr")
+    after = ("ATV.tr", "20261012200000", "20261012210000", "Sonra")
+    guide.build(channel, NOW, 1, serving(feed(*LONG_SHOWS, after)), guide.Copies(saved))
+    guide.build(
+        channel, NOW, 1, serving(feed(("ATV.tr", "20261011150000", "20261011180000", "Kisa"))), guide.Copies(saved)
+    )
+    [kept] = saved.iterdir()
+    assert kept.read_text().count("Sonra") == 1
+    before = kept.read_bytes(), kept.stat().st_mtime_ns
+
+    def unused(url: str, destination: Path) -> None:
+        raise AssertionError(url)
+
+    built = guide.build(channel, NOW, 1, unused, guide.Copies(saved, frozenset({url})))
+    assert shows(built.data, "tellyard.201", "atv") == ["Kisa", "Gece"]
+    assert (kept.read_bytes(), kept.stat().st_mtime_ns) == before
+
+
+def test_text_after_the_end_tag_saves_the_download_alone(tmp_path: Path) -> None:
+    saved = tmp_path / "feeds"
+    channel = lineup(xmltv="https://epg.example.com/tr.xml", id="ATV.tr")
+    guide.build(channel, NOW, 1, serving(LONG), guide.Copies(saved))
+    short = feed(("ATV.tr", "20261011150000", "20261011180000", "Kisa")) + "\n<!-- end </tv> -->\n"
+    built = guide.build(channel, NOW, 1, serving(short), guide.Copies(saved))
+    assert shows(built.data, "tellyard.201", "atv") == ["Kisa", "Gece"]
     [kept] = saved.iterdir()
     assert kept.read_text() == short
