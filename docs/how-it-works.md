@@ -41,16 +41,16 @@ Tellyard fetches every page, playlist, key and video segment itself. ffmpeg rece
 Tellyard publishes an XMLTV guide at `/guide.xml` for `GUIDE_DAYS` days, starting two hours back.
 
 - A channel with `[channel.guide] xmltv` and `id` gets its shows from that XMLTV source. Each source is downloaded once per rebuild, however many channels use it.
-- If two shows in a source overlap, the earlier one ends when the next one starts.
+- If two shows in a source overlap, the earlier one ends when the next one starts. A show without an end time also ends when the next one starts, or after one placeholder block when it is the last.
 - Every gap, and every channel without a guide, gets placeholder blocks of `hours` length, aligned to the clock in `TZ`, or UTC when it is not set or not a known time zone name. On a daylight saving change, the blocks around the change can be longer or shorter than the rest. Their title is the channel name unless `title` says otherwise.
-- Every entry gets a category, and every entry that is not a movie gets an episode number with its air date, so Plex files it as a TV episode.
+- An entry without a category gets the channel's `category`, when it is set. Every entry that is not a movie gets an episode number with its air date, so Plex files it as a TV episode.
 - The channel logo is the `logo` URL as written. Shows keep the pictures their source guide gives them; placeholder blocks have none.
 
 The guide is rebuilt every `GUIDE_REFRESH_HOURS` hours and within a minute of a change to `channels.toml`. If a rebuild fails, Tellyard keeps the last guide and tries again 15 minutes later.
 
-Tellyard keeps the last good copy of each guide source in `/data/feeds`. When a source fails, its channels use that copy, or placeholder blocks when there is none. A source fails when it cannot be downloaded, is not valid XMLTV, is larger than 256 MB to download or 1 GB unpacked, declares its own XML entities, has an entry larger than 64 KB or nested more than 8 levels deep, or has more than 32 MB of shows for your channels. A source with no current shows for any of your channels also keeps the last good copy. When a new download ends earlier for a channel than the last good copy, or lacks the channel, the later shows come from the copy and are saved with the new download. A show that started before the guide window, or starts more than 30 days after it, is not taken from the copy.
+Tellyard keeps the last good copy of each guide source in `/data/feeds`. When a source fails, its channels use that copy, or placeholder blocks when there is none. A source fails when it cannot be downloaded, is not valid XMLTV, is larger than 256 MB to download or 1 GB unpacked, declares its own XML entities, uses a multi-byte encoding other than UTF-8 or UTF-16 (such as Shift_JIS or GBK), has an entry larger than 64 KB or nested more than 8 levels deep, or has more than 32 MB of shows for your channels. A source with no current shows for any of your channels also keeps the last good copy. When a new download ends earlier for a channel than the last good copy, or lacks the channel, the later shows come from the copy and are saved with the new download. A show that started before the guide window, or starts more than 30 days after it, is not taken from the copy.
 
-After a failed download or unreadable file, Tellyard downloads only that source again 15 minutes later, and keeps doing so until it works. The other sources are downloaded at the next scheduled rebuild. A source that is too large or declares entities is not tried again before the next scheduled rebuild.
+After a failed download or unreadable file, Tellyard downloads only that source again 15 minutes later, and keeps doing so until it works. The other sources are downloaded at the next scheduled rebuild. A source that is too large, declares entities or uses such an encoding is not tried again before the next scheduled rebuild.
 
 Tellyard serves no images itself. Tools such as [Posteryard](https://github.com/SandObserver/Posteryard) can add posters to the Plex guide.
 

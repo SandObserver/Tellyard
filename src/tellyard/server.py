@@ -218,9 +218,9 @@ class App:
             self._guide_failed_at = moment
         else:
             self._guide_failed_at = None
+            self._guide_version = version
             if not retry:
                 self._guide_full_at = moment
-        self._guide_version = version
 
     def start(self, stop: threading.Event) -> None:
         self._guide_thread = threading.Thread(target=self.guide_loop, args=(stop,), name="guide", daemon=True)

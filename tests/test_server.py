@@ -342,6 +342,28 @@ def test_failed_guide_rebuild_waits_before_retrying(
     assert "guide rebuild failed" in caplog.text
 
 
+def test_channel_change_after_a_failed_rebuild_is_built_soon(
+    app: App, channels_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    now = datetime(2026, 10, 11, 12, tzinfo=UTC)
+    app.refresh_guide(now)
+    calls: list[datetime] = []
+    rebuild = app.guide.rebuild
+
+    def failing_once(lineup: Lineup, moment: datetime, retry: bool = False) -> None:
+        calls.append(moment)
+        if len(calls) == 1:
+            raise RuntimeError("disk full")
+        rebuild(lineup, moment, retry)
+
+    monkeypatch.setattr(app.guide, "rebuild", failing_once)
+    channels_file.write_text(channels_file.read_text(encoding="utf-8").replace("Drama", "Comedy"), encoding="utf-8")
+    app.refresh_guide(now + timedelta(minutes=1))
+    app.refresh_guide(now + timedelta(minutes=17))
+    assert calls == [now + timedelta(minutes=1), now + timedelta(minutes=17)]
+    assert b"Comedy" in (app.guide.data or b"")
+
+
 def test_guide_loop_stops(app: App) -> None:
     stop = threading.Event()
     stop.set()
