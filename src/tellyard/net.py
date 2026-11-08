@@ -256,7 +256,14 @@ def fetch_text(
             body += block
     if len(body) > TEXT_LIMIT:
         raise TooLargeError(f"{safe_url(url)}: response is larger than {TEXT_LIMIT // 1024 // 1024} MB")
+    _require_whole(response, url)
     return final, body.decode("utf-8", errors="replace")
+
+
+def _require_whole(response: http.client.HTTPResponse, url: str) -> None:
+    # http.client reports no error when a server closes before the declared length.
+    if response.length:
+        raise FetchError(f"{safe_url(url)}: the connection closed before the end of the response")
 
 
 def read_block(response: http.client.HTTPResponse, size: int) -> bytes:
@@ -281,6 +288,7 @@ def download(
                 if total > DOWNLOAD_LIMIT:
                     raise TooLargeError(f"{safe_url(url)}: file is larger than {DOWNLOAD_LIMIT // 1024 // 1024} MB")
                 out.write(chunk)
+        _require_whole(response, url)
         partial.replace(destination)
     except OSError as error:
         raise FetchError(f"{safe_url(url)}: {_reason(error)}") from error

@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Treat a response that ends before its declared length as a failed request. A cut playlist was used as if it were whole.
 - Ignore the body of a redirect. A large one could use all of Tellyard's memory.
 - Refuse playlists with an address longer than 16 KB. Long addresses could fill memory during a stream.
 - Clean long yt-dlp error lines for the log without delay. One such line could freeze every stream for minutes.
