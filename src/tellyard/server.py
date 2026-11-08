@@ -225,15 +225,24 @@ class App:
     def start(self, stop: threading.Event) -> None:
         self._guide_thread = threading.Thread(target=self.guide_loop, args=(stop,), name="guide", daemon=True)
         self._guide_thread.start()
+        if self.settings.heartbeat_url:
+            threading.Thread(target=self.heartbeat_loop, args=(stop,), name="heartbeat", daemon=True).start()
 
     def guide_loop(self, stop: threading.Event) -> None:
         while not stop.is_set():
             try:
                 self.refresh_guide()
-                self.heartbeat()
             except Exception:
                 log.exception("guide check failed", extra={"retry_s": round(GUIDE_CHECK)})
             stop.wait(GUIDE_CHECK)
+
+    def heartbeat_loop(self, stop: threading.Event) -> None:
+        while not stop.is_set():
+            try:
+                self.heartbeat()
+            except Exception:
+                log.exception("heartbeat failed", extra={"retry_s": round(HEARTBEAT_SECONDS)})
+            stop.wait(HEARTBEAT_SECONDS)
 
     def heartbeat(self) -> None:
         now = time.monotonic()
