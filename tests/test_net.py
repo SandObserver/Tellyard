@@ -35,6 +35,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.flush()
                 time.sleep(0.2)
             return
+        if self.path == "/cut":
+            self.send_response(200)
+            self.send_header("Content-Length", "1000")
+            self.end_headers()
+            self.wfile.write(b"#EXTM3U\n")
+            return
         if self.path == "/pieces":
             self.send_response(200)
             self.send_header("Transfer-Encoding", "chunked")
@@ -117,6 +123,18 @@ def test_download_errors_leave_no_partial_file(base: str, tmp_path: Path, monkey
     monkeypatch.setattr(net, "CHUNK", 512)
     with pytest.raises(FetchError, match="larger than"):
         net.download(f"{base}/big", target, net.trust_of([base]))
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_fetch_text_refuses_a_cut_response(base: str) -> None:
+    with pytest.raises(FetchError, match="closed before the end"):
+        net.fetch_text(f"{base}/cut", trust=net.trust_of([base]))
+
+
+def test_download_refuses_a_cut_response(base: str, tmp_path: Path) -> None:
+    destination = tmp_path / "guide.xml"
+    with pytest.raises(FetchError, match="closed before the end"):
+        net.download(f"{base}/cut", destination, net.trust_of([base]))
     assert list(tmp_path.iterdir()) == []
 
 
