@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Treat a response that ends before its declared length as a failed request. A cut playlist was used as if it were whole.
 - Ignore the body of a redirect. A large one could use all of Tellyard's memory.
+- Use the new title of a last show without an end time. The last good copy kept the old one.
+- Stop downloading a guide source that is too large or unreadable on every retry when it has no saved copy.
 - Refuse guide sources that declare XML entities in any encoding. One in UTF-16 could use more memory than the container has.
 - Refuse playlists with an address longer than 16 KB. Long addresses could fill memory during a stream.
 - Clean long yt-dlp error lines for the log without delay. One such line could freeze every stream for minutes.
