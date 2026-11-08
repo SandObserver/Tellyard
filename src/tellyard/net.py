@@ -43,7 +43,10 @@ TLS.set_alpn_protocols(["http/1.1"])
 TLS.post_handshake_auth = True
 
 # Stream URLs carry credentials, and signed ones carry tokens in the path and the query.
-URL = re.compile(r"(?P<scheme>\b[a-z][a-z0-9+.-]*://)(?:[^/\s?#@'\"]*@)?(?P<host>[^/\s?#'\"]+)[^\s'\"]*", re.IGNORECASE)
+# The scheme length is capped. Without the cap, one long error line blocks every thread for minutes.
+URL = re.compile(
+    r"(?P<scheme>[a-z][a-z0-9+.-]{0,31}://)(?:[^/\s?#@'\"]*@)?(?P<host>[^/\s?#'\"]+)[^\s'\"]*", re.IGNORECASE
+)
 
 NAT64 = ipaddress.IPv6Network("64:ff9b::/96")
 IPV4_COMPATIBLE = ipaddress.IPv6Network("::/96")
@@ -625,6 +628,9 @@ class _Redirects(urllib.request.HTTPRedirectHandler):
         if scheme not in SCHEMES:
             raise urllib.error.URLError(f"refused a redirect to a {scheme or 'relative'} address")
         new = super().redirect_request(req, fp, code, msg, headers, newurl)  # type: ignore[arg-type]
+        # urllib reads the whole body of a redirect, with no limit. Closing first leaves it nothing to read.
+        if new is not None and fp is not None:
+            fp.close()  # type: ignore[attr-defined]
         if new is not None and not self._trust.sends_credentials(newurl):
             for name in [name for name in new.headers if name.lower() in CREDENTIAL_HEADERS]:
                 del new.headers[name]

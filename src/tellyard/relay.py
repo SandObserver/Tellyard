@@ -19,6 +19,7 @@ PLAYLIST_DEADLINE = 15.0
 SEGMENT_DEADLINE = 60.0
 SOCKET_TIMEOUT = 30.0
 ENTRIES = 1024
+ADDRESS_LIMIT = 16 * 1024
 LIVE_SEGMENTS = 30
 CHUNK = 64 * 1024
 NAME_LENGTH = 100
@@ -47,6 +48,9 @@ def rewrite(text: str, base: str, address: Address) -> str:
     seen: dict[tuple[str, bool], str] = {}
 
     def local(url: str, playlist: bool) -> str:
+        # The feed keeps every address it holds. Long ones would fill memory.
+        if len(url) > ADDRESS_LIMIT:
+            raise PlaylistError(f"the playlist has an address longer than {ADDRESS_LIMIT // 1024} KB")
         # The feed holds ENTRIES addresses. A longer list would push out addresses ffmpeg still needs.
         if (url, playlist) not in seen:
             if len(seen) >= ENTRIES:

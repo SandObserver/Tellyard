@@ -312,3 +312,16 @@ def test_rewrite_splits_lines_at_nul_like_ffmpeg() -> None:
 def test_rewrite_refuses_invalid_addresses() -> None:
     with pytest.raises(PlaylistError, match="invalid address"):
         rewrite("#EXTM3U\nhttp://[::1/seg.ts\n", "https://cdn.example.com/live/media.m3u8", lambda url, playlist: url)
+
+
+def test_rewrite_refuses_addresses_too_long_to_keep() -> None:
+    long = "seg.ts?" + "x" * relay_module.ADDRESS_LIMIT
+    with pytest.raises(PlaylistError, match="longer than 16 KB"):
+        rewrite(f"#EXTM3U\n#EXTINF:2,\n{long}\n", "https://cdn.example.com/a/", lambda url, playlist: url)
+
+
+def test_rewrite_keeps_long_signed_addresses() -> None:
+    signed = "seg.ts?" + "x" * 8000
+    assert signed in rewrite(
+        f"#EXTM3U\n#EXTINF:2,\n{signed}\n", "https://cdn.example.com/a/", lambda url, playlist: url
+    )

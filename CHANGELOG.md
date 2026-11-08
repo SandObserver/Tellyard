@@ -18,6 +18,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Ignore the body of a redirect. A large one could use all of Tellyard's memory.
+- Refuse playlists with an address longer than 16 KB. Long addresses could fill memory during a stream.
+- Clean long yt-dlp error lines for the log without delay. One such line could freeze every stream for minutes.
 - Accept a proxy setting without `http://`, such as `http_proxy=192.168.1.5:3128`. Every request was refused.
 - Free the tuner within a second when the viewer leaves during a page, token or playlist request. It stayed taken for up to 30 seconds.
 - Free the tuner within a second when the viewer leaves while Tellyard connects to a source that does not answer. It stayed taken for 10 seconds per address of the source.

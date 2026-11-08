@@ -531,3 +531,27 @@ def test_cancel_runs_hooks_only_while_they_are_registered() -> None:
     with cancel.on_set(lambda: calls.append("already set")):
         pass
     assert calls == ["set", "already set"]
+
+
+def test_redact_takes_linear_time_on_dotted_text() -> None:
+    started = time.process_time()
+    net.redact("a." * 32768)
+    assert time.process_time() - started < 1.0
+
+
+def test_redact_finds_an_address_after_a_long_run_of_letters() -> None:
+    assert net.redact("x" * 100 + "https://cdn.example.com/a?token=secret") == "x" * 100 + "https://cdn.example.com"
+
+
+def test_a_redirect_body_is_not_read() -> None:
+    class Body:
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    body = Body()
+    url = "http://tv.example.com/a"
+    request = urllib.request.Request(url)
+    assert net._Redirects(net.trust_of([url])).redirect_request(request, body, 302, "Found", {}, url + "b")
+    assert body.closed
