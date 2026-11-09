@@ -149,8 +149,8 @@ def _external(
     loaded: set[str] = set()
     for url, ids in wanted.items():
         kept = copies.folder / _saved_name(url) if copies else None
-        if copies and kept and url in copies.reuse and kept.is_file():
-            found, ok = _load(url, ids, (start, end), _copying(kept), None)
+        if copies and kept and url in copies.reuse:
+            found, ok = _load(url, ids, (start, end), _copying(kept), None) if kept.is_file() else (None, True)
         else:
             found, ok = _load(url, ids, (start, end), downloader, kept)
         if ok:
@@ -179,7 +179,12 @@ def _load(
             return _checked(url, ids, _read_saved(kept, url, ids, span) or found), True
         _checked(url, ids, found)
         if kept:
-            added, borrowed = _extend(ends, kept, url, ids, span)
+            added, borrowed = _extend(found, ends, kept, ids, span)
+            if added:
+                log.info(
+                    "guide source ends before its last good copy, adding the later shows from the copy",
+                    extra={"url": safe_url(url), "shows": sum(len(slots) for slots in added.values())},
+                )
             for number, slots in added.items():
                 found[number].extend(slots)
             _save(path, kept, borrowed)
@@ -195,7 +200,11 @@ def _checked(url: str, ids: dict[str, list[str]], found: dict[str, list[Slot]] |
 
 
 def _extend(
-    ends: dict[str, datetime], kept: Path, url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime]
+    found: dict[str, list[Slot]],
+    ends: dict[str, datetime],
+    kept: Path,
+    ids: dict[str, list[str]],
+    span: tuple[datetime, datetime],
 ) -> tuple[dict[str, list[Slot]], list[ET.Element]]:
     try:
         # Read past the window, so the merged copy keeps the later days.
@@ -207,16 +216,12 @@ def _extend(
     for number, slots in saved.items():
         # Borrow only shows after the end of the new download and inside the window, or dropped and old shows return.
         last = max(ends.get(number, span[0]), span[0])
-        later = [slot for slot in slots if slot.start >= last]
+        current = {slot.start for slot in found.get(number, [])}
+        later = [slot for slot in slots if slot.start >= last and slot.start not in current]
         shown = [replace(slot, stop=min(slot.stop, span[1])) for slot in later if slot.start < span[1]]
         if shown:
             added[number] = shown
         borrowed += [slot.element for slot in later if slot.element is not None]
-    if added:
-        log.info(
-            "guide source ends before its last good copy, adding the later shows from the copy",
-            extra={"url": safe_url(url), "shows": sum(len(slots) for slots in added.values())},
-        )
     return added, borrowed
 
 

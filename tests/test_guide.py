@@ -452,6 +452,44 @@ def test_entity_declarations_stop_a_utf16_feed(tmp_path: Path) -> None:
         guide._read(path, {"ATV.tr": ["201"]}, (NOW, NOW + timedelta(days=1)))
 
 
+def test_a_retry_skips_a_lasting_failure_without_a_saved_copy(tmp_path: Path) -> None:
+    calls: list[str] = []
+
+    def download(url: str, destination: Path) -> None:
+        calls.append(url)
+        raise TooLargeError("a: too large") if "a." in url else FetchError("b: HTTP 503")
+
+    entries = [
+        {"number": number, "name": name, "logo": "https://example.com/l.png", "hls": "https://cdn.example.com/x.m3u8",
+         "guide": {"xmltv": url, "id": "ATV.tr"}}
+        for number, name, url in [(201, "atv", "https://a.example.com/x"), (202, "show", "https://b.example.com/x")]
+    ]  # fmt: skip
+    both = channels.parse({"channel": entries})
+    cache = guide.Guide(tmp_path / "guide.xml", 1, download)
+    cache.rebuild(both, NOW)
+    calls.clear()
+    cache.rebuild(both, NOW, retry=True)
+    assert calls == ["https://b.example.com/x"]
+
+
+def test_the_new_download_wins_for_a_show_without_a_stop_time(tmp_path: Path) -> None:
+    title = ["To be announced"]
+
+    def download(url: str, destination: Path) -> None:
+        destination.write_text(
+            f'<tv><programme start="20261011200000 +0000" channel="ATV.tr"><title>{title[0]}</title></programme></tv>'
+        )
+
+    line = lineup(xmltv="https://a.example.com/x", id="ATV.tr")
+    cache = guide.Guide(tmp_path / "guide.xml", 1, download)
+    cache.rebuild(line, NOW)
+    title[0] = "Real title"
+    cache.rebuild(line, NOW)
+    data = cache.data or b""
+    assert b"Real title" in data
+    assert b"To be announced" not in data
+
+
 def test_doctype_without_entities_is_read(tmp_path: Path) -> None:
     path = tmp_path / "feed.xml.gz"
     bulk(path, [b'<?xml version="1.0"?>\n<!DOCTYPE tv SYSTEM "xmltv.dtd">\n<tv>', ENTRY, b"</tv>"])
