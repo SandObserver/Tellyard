@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Bring the landing page guide in with one short entrance and speed up its menus, install steps and press feedback.
+
+### Fixed
+
+- Stop the landing page from scrolling sideways on 320 pixel screens and with long translated text.
+- Show the full keyboard focus ring on landing page code boxes and picker menus.
+- Keep gentle fades for reduced motion, follow the increased contrast setting and say when copying is blocked.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added

@@ -9,10 +9,12 @@
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <style>
       :root { color-scheme: dark; }
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-align: center; }
+      body { margin: 0; min-height: 100svh; display: grid; place-items: center; padding: 16px; background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; text-align: center; }
       h1 { margin: 16px 0 8px; font-size: 28px; }
       p { margin: 0 0 24px; color: #a3a3a8; }
-      a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 22px; background: #d70015; color: #fff; font-weight: 600; text-decoration: none; }
+      a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 22px; background: #d70015; color: #fff; font-weight: 600; text-decoration: none; touch-action: manipulation; transition: transform 0.16s cubic-bezier(0.32, 0.72, 0, 1); }
+      a:active { transform: scale(0.97); transition-duration: 0.1s; }
+      @media (prefers-reduced-motion: reduce) { a { transition: none; } a:active { transform: none; } }
     </style>
   </head>
   <body>
