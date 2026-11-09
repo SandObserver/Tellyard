@@ -13,38 +13,61 @@
   <Overview>A live TV tuner for Plex and Jellyfin that you'll forget is running.[br][br]Tellyard shows up in Plex and Jellyfin as a network tuner. You list your channels in one file. When someone tunes in, Tellyard finds the channel's live stream on YouTube, Twitch, a broadcaster's page or an HLS address and passes it on without re-encoding. When they stop watching, it stops. The guide merges XMLTV schedules with placeholder blocks, so it is never empty.[br][br]Tellyard ships no channels. It starts with an empty line-up: put your channels.toml in /mnt/user/appdata/tellyard/config and it is loaded within a minute. Then add the tuner in Plex at UNRAID-IP:5004 and the guide at http://UNRAID-IP:5004/guide.xml.</Overview>
   <Requires>Plex or Jellyfin, and a channels.toml listing the live streams you may watch. Tellyard ships no channels.</Requires>
   <Changes>
-### 0.1.3 - 2026-11-01
+### 0.2.0 - 2026-11-09
+
+#### Added
+
+- Add `allow` for a channel: other `host:port` addresses on your home network that its stream uses.
 
 #### Changed
 
-- Stop yt-dlp from sending a made-up address in another country to sites that limit streams by region. A `live` channel limited to another region now fails with the site's region error.
-- Start guide placeholder blocks at local midnight in `TZ` instead of UTC. A `TZ` that is not a known time zone name logs a warning and keeps UTC.
+- Refuse proxy options in `YTDLP_ARGS`. yt-dlp now uses `http_proxy` or `https_proxy` through Tellyard, and no longer `all_proxy`.
+- Stop yt-dlp from loading its config files and plugins. Set yt-dlp options in `YTDLP_ARGS`.
+- Stop every stream when Tellyard stops, and wait up to 8 seconds for them to end.
 
 #### Fixed
 
-- Report the error yt-dlp gives when a stream cannot be opened, such as a region limit, instead of its last hint line.
-- Read guide times that name their time zone as `UTC` or `GMT`. Log the entries whose times cannot be read.
-- Keep building the guide when a guide source lists a show that ends far in the future. All channels lost their guide.
-- Rebuild the guide after the system clock is set back. It stopped updating until the clock caught up.
-- Read guide times that have no space before the time zone offset. They were read as UTC.
-- Read guide times without seconds or minutes, such as `202610111530 +0300`. They were read at the wrong time.
-- Log the time the last good copy of a guide source was downloaded, also after a retry.
-- Play streams and pass the container health check when `http_proxy` is set. Both sent requests meant for Tellyard itself to the proxy.
-- Refuse a guide source with an entry nested more than 8 levels deep. A few such entries made the guide hundreds of megabytes.
-- Play HLS streams whose master playlist starts with a blank line.
-- Keep the later shows of the last good copy of a guide source when a new download ends earlier or lacks a channel. Those hours showed placeholder blocks until the next rebuild.
-- Log why the last good copy of a guide source was not used when a channel falls back to placeholder blocks.
-- Keep the last good copy of a guide source readable when it holds shows with long text in a non-Latin script. Those channels showed placeholder blocks when the source failed.
-- Keep updating the guide when a guide source names a text encoding Python does not know. The guide stopped updating for all channels.
-- Keep the shows after the guide window in the last good copy of a guide source. While a source stayed shorter than its copy, the later shows ran out after one rebuild.
-- Rebuild the guide when `channels.toml` changes while the guide is being built. New or renamed channels stayed out of the guide until the next scheduled rebuild.
-- Stop the Deno helper when a channel lookup is cancelled or takes too long. It kept running.
-- Clean up finished helper processes when the container runs without `--init`. The image now starts with tini.
-- Stop yt-dlp and Deno when `tellyard check` or `tellyard serve` is stopped with Ctrl-C during a channel lookup.
+- Treat a response that ends before its declared length as a failed request. A cut playlist was used as if it were whole.
+- Ignore the body of a redirect. A large one could use all of Tellyard's memory.
+- Try the other proxy when `http_proxy` and `https_proxy` differ and the first one refuses a connection.
+- Keep every address of channels with a separate audio track and long playlists. The audio addresses pushed out the first video segments.
+- Use the new title of a last show without an end time. The last good copy kept the old one.
+- Stop downloading a guide source that is too large or unreadable on every retry when it has no saved copy.
+- Refuse guide sources that declare XML entities in any encoding. One in UTF-16 could use more memory than the container has.
+- Refuse playlists with an address longer than 16 KB. Long addresses could fill memory during a stream.
+- Clean long yt-dlp error lines for the log without delay. One such line could freeze every stream for minutes.
+- Accept a proxy setting without `http://`, such as `http_proxy=192.168.1.5:3128`. Every request was refused.
+- Free the tuner within a second when the viewer leaves during a page, token or playlist request. It stayed taken for up to 30 seconds.
+- Free the tuner within a second when the viewer leaves while Tellyard connects to a source that does not answer. It stayed taken for 10 seconds per address of the source.
+- See a viewer leave who sent anything after the request. The lookup and reconnects ran on for nobody.
+- Stop yt-dlp lookups and keep ffmpeg away from Ctrl-C when Tellyard stops outside Docker. A lookup kept running, and Ctrl-C started a new one.
+- Clean up the landing page guide, its animations and the install section. The time line keeps one thickness, the guide no longer jumps every half hour, and the guide fits at every screen width.
+- Keep sound in sync on channels whose audio is a separate track. It could run seconds ahead of or behind the picture.
+- Reconnect when the separate audio track of a channel fails. The picture played on without sound.
+- Play streams whose segment addresses have no file extension, such as `/seg/5`. They never started.
+- Give up after three tries on a source that keeps freezing after a few seconds of video. It was retried forever.
+- Report a failed ffmpeg start during a reconnect and try again. The stream ended without a log line.
+- Report in `tellyard check` the height of the video that plays. A source with several video streams reported the tallest one.
+- Skip a variant with a malformed address. The whole channel failed.
+- Refuse playlists that list more than 1024 addresses. Reading one took up to 16 seconds per request.
+- Keep the guide of every channel when one guide source uses a multi-byte encoding such as Shift_JIS or GBK. The whole guide stopped updating.
+- Read guide shows without an end time. They end when the next show starts. Such a source gave only placeholder blocks.
+- Stop the last good copy of a guide source from bringing back shows that the source moved or dropped.
+- Stop the last good copy of a guide source from growing with every retry.
+- Keep the last good copy of a guide source whole when the source has a comment after its end.
+- Rebuild the guide 15 minutes after a failed rebuild that followed a change to `channels.toml`. New channels were missing until the next scheduled rebuild.
+- Log `guide source has no current listings` for an id the source dropped, also when the last good copy still has shows for it.
+- Call `HEARTBEAT_URL` once a minute also while the guide downloads. A slow guide source delayed it by up to 10 minutes per source.
 
 #### Security
 
-- Update Python to 3.13.18, which rejects the compromised eMudhra intermediate certificates in every TLS connection (CVE-2026-115557).
+- Send `live` channel lookups through a proxy inside Tellyard. yt-dlp followed redirects and page links to private addresses the channel does not name.
+- Stop trusting the host of every proxy setting for direct requests. A proxy only for https, `all_proxy` or `no_proxy` made that host reachable on every port.
+- Check every address in a playlist that a source lists twice, once as a key and once as a playlist. ffmpeg fetched the addresses inside it directly, without the private-address rules.
+- Refuse private addresses written as other numbers behind a proxy, such as `2130706433` or `127.1`.
+- Reach a named private address only on its own port, and send `Authorization` and `Cookie` only to the scheme, host and port written in the channel.
+- Refuse IPv4 addresses inside IPv6 addresses, the container's own IPv6 networks and Azure's metadata address.
+- Stop a `live` channel lookup whose yt-dlp output passes 16 MB. A large answer could use up the container's memory.
   </Changes>
   <Category>MediaApp:Video MediaServer:Video</Category>
   <TemplateURL>https://raw.githubusercontent.com/SandObserver/Tellyard/main/templates/tellyard.xml</TemplateURL>
