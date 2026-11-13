@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-NUMBER = re.compile(r"^\d{1,5}(\.\d{1,3})?$")
+NUMBER = re.compile(r"[0-9]{1,5}(\.[0-9]{1,3})?")
 HEADER_NAME = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 SOURCE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 CHANNEL_KEYS = frozenset(
@@ -166,7 +166,7 @@ def _channel(value: Any, index: int, sources: Mapping[str, str]) -> Channel:
     if isinstance(number, float):
         raise ChannelError(f'{where}: write subchannel numbers in quotes, such as number = "{number}"')
     number_text = str(number) if isinstance(number, int | str) and not isinstance(number, bool) else ""
-    if not NUMBER.match(number_text):
+    if not NUMBER.fullmatch(number_text):
         raise ChannelError(f'{where}: number must look like 101 or "101.1"')
     logo = _url(entry.get("logo"), f"{where} logo")
     source = _source(entry, where)

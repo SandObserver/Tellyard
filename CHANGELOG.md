@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Stop the landing page from scrolling sideways on 320 pixel screens and with long translated text.
 - Show the full keyboard focus ring on landing page code boxes and picker menus.
 - Keep gentle fades for reduced motion, follow the increased contrast setting and say when copying is blocked.
+- Report an `FFMPEG` or `YTDLP` file that cannot run as a clear error, also in `tellyard check`, instead of a stack trace.
+- Stop logging a source failure when ffmpeg closes a segment request before the reply starts.
+- Answer yt-dlp with a connection error, instead of a stack trace, for a proxy with an invalid port or a host name that cannot be looked up.
+- Refuse channel numbers with non-ASCII digits or a line break.
 
 ## [0.2.0] - 2026-11-09
 

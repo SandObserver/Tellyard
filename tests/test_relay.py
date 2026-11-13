@@ -233,6 +233,20 @@ def test_relay_serves_rewritten_playlists_and_segments(relay: Relay, upstream: s
     assert all(seen["Cookie"] == "c=1" for seen in Upstream.seen)
 
 
+def test_relay_does_not_blame_the_source_when_ffmpeg_leaves_first(
+    relay: Relay, upstream: str, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def gone(handler: object) -> None:
+        raise BrokenPipeError
+
+    feed = feed_for(relay, f"{upstream}/live/media.m3u8")
+    segment = next(line for line in get(feed.video)[2].decode().splitlines() if line.endswith("/seg1.ts"))
+    monkeypatch.setattr(relay_module._Handler, "end_headers", gone)
+    with caplog.at_level(logging.WARNING), pytest.raises(OSError):
+        get(segment)
+    assert not [record for record in caplog.records if record.getMessage() == "source request failed"]
+
+
 def test_relay_refuses_private_addresses_the_owner_did_not_name(
     relay: Relay, upstream: str, caplog: pytest.LogCaptureFixture
 ) -> None:

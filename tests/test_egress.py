@@ -129,6 +129,21 @@ def test_an_unreachable_target_fails() -> None:
     assert reply[:2] == b"\x05\x01"
 
 
+def test_a_host_name_that_cannot_be_looked_up_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
+        monkeypatch.delenv(name, raising=False)
+    with egress.serve(Trust(), "9") as proxy:
+        reply, sock = socks(proxy, domain("a" * 64 + ".example.com", 443))
+        sock.close()
+    assert reply[:2] == b"\x05\x01"
+
+
+def test_a_proxy_with_a_bad_port_is_a_connection_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("https_proxy", "http://127.0.0.1:99999")
+    with pytest.raises(OSError, match="the proxy address is not valid"):
+        net.connect_out("cdn.example.com", 443, Trust(), 1)
+
+
 def test_goes_through_the_configured_proxy(sites: tuple[str, str], monkeypatch: pytest.MonkeyPatch) -> None:
     tunnels: list[bytes] = []
     listener = socket.create_server(("127.0.0.1", 0))

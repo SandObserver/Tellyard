@@ -69,6 +69,12 @@ def is_twitch(url: str) -> bool:
     return host == TWITCH_HOSTS[0] or host.endswith(TWITCH_HOSTS[1])
 
 
+def start_failure(program: str, error: OSError) -> str:
+    if isinstance(error, FileNotFoundError):
+        return f"{program} is not installed"
+    return f"{program} did not start: {error.strerror or error}"
+
+
 def kill_group(process: subprocess.Popen[bytes]) -> None:
     # yt-dlp starts Deno. Killing yt-dlp alone leaves Deno running.
     with contextlib.suppress(ProcessLookupError):
@@ -84,8 +90,8 @@ def run_command(args: Sequence[str], timeout: float, cancel: threading.Event | N
             stderr=subprocess.PIPE,
             start_new_session=True,
         )
-    except FileNotFoundError as error:
-        raise ResolveError(f"{args[0]} is not installed") from error
+    except OSError as error:
+        raise ResolveError(start_failure(args[0], error)) from error
     with process:
         try:
             stdout, stderr = _collect(process, args[0], timeout, cancel)
