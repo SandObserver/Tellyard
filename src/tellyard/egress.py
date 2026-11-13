@@ -90,7 +90,7 @@ class _Handler(socketserver.BaseRequestHandler):
             log.warning("source request failed", extra={"channel": self.server.label, "reason": str(error)})
             _reply(client, NOT_ALLOWED)
             return
-        except OSError:
+        except (OSError, ValueError):
             _reply(client, FAILED)
             return
         with upstream:

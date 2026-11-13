@@ -117,6 +117,8 @@ def test_min_height_is_optional_per_channel() -> None:
         ({"channel": [entry(), entry()]}, "more than once"),
         ({"channel": [entry(number="1a")]}, "number must look like"),
         ({"channel": [entry(number=True)]}, "number must look like"),
+        ({"channel": [entry(number="\u0661\u0660\u0661")]}, "number must look like"),
+        ({"channel": [entry(number="101\n")]}, "number must look like"),
         ({"channel": [entry(number=101.1)]}, 'in quotes, such as number = "101.1"'),
         ({"channel": [entry(name=" ")]}, "name must be non-empty"),
         ({"channel": [entry(logo="ftp://x")]}, "logo must be an http"),

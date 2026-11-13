@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from tellyard.channels import Channel
 from tellyard.net import redact
 from tellyard.relay import Relay
-from tellyard.resolve import Resolved, ResolveError, Resolver, Runner
+from tellyard.resolve import Resolved, ResolveError, Resolver, Runner, start_failure
 from tellyard.stream import ffmpeg_env, input_options, local
 
 PROBE_TIMEOUT = 45.0
@@ -38,8 +38,8 @@ def run_probe(args: Sequence[str], timeout: float, cancel: threading.Event | Non
             timeout=timeout,
             env=ffmpeg_env(),
         )
-    except FileNotFoundError as error:
-        raise ResolveError(f"{args[0]} is not installed") from error
+    except OSError as error:
+        raise ResolveError(start_failure(args[0], error)) from error
     except subprocess.TimeoutExpired:
         raise ResolveError(f"{args[0]} took longer than {timeout:.0f} s") from None
     return done.stderr.decode("utf-8", errors="replace")

@@ -12,7 +12,7 @@ from typing import Self
 from tellyard.channels import Channel
 from tellyard.net import Cancel, redact, without_proxies
 from tellyard.relay import Feed, Relay
-from tellyard.resolve import LookupCancelledError, Resolved, ResolveError, Resolver
+from tellyard.resolve import LookupCancelledError, Resolved, ResolveError, Resolver, start_failure
 
 log = logging.getLogger(__name__)
 CHUNK = 188 * 348
@@ -93,10 +93,8 @@ class Process:
                 env=ffmpeg_env(),
                 start_new_session=True,
             )
-        except FileNotFoundError as error:
-            raise StreamError(f"{args[0]} is not installed") from error
         except OSError as error:
-            raise StreamError(f"{args[0]} did not start: {error.strerror or error}") from error
+            raise StreamError(start_failure(args[0], error)) from error
         threading.Thread(target=self._pump, name=f"pump {label}", daemon=True).start()
         threading.Thread(target=self._drain, name=f"log {label}", daemon=True).start()
 

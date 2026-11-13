@@ -213,6 +213,8 @@ def test_run_command_reports_failures() -> None:
         run_command([sys.executable, "-c", "import time; time.sleep(5)"], 0.2)
     with pytest.raises(ResolveError, match="is not installed"):
         run_command(["/nonexistent/yt-dlp"], 10)
+    with pytest.raises(ResolveError, match="did not start"):
+        run_command([str(Path(sys.executable).parent)], 10)
 
 
 def scripted(outputs: dict[str, str], seen: list[Sequence[str]]) -> Runner:

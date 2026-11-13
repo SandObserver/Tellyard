@@ -468,7 +468,11 @@ def _tunnel(proxy: urllib.parse.SplitResult, host: str, port: int, timeout: floa
     if proxy.username is not None:
         user = f"{urllib.parse.unquote(proxy.username)}:{urllib.parse.unquote(proxy.password or '')}"
         lines.append(f"Proxy-Authorization: Basic {base64.b64encode(user.encode()).decode()}")
-    sock = socket.create_connection((proxy.hostname, proxy.port or DEFAULT_PORTS["http"]), timeout)
+    try:
+        address = (proxy.hostname, proxy.port or DEFAULT_PORTS["http"])
+    except ValueError as error:
+        raise OSError(f"the proxy address is not valid: {error}") from error
+    sock = socket.create_connection(address, timeout)
     try:
         sock.sendall(("\r\n".join(lines) + "\r\n\r\n").encode())
         status = _read_head(sock).split(b"\r\n", 1)[0].split(b" ")

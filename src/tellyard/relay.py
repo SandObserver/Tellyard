@@ -1,3 +1,4 @@
+import http.client
 import logging
 import re
 import secrets
@@ -247,16 +248,9 @@ class _Handler(BaseHTTPRequestHandler):
         started = False
         try:
             with net.open_url(url, headers, feed.trust, limits=net.Limits(total=SEGMENT_DEADLINE)) as response:
-                # ffmpeg logs a body without a length as cut short. Chunked encoding marks the end.
                 chunked = response.headers.get("Content-Length") is None
-                self.send_response(response.status)
-                for name in PASSED_HEADERS:
-                    if value := response.headers.get(name):
-                        self.send_header(name, value)
-                if chunked:
-                    self.send_header("Transfer-Encoding", "chunked")
-                self.send_header("Connection", "close")
-                self.end_headers()
+                if not self._start(response, chunked):
+                    return
                 started = True
                 while not feed.closed.is_set() and (chunk := net.read_block(response, CHUNK)):
                     if not self._write(b"%x\r\n%b\r\n" % (len(chunk), chunk) if chunked else chunk):
@@ -266,6 +260,21 @@ class _Handler(BaseHTTPRequestHandler):
         except FetchError as error:
             if not started:
                 self._fail(feed, error)
+
+    def _start(self, response: http.client.HTTPResponse, chunked: bool) -> bool:
+        self.send_response(response.status)
+        for name in PASSED_HEADERS:
+            if value := response.headers.get(name):
+                self.send_header(name, value)
+        if chunked:
+            # ffmpeg logs a body without a length as cut short. Chunked encoding marks the end.
+            self.send_header("Transfer-Encoding", "chunked")
+        self.send_header("Connection", "close")
+        try:
+            self.end_headers()
+        except OSError:
+            return False
+        return True
 
     def _write(self, data: bytes) -> bool:
         try:

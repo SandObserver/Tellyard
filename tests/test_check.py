@@ -56,6 +56,8 @@ def test_run_probe_returns_stderr(tmp_path: Path) -> None:
     assert check.run_probe([str(script)], 5.0) == "details\n"
     with pytest.raises(ResolveError, match="is not installed"):
         check.run_probe([str(tmp_path / "missing")], 5.0)
+    with pytest.raises(ResolveError, match="did not start"):
+        check.run_probe([str(tmp_path)], 5.0)
     slow = tmp_path / "slow"
     slow.write_text("#!/bin/sh\nsleep 5\n")
     slow.chmod(0o755)
