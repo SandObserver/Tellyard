@@ -98,8 +98,9 @@ def test_request_sends_a_browser_agent_and_headers() -> None:
 
 
 def test_fetch_text_errors(base: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    with pytest.raises(FetchError, match="HTTP 404"):
+    with pytest.raises(FetchError, match="HTTP 404") as missing:
         net.fetch_text(f"{base}/missing", trust=net.trust_of([base]))
+    assert missing.value.status == 404
     monkeypatch.setattr(net, "TEXT_LIMIT", 1024)
     with pytest.raises(FetchError, match="larger than"):
         net.fetch_text(f"{base}/big", trust=net.trust_of([base]))

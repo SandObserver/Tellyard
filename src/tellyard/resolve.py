@@ -17,7 +17,7 @@ from typing import Any, Protocol
 
 from tellyard import egress, hls
 from tellyard.channels import Channel, Headers, HlsSource, LiveSource, PageSource
-from tellyard.net import NOBODY, Cancel, FetchError, Trust, fetch_text, redact, safe_url, trust_of
+from tellyard.net import NOBODY, Cancel, FetchError, TooLargeError, Trust, fetch_text, redact, safe_url, trust_of
 from tellyard.settings import Settings
 
 log = logging.getLogger(__name__)
@@ -29,6 +29,7 @@ ERROR_TAIL = 64 * 1024
 READ_SIZE = 64 * 1024
 STREAM_SCAN = 20
 FETCH_ATTEMPTS = 3
+PASSING_STATUSES = frozenset({408, 429})
 CANCEL_POLL = 0.5
 TWITCH_HOSTS = ("twitch.tv", ".twitch.tv")
 # --xff never: without it, yt-dlp sends a made-up address from the allowed country to region-limited sites.
@@ -259,7 +260,7 @@ class Resolver:
             return Resolved(final, None, None, headers, trust)
         try:
             variants, renditions = hls.parse_master(text, final)
-        except hls.PlaylistError as error:
+        except hls.MasterPlaylistError as error:
             raise ResolveError(str(error)) from error
         choice = hls.choose(variants, renditions)
         return Resolved(choice.video, choice.audio, choice.height, headers, trust)
@@ -270,7 +271,7 @@ class Resolver:
             try:
                 return self._load(url, headers, trust, cancel)
             except FetchError as error:
-                if attempt == FETCH_ATTEMPTS:
+                if attempt == FETCH_ATTEMPTS or _lasting(error):
                     raise ResolveError(f"could not load the playlist: {error}") from error
                 log.info("playlist request failed, retrying", extra={"attempt": attempt, "reason": str(error)})
         raise AssertionError("unreachable")
@@ -284,6 +285,11 @@ class Resolver:
             if cancel.is_set():
                 raise LookupCancelledError from None
             raise
+
+
+def _lasting(error: FetchError) -> bool:
+    client_error = error.status is not None and 400 <= error.status < 500
+    return isinstance(error, TooLargeError) or (client_error and error.status not in PASSING_STATUSES)
 
 
 def _json(text: str) -> dict[str, Any]:

@@ -63,7 +63,9 @@ type Connect = Callable[[tuple[str, int], float | None, tuple[str, int] | None],
 
 
 class FetchError(Exception):
-    pass
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 class Limits(NamedTuple):
@@ -233,7 +235,12 @@ def open_url(
         with stop, _opener(watch, trust).open(request(url, headers, trust), timeout=limits.read) as response:
             yield response
     except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException, ValueError) as error:
-        raise FetchError(f"{safe_url(url)}: {watch.reason(deadline) or _reason(error)}") from error
+        stopped = watch.reason(deadline)
+        status = None
+        if isinstance(error, urllib.error.HTTPError):
+            error.close()
+            status = None if stopped else error.code
+        raise FetchError(f"{safe_url(url)}: {stopped or _reason(error)}", status) from error
     finally:
         timer.cancel()
     # A shut connection reads as a short body.

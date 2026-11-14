@@ -14,6 +14,8 @@ from tellyard.net import trust_of
 from tellyard.relay import Feed, PlaylistError, Relay, rewrite
 from tellyard.resolve import Resolved
 
+SEVEN = {"channel": "7", "title": "Seven"}
+
 SEGMENT = bytes(range(256)) * 4
 MEDIA = """#EXTM3U
 #EXT-X-TARGETDURATION:2
@@ -80,12 +82,12 @@ def upstream() -> Iterator[str]:
 
 def feed_for(relay: Relay, url: str) -> Feed:
     headers = (("Referer", "https://tv.example.com/"), ("Cookie", "c=1"))
-    return relay.open(Resolved(url, None, 1080, headers, trust_of([url])), "7 Seven")
+    return relay.open(Resolved(url, None, 1080, headers, trust_of([url])), SEVEN)
 
 
 def test_separate_audio_does_not_push_out_video_addresses() -> None:
     resolved = Resolved("http://x.example.com/v.m3u8", "http://x.example.com/a.m3u8", 1080, ())
-    feed = Feed(cast(Relay, SimpleNamespace(base="http://relay")), "token", resolved, "7 Seven")
+    feed = Feed(cast(Relay, SimpleNamespace(base="http://relay")), "token", resolved, SEVEN)
     for kind in ("v", "a"):
         for index in range(relay_module.ENTRIES):
             feed.address(f"http://x.example.com/{kind}{index}.ts", False)
@@ -257,6 +259,9 @@ def test_relay_refuses_private_addresses_the_owner_did_not_name(
         assert get(segment)[0] == 502
     reasons = [getattr(record, "reason", "") for record in caplog.records]
     assert any("private addresses need a host and port named" in reason for reason in reasons)
+    assert {(getattr(record, "channel", ""), getattr(record, "title", "")) for record in caplog.records} == {
+        ("7", "Seven")
+    }
     assert len(Upstream.seen) == 1
 
 

@@ -63,7 +63,7 @@ def test_detects_master_playlists() -> None:
 
 @pytest.mark.parametrize("text", ["<html>", "", "#EXTM3U\n#EXT-X-VERSION:3\n"])
 def test_rejects_non_master_text(text: str) -> None:
-    with pytest.raises(hls.PlaylistError):
+    with pytest.raises(hls.MasterPlaylistError):
         hls.parse_master(text, "https://a.example.com/")
 
 
@@ -107,7 +107,7 @@ def test_only_http_addresses_are_used() -> None:
     variants, renditions = hls.parse_master(text, "https://a.example.com/live/master.m3u8")
     choice = hls.choose(variants, renditions)
     assert choice == hls.Choice("https://a.example.com/live/v/1080.m3u8", None, 1080)
-    with pytest.raises(hls.PlaylistError, match="no variants"):
+    with pytest.raises(hls.MasterPlaylistError, match="no variants"):
         hls.parse_master("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nfile:///etc/passwd\n", "https://a.example.com/")
 
 
