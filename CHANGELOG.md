@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-14
+
 ### Changed
 
 - Bring the landing page guide in with one short entrance and speed up its menus, install steps and press feedback.
