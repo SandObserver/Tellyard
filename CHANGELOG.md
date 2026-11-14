@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Log a client that disconnects before Tellyard answers as one line, instead of a Python traceback. A stream that ends this way now also logs `stream stopped`.
 - Stop the landing page from scrolling sideways on 320 pixel screens and with long translated text.
 - Show the full keyboard focus ring on landing page code boxes and picker menus.
 - Keep gentle fades for reduced motion, follow the increased contrast setting and say when copying is blocked.
