@@ -6,6 +6,7 @@ import logging
 import re
 import select
 import socket
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -296,6 +297,12 @@ class Server(ThreadingHTTPServer):
         finally:
             self._slots.release()
 
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        if isinstance(sys.exception(), OSError):
+            log.debug("client left during the reply", extra={"client": client_address[0]})
+        else:
+            log.exception("request failed", extra={"client": client_address[0]})
+
 
 class Handler(BaseHTTPRequestHandler):
     server: Server
@@ -420,12 +427,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(HTTPStatus.SERVICE_UNAVAILABLE, "text/plain; charset=utf-8", f"{error}\n".encode())
             return
         log.info("stream started", extra={**session.fields, "client": self.client_address[0], "height": session.height})
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "video/mp2t")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Connection", "close")
-        self.end_headers()
         try:
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "video/mp2t")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.end_headers()
             for chunk in session.chunks():
                 self.wfile.write(chunk)
         except OSError:

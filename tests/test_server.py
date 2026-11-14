@@ -584,6 +584,51 @@ def test_oversized_requests_are_refused(base: str, monkeypatch: pytest.MonkeyPat
         assert client.recv(64).startswith(b"HTTP/1.0 431")
 
 
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (BrokenPipeError(32, "Broken pipe"), ("DEBUG", "client left during the reply")),
+        (ValueError("bad"), ("ERROR", "request failed")),
+    ],
+    ids=["hang-up", "bug"],
+)
+def test_request_errors_are_logged_on_one_line(
+    app: App,
+    error: Exception,
+    expected: tuple[str, str],
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    caplog.set_level("DEBUG", logger="tellyard.server")
+    plain = Server(("127.0.0.1", 0), app)
+    try:
+        try:
+            raise error
+        except Exception:
+            plain.handle_error(None, ("192.0.2.9", 5000))
+    finally:
+        plain.server_close()
+    assert [(r.levelname, r.getMessage(), getattr(r, "client", None)) for r in caplog.records] == [
+        (*expected, "192.0.2.9")
+    ]
+    assert "Exception occurred" not in capsys.readouterr().err
+
+
+def test_stream_stop_is_logged_when_the_viewer_left_before_the_headers(
+    base: str, app: App, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="tellyard.server")
+
+    def hung_up(handler: BaseHTTPRequestHandler) -> None:
+        raise BrokenPipeError(32, "Broken pipe")
+
+    monkeypatch.setattr(server.Handler, "end_headers", hung_up)
+    with socket.create_connection(("127.0.0.1", int(base.rsplit(":", 1)[1]))) as client:
+        client.sendall(b"GET /stream/101 HTTP/1.0\r\n\r\n")
+        assert wait_for(lambda: "stream stopped" in caplog.text, 10)
+    assert wait_for(lambda: app.streams == 0, 5)
+
+
 def test_health_reports_a_guide_that_cannot_be_saved(app: App, tmp_path: Path) -> None:
     (tmp_path / "data").mkdir(exist_ok=True)
     (tmp_path / "data").chmod(0o555)
