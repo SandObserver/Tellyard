@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Stop logging a source failure when ffmpeg closes a segment request before the reply starts.
 - Answer yt-dlp with a connection error, instead of a stack trace, for a proxy with an invalid port or a host name that cannot be looked up.
 - Refuse channel numbers with non-ASCII digits or a line break.
+- Treat a viewer who leaves just before an https handshake as a viewer who left, instead of logging a stack trace.
+- Download a guide source again on the next retry when its last good copy could not be saved, instead of showing placeholders.
 
 ## [0.2.0] - 2026-11-09
 

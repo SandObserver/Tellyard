@@ -150,13 +150,15 @@ def _external(
     for url, ids in wanted.items():
         kept = copies.folder / _saved_name(url) if copies else None
         if copies and kept and url in copies.reuse:
-            found, ok = _load(url, ids, (start, end), _copying(kept), None) if kept.is_file() else (None, True)
+            found, ok, settled = (
+                _load(url, ids, (start, end), _copying(kept), None) if kept.is_file() else (None, True, True)
+            )
         else:
-            found, ok = _load(url, ids, (start, end), downloader, kept)
-        if ok:
-            loaded.add(url)
-        else:
+            found, ok, settled = _load(url, ids, (start, end), downloader, kept)
+        if not ok:
             failed += 1
+        if settled:
+            loaded.add(url)
         for number, slots in (found or {}).items():
             schedules[number].extend(slots)
     if copies:
@@ -166,7 +168,8 @@ def _external(
 
 def _load(
     url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime], downloader: Downloader, kept: Path | None
-) -> tuple[dict[str, list[Slot]] | None, bool]:
+) -> tuple[dict[str, list[Slot]] | None, bool, bool]:
+    # Returns the shows, whether the source counts as working, and whether a retry may skip downloading it.
     with tempfile.TemporaryDirectory(prefix="tellyard-guide-") as scratch:
         path = Path(scratch) / "source.xml"
         ends: dict[str, datetime] = {}
@@ -174,9 +177,10 @@ def _load(
             downloader(url, path)
             found = _read(path, ids, span, url, ends)
         except FEED_ERRORS as error:
-            return _checked(url, ids, _read_saved(kept, url, ids, span, error)), isinstance(error, LASTING_ERRORS)
+            lasting = isinstance(error, LASTING_ERRORS)
+            return _checked(url, ids, _read_saved(kept, url, ids, span, error)), lasting, lasting
         if not found:
-            return _checked(url, ids, _read_saved(kept, url, ids, span) or found), True
+            return _checked(url, ids, _read_saved(kept, url, ids, span) or found), True, True
         _checked(url, ids, found)
         if kept:
             added, borrowed = _extend(found, ends, kept, ids, span)
@@ -187,8 +191,8 @@ def _load(
                 )
             for number, slots in added.items():
                 found[number].extend(slots)
-            _save(path, kept, borrowed)
-        return found, True
+            return found, True, _save(path, kept, borrowed)
+        return found, True, True
 
 
 def _checked(url: str, ids: dict[str, list[str]], found: dict[str, list[Slot]] | None) -> dict[str, list[Slot]] | None:
@@ -263,7 +267,7 @@ def _read_saved(
     return None
 
 
-def _save(path: Path, kept: Path, borrowed: list[ET.Element] | None = None) -> None:
+def _save(path: Path, kept: Path, borrowed: list[ET.Element] | None = None) -> bool:
     partial = kept.with_name(kept.name + ".part")
     try:
         kept.parent.mkdir(parents=True, exist_ok=True)
@@ -274,6 +278,8 @@ def _save(path: Path, kept: Path, borrowed: list[ET.Element] | None = None) -> N
         with contextlib.suppress(OSError):
             partial.unlink(missing_ok=True)
         log.warning("guide source copy not saved", extra={"reason": error.strerror or str(error)})
+        return False
+    return True
 
 
 def _merge(path: Path, target: Path, elements: list[ET.Element]) -> bool:
