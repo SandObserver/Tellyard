@@ -1,6 +1,7 @@
 import gzip
 import http.client
 import socket
+import ssl
 import threading
 import time
 import tracemalloc
@@ -9,6 +10,7 @@ import urllib.request
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -536,6 +538,22 @@ def test_cancel_stops_a_tls_handshake_that_gets_no_answer(silent_tls: str) -> No
     with pytest.raises(FetchError, match="cancelled"):
         net.fetch_text(silent_tls, trust=net.trust_of([silent_tls]), cancel=cancel)
     assert time.monotonic() - started < 2
+
+
+def test_cancel_between_connect_and_tls_handshake_is_a_cancelled_fetch(
+    silent_tls: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cancel = net.Cancel()
+    wrap = ssl.SSLContext.wrap_socket
+
+    def wrap_then_cancel(self: ssl.SSLContext, *args: Any, **kwargs: Any) -> ssl.SSLSocket:
+        tls = wrap(self, *args, **kwargs)
+        cancel.set()
+        return tls
+
+    monkeypatch.setattr(ssl.SSLContext, "wrap_socket", wrap_then_cancel)
+    with pytest.raises(FetchError, match="cancelled"):
+        net.fetch_text(silent_tls, trust=net.trust_of([silent_tls]), cancel=cancel)
 
 
 def test_dial_tries_the_next_address_until_stopped(monkeypatch: pytest.MonkeyPatch) -> None:

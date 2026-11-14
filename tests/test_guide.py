@@ -472,6 +472,36 @@ def test_a_retry_skips_a_lasting_failure_without_a_saved_copy(tmp_path: Path) ->
     assert calls == ["https://b.example.com/x"]
 
 
+def test_a_retry_downloads_a_working_source_whose_copy_was_not_saved(tmp_path: Path) -> None:
+    calls: list[str] = []
+
+    def download(url: str, destination: Path) -> None:
+        calls.append(url)
+        if "b." in url:
+            raise FetchError("b: HTTP 503")
+        destination.write_text(SOURCE)
+
+    entries = [
+        {"number": number, "name": name, "logo": "https://example.com/l.png", "hls": "https://cdn.example.com/x.m3u8",
+         "guide": {"xmltv": url, "id": "ATV.tr"}}
+        for number, name, url in [(201, "atv", "https://a.example.com/x"), (202, "show", "https://b.example.com/x")]
+    ]  # fmt: skip
+    both = channels.parse({"channel": entries})
+    feeds = tmp_path / "feeds"
+    feeds.mkdir()
+    feeds.chmod(0o555)
+    try:
+        cache = guide.Guide(tmp_path / "guide.xml", 1, download)
+        cache.rebuild(both, NOW)
+        first = cache.data
+        calls.clear()
+        cache.rebuild(both, NOW, retry=True)
+    finally:
+        feeds.chmod(0o755)
+    assert sorted(calls) == ["https://a.example.com/x", "https://b.example.com/x"]
+    assert cache.data == first
+
+
 def test_the_new_download_wins_for_a_show_without_a_stop_time(tmp_path: Path) -> None:
     title = ["To be announced"]
 

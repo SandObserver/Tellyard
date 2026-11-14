@@ -657,8 +657,9 @@ class _Redirects(urllib.request.HTTPRedirectHandler):
 
 
 def _shut(sock: socket.socket) -> None:
+    # SSLSocket.shutdown also clears the TLS state that the request thread uses. Shut only the connection.
     with contextlib.suppress(OSError):
-        sock.shutdown(socket.SHUT_RDWR)
+        socket.socket.shutdown(sock, socket.SHUT_RDWR)
 
 
 def open_maybe_gzip(path: Path) -> io.BufferedIOBase:
