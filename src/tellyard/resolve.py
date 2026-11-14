@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import selectors
+import shutil
 import signal
 import subprocess
 import threading
@@ -72,7 +73,9 @@ def is_twitch(url: str) -> bool:
 
 def start_failure(program: str, error: OSError) -> str:
     if isinstance(error, FileNotFoundError):
-        return f"{program} is not installed"
+        if shutil.which(program) is None:
+            return f"{program} is not installed"
+        return f"{program} did not start: its interpreter or loader is missing"
     return f"{program} did not start: {error.strerror or error}"
 
 

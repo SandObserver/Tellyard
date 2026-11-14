@@ -240,6 +240,14 @@ def test_run_command_reports_failures() -> None:
         run_command([str(Path(sys.executable).parent)], 10)
 
 
+def test_run_command_reports_a_missing_interpreter(tmp_path: Path) -> None:
+    script = tmp_path / "yt-dlp"
+    script.write_text("#!/nonexistent/python3\n")
+    script.chmod(0o755)
+    with pytest.raises(ResolveError, match="did not start: its interpreter or loader is missing"):
+        run_command([str(script)], 10)
+
+
 def scripted(outputs: dict[str, str], seen: list[Sequence[str]]) -> Runner:
     def run(args: Sequence[str], timeout: float, cancel: threading.Event | None) -> str:
         seen.append(args)
