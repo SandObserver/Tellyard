@@ -13,7 +13,7 @@ import pytest
 
 from tellyard import channels, resolve
 from tellyard.channels import Channel, Headers
-from tellyard.net import Cancel, FetchError, Trust, trust_of
+from tellyard.net import Cancel, FetchError, TooLargeError, Trust, trust_of
 from tellyard.resolve import Fetcher, LookupCancelledError, Resolved, ResolveError, Resolver, Runner, run_command
 from tellyard.settings import Settings
 
@@ -93,6 +93,29 @@ def test_retries_a_hanging_playlist_request(make_settings: Callable[..., Setting
 def test_gives_up_after_three_playlist_attempts(make_settings: Callable[..., Settings]) -> None:
     with pytest.raises(ResolveError, match="could not load the playlist"):
         Resolver(make_settings(), fetcher=pages({})).resolve(channel(hls="https://cdn.example.com/m.m3u8"))
+
+
+@pytest.mark.parametrize(
+    ("error", "tries"),
+    [
+        (FetchError("cdn.example.com: HTTP 404", 404), 1),
+        (TooLargeError("cdn.example.com: response is larger than 4 MB"), 1),
+        (FetchError("cdn.example.com: HTTP 429", 429), 3),
+        (FetchError("cdn.example.com: HTTP 503", 503), 3),
+    ],
+)
+def test_retries_only_playlist_errors_that_can_pass(
+    make_settings: Callable[..., Settings], error: FetchError, tries: int
+) -> None:
+    attempts: list[str] = []
+
+    def failing(url: str, headers: Headers, trust: Trust, *, cancel: Cancel | None = None) -> tuple[str, str]:
+        attempts.append(url)
+        raise error
+
+    with pytest.raises(ResolveError, match="could not load the playlist"):
+        Resolver(make_settings(), fetcher=failing).resolve(channel(hls="https://cdn.example.com/m.m3u8"))
+    assert len(attempts) == tries
 
 
 def test_page_source_finds_escaped_urls(make_settings: Callable[..., Settings]) -> None:

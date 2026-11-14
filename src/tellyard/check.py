@@ -8,7 +8,7 @@ from tellyard.channels import Channel
 from tellyard.net import redact
 from tellyard.relay import Relay
 from tellyard.resolve import Resolved, ResolveError, Resolver, Runner, start_failure
-from tellyard.stream import ffmpeg_env, input_options, local
+from tellyard.stream import ffmpeg_env, input_options, local, log_fields
 
 PROBE_TIMEOUT = 45.0
 VIDEO_SIZE = re.compile(r"^\s*Stream #\d+:\d+.*?: Video: .*?, (\d{1,5})x(\d{1,5})\b", re.MULTILINE)
@@ -45,8 +45,10 @@ def run_probe(args: Sequence[str], timeout: float, cancel: threading.Event | Non
     return done.stderr.decode("utf-8", errors="replace")
 
 
-def probe_height(ffmpeg: str, relay: Relay, resolved: Resolved, runner: Runner = run_probe) -> int | None:
-    feed = relay.open(resolved, "check")
+def probe_height(
+    ffmpeg: str, relay: Relay, channel: Channel, resolved: Resolved, runner: Runner = run_probe
+) -> int | None:
+    feed = relay.open(resolved, log_fields(channel))
     try:
         args = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "info", *input_options()]
         args += ["-i", local(resolved, feed).video]
@@ -65,14 +67,14 @@ def probe_height(ffmpeg: str, relay: Relay, resolved: Resolved, runner: Runner =
 def check(
     channels: Iterable[Channel],
     resolver: Resolver,
-    measure: Callable[[Resolved], int | None],
+    measure: Callable[[Channel, Resolved], int | None],
     minimum: int | None = None,
 ) -> list[Result]:
     results: list[Result] = []
     for channel in channels:
         try:
             resolved = resolver.resolve(channel)
-            height = measure(resolved)
+            height = measure(channel, resolved)
         except (ResolveError, ValueError) as error:
             results.append(Result(channel, None, str(error)))
             continue

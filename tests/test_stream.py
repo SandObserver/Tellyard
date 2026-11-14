@@ -3,7 +3,7 @@ import os
 import queue
 import subprocess
 import threading
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import closing
 from itertools import islice
 from pathlib import Path
@@ -17,6 +17,8 @@ from tellyard.resolve import Resolved, ResolveError
 from tellyard.settings import Settings
 from tellyard.stream import Process, Session, StreamError, ffmpeg_args
 from tests.fakes import FakeResolver, fake_ffmpeg
+
+SEVEN = {"channel": "7", "title": "Seven"}
 
 
 @pytest.fixture
@@ -76,7 +78,7 @@ def test_ffmpeg_accepts_segment_names_without_an_extension() -> None:
 def test_ffmpeg_reads_only_through_the_relay(relay: Relay) -> None:
     headers = (("Referer", "https://r.example.com/"), ("Cookie", "secret"))
     resolved = Resolved("https://v.example.com/v.m3u8", "https://v.example.com/a.m3u8", 1080, headers)
-    feed = relay.open(resolved, "7 Seven")
+    feed = relay.open(resolved, SEVEN)
     args = ffmpeg_args("ffmpeg", stream.local(resolved, feed))
     inputs = [args[index + 1] for index, arg in enumerate(args) if arg == "-i"]
     assert inputs == [feed.video, feed.audio]
@@ -89,8 +91,8 @@ def test_streams_and_stops_ffmpeg(
 ) -> None:
     started: list[Process] = []
 
-    def starter(args: Sequence[str], label: str) -> Process:
-        process = Process(args, label)
+    def starter(args: Sequence[str], fields: Mapping[str, str]) -> Process:
+        process = Process(args, fields)
         started.append(process)
         return process
 
@@ -167,7 +169,7 @@ def test_stalled_source_is_restarted(
     reads: Iterator[bytes | Exception] = iter([b"first", queue.Empty(), b"after"])
 
     class Scripted(Process):
-        def __init__(self, args: Sequence[str], label: str) -> None:
+        def __init__(self, args: Sequence[str], fields: Mapping[str, str]) -> None:
             self.closed = False
 
         def read(self, timeout: float) -> bytes | None:
@@ -189,7 +191,7 @@ def test_stalled_source_is_restarted(
 
 def test_ffmpeg_that_cannot_start_is_a_stream_error(tmp_path: Path) -> None:
     with pytest.raises(StreamError, match="did not start"):
-        Process([str(tmp_path)], "7 Seven")
+        Process([str(tmp_path)], SEVEN)
 
 
 def test_a_source_that_stalls_after_data_gives_up(
@@ -204,7 +206,7 @@ def test_a_source_that_stalls_after_data_gives_up(
     resolver = FakeResolver(make_settings())
 
     class Stalling(Process):
-        def __init__(self, args: Sequence[str], label: str) -> None:
+        def __init__(self, args: Sequence[str], fields: Mapping[str, str]) -> None:
             self.sent = False
 
         def read(self, timeout: float) -> bytes | None:
@@ -267,7 +269,7 @@ def test_gives_up_when_reconnects_fail(
 
 def test_ffmpeg_output_is_logged_without_url_paths(caplog: pytest.LogCaptureFixture) -> None:
     line = "Error opening input file https://user:PASSWORD@cdn.example.com/live/index.m3u8?token=SECRET&e=9."
-    process = Process(["sh", "-c", f"echo '{line}' >&2"], "7 Seven")
+    process = Process(["sh", "-c", f"echo '{line}' >&2"], SEVEN)
     with caplog.at_level(logging.WARNING):
         assert process.read(5) is None
         deadline = monotonic() + 5
@@ -276,6 +278,9 @@ def test_ffmpeg_output_is_logged_without_url_paths(caplog: pytest.LogCaptureFixt
         process.close()
     outputs = [getattr(record, "output", "") for record in caplog.records]
     assert "Error opening input file https://cdn.example.com" in outputs
+    assert {(getattr(record, "channel", ""), getattr(record, "title", "")) for record in caplog.records} == {
+        ("7", "Seven")
+    }
     assert "SECRET" not in caplog.text
     assert "PASSWORD" not in caplog.text
 
@@ -286,7 +291,7 @@ def test_ffmpeg_runs_without_proxy_settings(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("ALL_PROXY", "socks5://proxy.example.com:1080")
     monkeypatch.setenv("TELLYARD_KEPT", "kept")
     script = 'printf "%s|%s|%s|%s" "${http_proxy-}" "${HTTPS_PROXY-}" "${ALL_PROXY-}" "${TELLYARD_KEPT-}"'
-    process = Process(["sh", "-c", script], "7 Seven")
+    process = Process(["sh", "-c", script], SEVEN)
     output = b""
     try:
         while (chunk := process.read(5)) is not None:
@@ -317,7 +322,7 @@ class SecondSignalStops:
 
 
 def test_ffmpeg_runs_in_its_own_session() -> None:
-    process = Process(["sleep", "5"], "7 Seven")
+    process = Process(["sleep", "5"], SEVEN)
     try:
         assert os.getpgid(process._process.pid) == process._process.pid
     finally:
@@ -325,7 +330,7 @@ def test_ffmpeg_runs_in_its_own_session() -> None:
 
 
 def test_close_signals_twice_when_ffmpeg_finishes_its_read_first(monkeypatch: pytest.MonkeyPatch) -> None:
-    process = Process(["true"], "7 Seven")
+    process = Process(["true"], SEVEN)
     process._process.wait()
     fake = SecondSignalStops()
     monkeypatch.setattr(process, "_process", fake)
@@ -344,8 +349,8 @@ def test_leaving_during_the_first_data_wait_stops_ffmpeg(
     monkeypatch.setattr(stream, "FIRST_DATA_TIMEOUT", 30.0)
     started: list[Process] = []
 
-    def starter(args: Sequence[str], label: str) -> Process:
-        started.append(Process(args, label))
+    def starter(args: Sequence[str], fields: Mapping[str, str]) -> Process:
+        started.append(Process(args, fields))
         return started[-1]
 
     session = Session(channel, FakeResolver(make_settings()), ffmpeg, relay, starter=starter)
@@ -368,7 +373,7 @@ def test_leaving_during_a_stall_skips_the_reconnect(
     resolver = FakeResolver(make_settings())
 
     class Stalls(Process):
-        def __init__(self, args: Sequence[str], label: str) -> None:
+        def __init__(self, args: Sequence[str], fields: Mapping[str, str]) -> None:
             self.first = True
 
         def read(self, timeout: float) -> bytes | None:

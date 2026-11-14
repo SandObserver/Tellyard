@@ -5,7 +5,7 @@ import secrets
 import threading
 import urllib.parse
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -131,7 +131,7 @@ def _name(url: str, playlist: bool) -> str:
 
 
 class Feed:
-    def __init__(self, relay: "Relay", token: str, resolved: Resolved, label: str) -> None:
+    def __init__(self, relay: "Relay", token: str, resolved: Resolved, fields: Mapping[str, str]) -> None:
         self._relay = relay
         self._token = token
         self._lock = threading.Lock()
@@ -141,7 +141,7 @@ class Feed:
         self._next = 0
         self.headers: Headers = resolved.headers
         self.trust: Trust = resolved.trust
-        self.label = label
+        self.fields = dict(fields)
         self.closed = threading.Event()
         self._capacity = ENTRIES * 2 if resolved.audio else ENTRIES
         self.video = self.address(resolved.video, True)
@@ -181,9 +181,9 @@ class Relay:
         self.base = f"http://127.0.0.1:{self._server.server_address[1]}"
         threading.Thread(target=self._server.serve_forever, name="relay", daemon=True).start()
 
-    def open(self, resolved: Resolved, label: str) -> Feed:
+    def open(self, resolved: Resolved, fields: Mapping[str, str]) -> Feed:
         token = secrets.token_urlsafe(16)
-        feed = Feed(self, token, resolved, label)
+        feed = Feed(self, token, resolved, fields)
         with self._lock:
             self._feeds[token] = feed
         return feed
@@ -285,7 +285,7 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _fail(self, feed: Feed, error: Exception) -> None:
         if not feed.closed.is_set():
-            log.warning("source request failed", extra={"channel": feed.label, "reason": str(error)})
+            log.warning("source request failed", extra={**feed.fields, "reason": str(error)})
         self._send(HTTPStatus.BAD_GATEWAY, "text/plain; charset=utf-8", b"source request failed\n")
 
     def _send(self, status: HTTPStatus, content_type: str, body: bytes) -> None:

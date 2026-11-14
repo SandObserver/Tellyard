@@ -3,7 +3,7 @@ import os
 import queue
 import subprocess
 import threading
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import replace
 from time import monotonic
 from types import TracebackType
@@ -73,14 +73,19 @@ def ffmpeg_env() -> dict[str, str]:
     return without_proxies(os.environ)
 
 
+def log_fields(channel: Channel) -> dict[str, str]:
+    return {"channel": channel.number, "title": channel.name}
+
+
 def local(resolved: Resolved, feed: Feed) -> Resolved:
     # ffmpeg reads the source only through the relay, which checks every address it requests.
     return replace(resolved, video=feed.video, audio=feed.audio, headers=())
 
 
 class Process:
-    def __init__(self, args: Sequence[str], label: str) -> None:
-        self._label = label
+    def __init__(self, args: Sequence[str], fields: Mapping[str, str]) -> None:
+        self._fields = dict(fields)
+        label = self._fields.get("channel", "")
         self._closed = threading.Event()
         self._queue: queue.Queue[bytes | None] = queue.Queue(maxsize=QUEUE_CHUNKS)
         try:
@@ -142,10 +147,10 @@ class Process:
                 if text:
                     # After close, ffmpeg reports the closed pipe. These errors are expected.
                     level = logging.DEBUG if self._closed.is_set() else logging.WARNING
-                    log.log(level, "ffmpeg", extra={"channel": self._label, "output": text})
+                    log.log(level, "ffmpeg", extra={**self._fields, "output": text})
 
 
-type Starter = Callable[[Sequence[str], str], Process]
+type Starter = Callable[[Sequence[str], Mapping[str, str]], Process]
 
 
 class Session:
@@ -167,12 +172,8 @@ class Session:
         self.cancel = Cancel()
 
     @property
-    def label(self) -> str:
-        return f"{self.channel.number} {self.channel.name}"
-
-    @property
     def fields(self) -> dict[str, str]:
-        return {"channel": self.channel.number, "title": self.channel.name}
+        return log_fields(self.channel)
 
     def open(self) -> None:
         self._start()
@@ -220,9 +221,9 @@ class Session:
         except ResolveError as error:
             raise StreamError(str(error)) from error
         self.height = resolved.height
-        feed = self._relay.open(resolved, self.label)
+        feed = self._relay.open(resolved, self.fields)
         try:
-            process = self._starter(ffmpeg_args(self._ffmpeg, local(resolved, feed)), self.label)
+            process = self._starter(ffmpeg_args(self._ffmpeg, local(resolved, feed)), self.fields)
         except BaseException:
             feed.close()
             raise

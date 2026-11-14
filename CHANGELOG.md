@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Bring the landing page guide in with one short entrance and speed up its menus, install steps and press feedback.
+- Log relay, ffmpeg and `tellyard check` lines with the channel number in `channel` and its name in `title`, like every other line.
 
 ### Fixed
 
@@ -21,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Refuse channel numbers with non-ASCII digits or a line break.
 - Treat a viewer who leaves just before an https handshake as a viewer who left, instead of logging a stack trace.
 - Download a guide source again on the next retry when its last good copy could not be saved, instead of showing placeholders.
+- Stop retrying a playlist request at tune time when it fails with a lasting HTTP 4xx answer or is larger than 4 MB.
 
 ## [0.2.0] - 2026-11-09
 

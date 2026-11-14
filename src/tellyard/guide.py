@@ -105,7 +105,7 @@ class Copies:
 class Built:
     data: bytes
     failed: int
-    loaded: frozenset[str] = frozenset()
+    settled: frozenset[str] = frozenset()
 
 
 def build(
@@ -114,7 +114,7 @@ def build(
     # Placeholder blocks follow the clock in the time zone of now.
     start = now.astimezone(UTC) - HISTORY
     end = start + HISTORY + timedelta(days=days)
-    schedules, failed, loaded = _external(lineup.channels, start, end, downloader, copies)
+    schedules, failed, settled = _external(lineup.channels, start, end, downloader, copies)
     root = ET.Element("tv", {"generator-info-name": "Tellyard"})
     for channel in lineup.channels:
         element = ET.SubElement(root, "channel", {"id": channel.guide_id})
@@ -134,7 +134,7 @@ def build(
             entries = [_programme(channel, slot) for slot in _placeholders(channel, start, end, now.tzinfo)]
         root.extend(entries)
     ET.indent(root)
-    return Built(ET.tostring(root, encoding="utf-8", xml_declaration=True), failed, loaded)
+    return Built(ET.tostring(root, encoding="utf-8", xml_declaration=True), failed, settled)
 
 
 def _external(
@@ -146,30 +146,30 @@ def _external(
             wanted[channel.xmltv.url][channel.xmltv.channel_id].append(channel.number)
     schedules: dict[str, list[Slot]] = defaultdict(list)
     failed = 0
-    loaded: set[str] = set()
+    settled: set[str] = set()
     for url, ids in wanted.items():
         kept = copies.folder / _saved_name(url) if copies else None
         if copies and kept and url in copies.reuse:
-            found, ok, settled = (
-                _load(url, ids, (start, end), _copying(kept), None) if kept.is_file() else (None, True, True)
+            found, retry_soon, done = (
+                _load(url, ids, (start, end), _copying(kept), None) if kept.is_file() else (None, False, True)
             )
         else:
-            found, ok, settled = _load(url, ids, (start, end), downloader, kept)
-        if not ok:
+            found, retry_soon, done = _load(url, ids, (start, end), downloader, kept)
+        if retry_soon:
             failed += 1
-        if settled:
-            loaded.add(url)
+        if done:
+            settled.add(url)
         for number, slots in (found or {}).items():
             schedules[number].extend(slots)
     if copies:
         _forget_saved(copies.folder, {_saved_name(url) for url in wanted})
-    return schedules, failed, frozenset(loaded)
+    return schedules, failed, frozenset(settled)
 
 
 def _load(
     url: str, ids: dict[str, list[str]], span: tuple[datetime, datetime], downloader: Downloader, kept: Path | None
 ) -> tuple[dict[str, list[Slot]] | None, bool, bool]:
-    # Returns the shows, whether the source counts as working, and whether a retry may skip downloading it.
+    # Returns the shows, whether to retry the source soon, and whether a retry may skip downloading it.
     with tempfile.TemporaryDirectory(prefix="tellyard-guide-") as scratch:
         path = Path(scratch) / "source.xml"
         ends: dict[str, datetime] = {}
@@ -178,9 +178,9 @@ def _load(
             found = _read(path, ids, span, url, ends)
         except FEED_ERRORS as error:
             lasting = isinstance(error, LASTING_ERRORS)
-            return _checked(url, ids, _read_saved(kept, url, ids, span, error)), lasting, lasting
+            return _checked(url, ids, _read_saved(kept, url, ids, span, error)), not lasting, lasting
         if not found:
-            return _checked(url, ids, _read_saved(kept, url, ids, span) or found), True, True
+            return _checked(url, ids, _read_saved(kept, url, ids, span) or found), False, True
         _checked(url, ids, found)
         if kept:
             added, borrowed = _extend(found, ends, kept, ids, span)
@@ -191,8 +191,8 @@ def _load(
                 )
             for number, slots in added.items():
                 found[number].extend(slots)
-            return found, True, _save(path, kept, borrowed)
-        return found, True, True
+            return found, False, _save(path, kept, borrowed)
+        return found, False, True
 
 
 def _checked(url: str, ids: dict[str, list[str]], found: dict[str, list[Slot]] | None) -> dict[str, list[Slot]] | None:
@@ -248,7 +248,7 @@ def _read_saved(
     error: Exception | None = None,
 ) -> dict[str, list[Slot]] | None:
     extra = {"url": safe_url(url), "reason": str(error) if error else "no current listings"}
-    copy = "none"
+    copy_state = "none"
     if kept:
         try:
             found = _read(kept, ids, span, url)
@@ -256,14 +256,14 @@ def _read_saved(
         except FileNotFoundError:
             pass
         except FEED_ERRORS as copy_error:
-            copy = getattr(copy_error, "strerror", None) or str(copy_error) or type(copy_error).__name__
+            copy_state = getattr(copy_error, "strerror", None) or str(copy_error) or type(copy_error).__name__
         else:
             if found:
                 log.warning("guide source failed, using the last good copy", extra={**extra, "saved_at": saved_at})
                 return found
-            copy = "no current listings"
+            copy_state = "no current listings"
     if error:
-        log.warning("guide source failed, using placeholders", extra={**extra, "copy": copy})
+        log.warning("guide source failed, using placeholders", extra={**extra, "copy": copy_state})
     return None
 
 
@@ -570,7 +570,7 @@ class Guide:
         self.built_at: datetime | None = None
         self.write_error: str | None = None
         self.failed_sources = 0
-        self._loaded: frozenset[str] = frozenset()
+        self._settled: frozenset[str] = frozenset()
         if path.is_file():
             self._data = path.read_bytes()
             self.built_at = datetime.fromtimestamp(path.stat().st_mtime, UTC)
@@ -582,10 +582,10 @@ class Guide:
     def rebuild(self, lineup: Lineup, now: datetime | None = None, retry: bool = False) -> None:
         moment = now or datetime.now(UTC)
         saved = self._path.parent / "feeds"
-        reuse = self._loaded if retry else frozenset()
+        reuse = self._settled if retry else frozenset()
         local = moment.astimezone(self._zone) if self._zone else moment
         built = build(lineup, local, self._days, self._downloader, Copies(saved, reuse))
-        self._loaded = reuse | built.loaded
+        self._settled = reuse | built.settled
         data = built.data
         self._data = data
         self.built_at = moment

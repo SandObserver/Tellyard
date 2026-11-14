@@ -2,13 +2,14 @@ import re
 import urllib.parse
 from dataclasses import dataclass
 
+from tellyard.net import SCHEMES
+
 # Unanchored, this takes quadratic time on a long line without "=".
 ATTRIBUTE = re.compile(r'(?:^|,)[ \t]*([A-Z0-9-]+)=("[^"]*"|[^,]*)')
 RESOLUTION = re.compile(r"^([0-9]+)x([0-9]+)$")
-SCHEMES = ("http", "https")
 
 
-class PlaylistError(Exception):
+class MasterPlaylistError(Exception):
     pass
 
 
@@ -45,7 +46,7 @@ def is_master(text: str) -> bool:
 def parse_master(text: str, base: str) -> tuple[list[Variant], list[Rendition]]:
     lines = [line for line in map(str.strip, text.splitlines()) if line]
     if not lines or lines[0] != "#EXTM3U":
-        raise PlaylistError("not an HLS playlist")
+        raise MasterPlaylistError("not an HLS playlist")
     variants: list[Variant] = []
     renditions: list[Rendition] = []
     pending: dict[str, str] | None = None
@@ -56,11 +57,11 @@ def parse_master(text: str, base: str) -> tuple[list[Variant], list[Rendition]]:
             if rendition := _rendition(attributes(line.partition(":")[2]), base):
                 renditions.append(rendition)
         elif not line.startswith("#") and pending is not None:
-            if uri := _join(base, line):
+            if uri := _usable_url(base, line):
                 variants.append(_variant(pending, uri))
             pending = None
     if not variants:
-        raise PlaylistError("the master playlist lists no variants")
+        raise MasterPlaylistError("the master playlist lists no variants")
     return variants, renditions
 
 
@@ -86,13 +87,13 @@ def _rendition(media: dict[str, str], base: str) -> Rendition | None:
     if media.get("TYPE") != "AUDIO" or not media.get("GROUP-ID"):
         return None
     # Without URI, the rendition is carried in the variant stream.
-    uri = _join(base, media["URI"]) if media.get("URI") else None
+    uri = _usable_url(base, media["URI"]) if media.get("URI") else None
     if media.get("URI") and uri is None:
         return None
     return Rendition(media["GROUP-ID"], uri, media.get("DEFAULT") == "YES")
 
 
-def _join(base: str, reference: str) -> str | None:
+def _usable_url(base: str, reference: str) -> str | None:
     try:
         uri = urllib.parse.urljoin(base, reference)
         scheme = urllib.parse.urlsplit(uri).scheme
