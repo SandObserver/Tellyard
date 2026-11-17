@@ -11,8 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from tellyard import net
-from tellyard.channels import Headers
-from tellyard.net import FetchError, Trust
+from tellyard.net import FetchError, Headers, Trust
 from tellyard.resolve import Resolved
 
 log = logging.getLogger(__name__)

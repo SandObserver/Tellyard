@@ -73,10 +73,6 @@ def ffmpeg_env() -> dict[str, str]:
     return without_proxies(os.environ)
 
 
-def log_fields(channel: Channel) -> dict[str, str]:
-    return {"channel": channel.number, "title": channel.name}
-
-
 def local(resolved: Resolved, feed: Feed) -> Resolved:
     # ffmpeg reads the source only through the relay, which checks every address it requests.
     return replace(resolved, video=feed.video, audio=feed.audio, headers=())
@@ -173,7 +169,7 @@ class Session:
 
     @property
     def fields(self) -> dict[str, str]:
-        return log_fields(self.channel)
+        return self.channel.fields
 
     def open(self) -> None:
         self._start()

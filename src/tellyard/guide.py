@@ -128,9 +128,7 @@ def build(
             entries = [_programme(channel, slot) for slot in _fill(channel, slots, start, end, now.tzinfo)]
         except (ArithmeticError, ValueError) as error:
             # One bad entry must not stop the guide for every channel.
-            log.warning(
-                "guide entries unusable, using placeholders", extra={"channel": channel.number, "reason": str(error)}
-            )
+            log.warning("guide entries unusable, using placeholders", extra={**channel.fields, "reason": str(error)})
             entries = [_programme(channel, slot) for slot in _placeholders(channel, start, end, now.tzinfo)]
         root.extend(entries)
     ET.indent(root)

@@ -10,15 +10,27 @@ import signal
 import subprocess
 import threading
 import urllib.parse
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
+from pathlib import Path
 from time import monotonic
 from typing import Any, Protocol
 
 from tellyard import egress, hls
-from tellyard.channels import Channel, Headers, HlsSource, LiveSource, PageSource
-from tellyard.net import NOBODY, Cancel, FetchError, TooLargeError, Trust, fetch_text, redact, safe_url, trust_of
+from tellyard.channels import Channel, HlsSource, LiveSource, PageSource
+from tellyard.net import (
+    NOBODY,
+    Cancel,
+    FetchError,
+    Headers,
+    TooLargeError,
+    Trust,
+    fetch_text,
+    redact,
+    safe_url,
+    trust_of,
+)
 from tellyard.settings import Settings
 
 log = logging.getLogger(__name__)
@@ -38,7 +50,7 @@ TWITCH_HOSTS = ("twitch.tv", ".twitch.tv")
 YTDLP_BASE = ("--ignore-config", "--no-plugin-dirs", "--no-warnings", "--xff", "never")
 
 type Runner = Callable[[Sequence[str], float, threading.Event | None], str]
-type Proxy = Callable[[Trust, str], AbstractContextManager[str]]
+type Proxy = Callable[[Trust, Mapping[str, str]], AbstractContextManager[str]]
 
 
 class Fetcher(Protocol):
@@ -85,7 +97,17 @@ def kill_group(process: subprocess.Popen[bytes]) -> None:
         os.killpg(process.pid, signal.SIGKILL)
 
 
-def run_command(args: Sequence[str], timeout: float, cancel: threading.Event | None = None) -> str:
+def lookup_env(data_dir: Path) -> dict[str, str]:
+    cache = data_dir.absolute() / "cache"
+    env = dict(os.environ)
+    env.setdefault("XDG_CACHE_HOME", str(cache))
+    env.setdefault("DENO_DIR", str(cache / "deno"))
+    return env
+
+
+def run_command(
+    args: Sequence[str], timeout: float, cancel: threading.Event | None = None, env: Mapping[str, str] | None = None
+) -> str:
     try:
         process = subprocess.Popen(
             args,
@@ -93,6 +115,7 @@ def run_command(args: Sequence[str], timeout: float, cancel: threading.Event | N
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             start_new_session=True,
+            env=env,
         )
     except OSError as error:
         raise ResolveError(start_failure(args[0], error)) from error
@@ -151,12 +174,13 @@ class Resolver:
     def __init__(
         self,
         settings: Settings,
-        runner: Runner = run_command,
+        runner: Runner | None = None,
         fetcher: Fetcher = fetch_text,
         proxy: Proxy = egress.serve,
     ) -> None:
         self._settings = settings
-        self._run = runner
+        env = lookup_env(settings.data_dir)
+        self._run = runner or (lambda args, timeout, cancel: run_command(args, timeout, cancel, env))
         self._fetch = fetcher
         self._proxy = proxy
 
@@ -166,22 +190,22 @@ class Resolver:
         except ResolveError:
             raise
         except Exception as error:
-            log.exception("stream lookup failed unexpectedly", extra={"channel": channel.number})
+            log.exception("stream lookup failed unexpectedly", extra=channel.fields)
             raise ResolveError(f"the stream lookup failed unexpectedly ({type(error).__name__})") from error
 
     def _resolve(self, channel: Channel, cancel: Cancel) -> Resolved:
-        source, trust = channel.source, trust_of(channel.named_urls, channel.allow)
+        source, trust, fields = channel.source, trust_of(channel.named_urls, channel.allow), channel.fields
         match source:
             case HlsSource(token=token) if token:
-                return self._pick(self._signed(source, trust, cancel), source.headers, trust, cancel)
+                return self._pick(self._signed(source, trust, cancel), source.headers, trust, cancel, fields)
             case HlsSource(url=url, headers=headers):
-                return self._pick(url, headers, trust, cancel)
+                return self._pick(url, headers, trust, cancel, fields)
             case PageSource():
-                return self._pick(self._from_page(source, trust, cancel), source.headers, trust, cancel)
+                return self._pick(self._from_page(source, trust, cancel), source.headers, trust, cancel, fields)
             case LiveSource():
-                with self._proxy(trust, channel.number) as proxy:
-                    manifest = self._from_ytdlp(self._youtube_target(source, cancel, proxy), cancel, proxy)
-                return replace(self._pick(manifest, (), trust, cancel), repair_timestamps=is_twitch(source.url))
+                with self._proxy(trust, fields) as proxy:
+                    manifest = self._from_ytdlp(self._youtube_target(source, cancel, proxy, fields), cancel, proxy)
+                return replace(self._pick(manifest, (), trust, cancel, fields), repair_timestamps=is_twitch(source.url))
 
     def _signed(self, source: HlsSource, trust: Trust, cancel: Cancel) -> str:
         address = source.token.replace("{url}", urllib.parse.quote(source.url, safe=""))
@@ -211,7 +235,9 @@ class Resolver:
         hint = f" containing {source.match!r}" if source.match else ""
         raise ResolveError(f"no playlist URL{hint} on the channel page")
 
-    def _youtube_target(self, source: LiveSource, cancel: threading.Event, proxy: str) -> str:
+    def _youtube_target(
+        self, source: LiveSource, cancel: threading.Event, proxy: str, fields: Mapping[str, str]
+    ) -> str:
         if not source.match:
             return source.url
         channel = source.url.rstrip("/").removesuffix("/live")
@@ -223,7 +249,8 @@ class Resolver:
             raise
         except ResolveError as error:
             log.warning(
-                "live stream list failed, using the live page", extra={"url": safe_url(channel), "reason": str(error)}
+                "live stream list failed, using the live page",
+                extra={**fields, "url": safe_url(channel), "reason": str(error)},
             )
             return source.url
         entries = listing.get("entries")
@@ -234,7 +261,10 @@ class Resolver:
             title, video = entry.get("title"), entry.get("id")
             if isinstance(title, str) and isinstance(video, str) and wanted in title.casefold():
                 return f"https://www.youtube.com/watch?v={video}"
-        log.info("no live stream matches, using the live page", extra={"url": safe_url(channel), "match": source.match})
+        log.info(
+            "no live stream matches, using the live page",
+            extra={**fields, "url": safe_url(channel), "match": source.match},
+        )
         return source.url
 
     def _from_ytdlp(self, url: str, cancel: threading.Event, proxy: str) -> str:
@@ -255,8 +285,8 @@ class Resolver:
             raise ResolveError("yt-dlp returned no HLS playlist for the stream")
         return manifest
 
-    def _pick(self, url: str, headers: Headers, trust: Trust, cancel: Cancel) -> Resolved:
-        final, text = self._fetch_with_retry(url, headers, trust, cancel)
+    def _pick(self, url: str, headers: Headers, trust: Trust, cancel: Cancel, fields: Mapping[str, str]) -> Resolved:
+        final, text = self._fetch_with_retry(url, headers, trust, cancel, fields)
         if not hls.is_master(text):
             if not text.lstrip().startswith("#EXTM3U"):
                 raise ResolveError("the stream URL did not return an HLS playlist")
@@ -268,7 +298,9 @@ class Resolver:
         choice = hls.choose(variants, renditions)
         return Resolved(choice.video, choice.audio, choice.height, headers, trust)
 
-    def _fetch_with_retry(self, url: str, headers: Headers, trust: Trust, cancel: Cancel) -> tuple[str, str]:
+    def _fetch_with_retry(
+        self, url: str, headers: Headers, trust: Trust, cancel: Cancel, fields: Mapping[str, str]
+    ) -> tuple[str, str]:
         # Some CDNs hang on some requests. A new connection usually answers.
         for attempt in range(1, FETCH_ATTEMPTS + 1):
             try:
@@ -276,7 +308,9 @@ class Resolver:
             except FetchError as error:
                 if attempt == FETCH_ATTEMPTS or _lasting(error):
                     raise ResolveError(f"could not load the playlist: {error}") from error
-                log.info("playlist request failed, retrying", extra={"attempt": attempt, "reason": str(error)})
+                log.info(
+                    "playlist request failed, retrying", extra={**fields, "attempt": attempt, "reason": str(error)}
+                )
         raise AssertionError("unreachable")
 
     def _load(self, url: str, headers: Headers, trust: Trust, cancel: Cancel) -> tuple[str, str]:

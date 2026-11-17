@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple, override
 
-from tellyard.channels import Headers
+type Headers = tuple[tuple[str, str], ...]
 
 # Some broadcasters block requests without a browser user agent.
 USER_AGENT = (

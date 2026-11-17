@@ -6,14 +6,14 @@ import socket
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 
 import pytest
 
 from tellyard import channels, resolve
-from tellyard.channels import Channel, Headers
-from tellyard.net import Cancel, FetchError, TooLargeError, Trust, trust_of
+from tellyard.channels import Channel
+from tellyard.net import Cancel, FetchError, Headers, TooLargeError, Trust, trust_of
 from tellyard.resolve import Fetcher, LookupCancelledError, Resolved, ResolveError, Resolver, Runner, run_command
 from tellyard.settings import Settings
 
@@ -41,7 +41,7 @@ PROXY = "socks5h://127.0.0.1:9"
 
 
 @contextlib.contextmanager
-def fixed_proxy(trust: Trust, label: str) -> Iterator[str]:
+def fixed_proxy(trust: Trust, fields: Mapping[str, str]) -> Iterator[str]:
     yield PROXY
 
 
@@ -76,7 +76,10 @@ def test_rejects_a_non_playlist(make_settings: Callable[..., Settings]) -> None:
         Resolver(make_settings(), fetcher=fetch).resolve(channel(hls="https://cdn.example.com/a.m3u8"))
 
 
-def test_retries_a_hanging_playlist_request(make_settings: Callable[..., Settings]) -> None:
+def test_retries_a_hanging_playlist_request(
+    make_settings: Callable[..., Settings], caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
     attempts: list[str] = []
 
     def flaky(url: str, headers: Headers, trust: Trust, *, cancel: Cancel | None = None) -> tuple[str, str]:
@@ -88,6 +91,8 @@ def test_retries_a_hanging_playlist_request(make_settings: Callable[..., Setting
     resolved = Resolver(make_settings(), fetcher=flaky).resolve(channel(hls="https://cdn.example.com/m.m3u8"))
     assert resolved.height == 1080
     assert len(attempts) == 3
+    retries = [r for r in caplog.records if r.getMessage() == "playlist request failed, retrying"]
+    assert [(r.channel, r.title) for r in retries] == [("1", "Test")] * 2  # type: ignore[attr-defined]
 
 
 def test_gives_up_after_three_playlist_attempts(make_settings: Callable[..., Settings]) -> None:
@@ -299,7 +304,8 @@ def test_youtube_match_falls_back_to_the_live_page(
     resolver = Resolver(make_settings(), runner=scripted(outputs, seen), fetcher=fetch)
     resolver.resolve(channel(youtube="https://www.youtube.com/@LiveNOWFOX/live", match="24/7"))
     assert seen[-1][-1] == "https://www.youtube.com/@LiveNOWFOX/live"
-    assert "using the live page" in caplog.text
+    fallback = [r for r in caplog.records if "using the live page" in r.getMessage()]
+    assert [(r.channel, r.title) for r in fallback] == [("1", "Test")]  # type: ignore[attr-defined]
 
 
 TOKEN = "https://t.example.com/secure?url={url}"
@@ -452,3 +458,19 @@ def test_leaving_during_a_playlist_request_stops_it(make_settings: Callable[...,
     with listener, pytest.raises(LookupCancelledError):
         Resolver(make_settings()).resolve(channel(hls=url), cancel)
     assert time.monotonic() - started < 2
+
+
+def test_lookup_caches_follow_the_data_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    monkeypatch.delenv("DENO_DIR", raising=False)
+    env = resolve.lookup_env(tmp_path)
+    assert env["XDG_CACHE_HOME"] == str(tmp_path / "cache")
+    assert env["DENO_DIR"] == str(tmp_path / "cache" / "deno")
+    monkeypatch.setenv("DENO_DIR", "/elsewhere")
+    assert resolve.lookup_env(tmp_path)["DENO_DIR"] == "/elsewhere"
+
+
+def test_run_command_passes_the_environment() -> None:
+    script = "import os; print(os.environ['DENO_DIR'])"
+    output = run_command([sys.executable, "-c", script], 10.0, None, {"DENO_DIR": "/data/cache/deno"})
+    assert output.strip() == "/data/cache/deno"

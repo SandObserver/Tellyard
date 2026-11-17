@@ -6,7 +6,7 @@ import select
 import socket
 import socketserver
 import threading
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 
 from tellyard import net
 from tellyard.net import BlockedAddressError, Trust
@@ -25,10 +25,10 @@ SUCCEEDED, FAILED, NOT_ALLOWED, NOT_SUPPORTED, BAD_ADDRESS = 0, 1, 2, 7, 8
 
 
 @contextlib.contextmanager
-def serve(trust: Trust, label: str) -> Iterator[str]:
+def serve(trust: Trust, fields: Mapping[str, str]) -> Iterator[str]:
     # yt-dlp reaches the network only through this SOCKS5 proxy, which applies the same address checks as Tellyard.
-    server = _Server(trust, label)
-    threading.Thread(target=server.serve_forever, name=f"egress {label}", daemon=True).start()
+    server = _Server(trust, fields)
+    threading.Thread(target=server.serve_forever, name=f"egress {fields.get('channel', '')}", daemon=True).start()
     try:
         yield f"socks5h://127.0.0.1:{server.server_address[1]}"
     finally:
@@ -40,10 +40,10 @@ def serve(trust: Trust, label: str) -> Iterator[str]:
 class _Server(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
-    def __init__(self, trust: Trust, label: str) -> None:
+    def __init__(self, trust: Trust, fields: Mapping[str, str]) -> None:
         super().__init__(("127.0.0.1", 0), _Handler)
         self.trust = trust
-        self.label = label
+        self.fields = fields
         self._lock = threading.Lock()
         self._open: set[socket.socket] = set()
         self._closed = False
@@ -87,7 +87,7 @@ class _Handler(socketserver.BaseRequestHandler):
         try:
             upstream = net.connect_out(host, port, self.server.trust, CONNECT_TIMEOUT)
         except BlockedAddressError as error:
-            log.warning("source request failed", extra={"channel": self.server.label, "reason": str(error)})
+            log.warning("source request failed", extra={**self.server.fields, "reason": str(error)})
             _reply(client, NOT_ALLOWED)
             return
         except (OSError, ValueError):

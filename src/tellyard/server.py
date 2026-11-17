@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
 
 from tellyard import __version__
-from tellyard.channels import Channel
+from tellyard.channels import NUMBER, Channel
 from tellyard.guide import Guide
 from tellyard.net import FetchError, fetch_text, trust_of
 from tellyard.relay import Relay
@@ -28,7 +28,7 @@ from tellyard.store import ChannelStore
 from tellyard.stream import Session, StreamError, ViewerLeftError
 
 log = logging.getLogger(__name__)
-STREAM_PATH = re.compile(r"^/(?:stream/|auto/v)(\d{1,5}(?:\.\d{1,3})?)$")
+STREAM_PATH = re.compile(rf"^/(?:stream/|auto/v)({NUMBER.pattern})$")
 HOST = re.compile(r"^[A-Za-z0-9.\-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:.]+\](:\d{1,5})?$")
 GUIDE_CHECK = 60.0
 GUIDE_RETRY = timedelta(minutes=15)
