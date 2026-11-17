@@ -640,3 +640,17 @@ def test_health_reports_a_guide_that_cannot_be_saved(app: App, tmp_path: Path) -
         assert problem.startswith("cannot write the guide to ")
     finally:
         (tmp_path / "data").chmod(0o755)
+
+
+@pytest.mark.parametrize(
+    ("path", "number"),
+    [
+        ("/stream/101", "101"),
+        ("/auto/v5.1", "5.1"),
+        ("/stream/12345.123", "12345.123"),
+        ("/stream/\u0661\u0660\u0661", None),
+    ],
+)
+def test_stream_paths_take_the_channel_number_format(path: str, number: str | None) -> None:
+    found = server.STREAM_PATH.match(path)
+    assert (found.group(1) if found else None) == number

@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Keep the yt-dlp and Deno caches in `cache/` under `DATA_DIR`, so a different `DATA_DIR` moves them with the guide.
+- Log stream lookup, yt-dlp proxy and guide lines with the channel number in `channel` and its name in `title`.
+
+### Fixed
+
+- Report an `allow` entry that is not a valid address when `channels.toml` loads, instead of ignoring it.
+
 ## [0.2.1] - 2026-11-14
 
 ### Changed

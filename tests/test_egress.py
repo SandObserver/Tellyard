@@ -13,6 +13,8 @@ import pytest
 from tellyard import egress, net
 from tellyard.net import Trust
 
+FIELDS = {"channel": "9", "title": "Test"}
+
 PLAYLIST = b"#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nseg.ts\n"
 
 
@@ -71,7 +73,7 @@ def domain(host: str, port: int) -> bytes:
 def test_tunnels_to_a_named_origin(sites: tuple[str, str]) -> None:
     named, _ = sites
     port = int(named.rpartition(":")[2])
-    with egress.serve(net.trust_of([named]), "9") as proxy:
+    with egress.serve(net.trust_of([named]), FIELDS) as proxy:
         reply, sock = socks(proxy, domain("127.0.0.1", port))
         with sock:
             assert reply[:2] == b"\x05\x00"
@@ -85,12 +87,13 @@ def test_refuses_private_addresses_the_channel_does_not_name(
 ) -> None:
     named, other = sites
     request = b"\x05\x01\x00\x01" + socket.inet_aton("127.0.0.1") + struct.pack(">H", int(other.rpartition(":")[2]))
-    with caplog.at_level(logging.WARNING), egress.serve(net.trust_of([named]), "9") as proxy:
+    with caplog.at_level(logging.WARNING), egress.serve(net.trust_of([named]), FIELDS) as proxy:
         reply, sock = socks(proxy, request)
         sock.close()
     assert reply[:2] == b"\x05\x02"
     assert Site.seen == []
-    assert any("private addresses need a host and port named" in getattr(r, "reason", "") for r in caplog.records)
+    refused = [r for r in caplog.records if "private addresses need a host and port named" in getattr(r, "reason", "")]
+    assert [(r.channel, r.title) for r in refused] == [("9", "Test")]  # type: ignore[attr-defined]
 
 
 @pytest.mark.parametrize(
@@ -105,7 +108,7 @@ def test_refuses_private_addresses_the_channel_does_not_name(
     ],
 )
 def test_answers_bad_requests(greeting: bytes, ask: bytes, answer: bytes) -> None:
-    with egress.serve(Trust(), "9") as proxy:
+    with egress.serve(Trust(), FIELDS) as proxy:
         reply, sock = socks(proxy, ask, greeting)
         sock.close()
     assert reply[:2] == answer
@@ -113,7 +116,7 @@ def test_answers_bad_requests(greeting: bytes, ask: bytes, answer: bytes) -> Non
 
 def test_ipv6_targets_are_checked() -> None:
     request = b"\x05\x01\x00\x04" + socket.inet_pton(socket.AF_INET6, "::1") + struct.pack(">H", 80)
-    with egress.serve(Trust(), "9") as proxy:
+    with egress.serve(Trust(), FIELDS) as proxy:
         reply, sock = socks(proxy, request)
         sock.close()
     assert reply[:2] == b"\x05\x02"
@@ -123,7 +126,7 @@ def test_an_unreachable_target_fails() -> None:
     closed = socket.create_server(("127.0.0.1", 0))
     port = closed.getsockname()[1]
     closed.close()
-    with egress.serve(net.trust_of([f"http://127.0.0.1:{port}/"]), "9") as proxy:
+    with egress.serve(net.trust_of([f"http://127.0.0.1:{port}/"]), FIELDS) as proxy:
         reply, sock = socks(proxy, domain("127.0.0.1", port))
         sock.close()
     assert reply[:2] == b"\x05\x01"
@@ -132,7 +135,7 @@ def test_an_unreachable_target_fails() -> None:
 def test_a_host_name_that_cannot_be_looked_up_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
         monkeypatch.delenv(name, raising=False)
-    with egress.serve(Trust(), "9") as proxy:
+    with egress.serve(Trust(), FIELDS) as proxy:
         reply, sock = socks(proxy, domain("a" * 64 + ".example.com", 443))
         sock.close()
     assert reply[:2] == b"\x05\x01"
@@ -162,7 +165,7 @@ def test_goes_through_the_configured_proxy(sites: tuple[str, str], monkeypatch: 
 
     threading.Thread(target=upstream, daemon=True).start()
     monkeypatch.setenv("https_proxy", f"http://user:p%40ss@127.0.0.1:{listener.getsockname()[1]}")
-    with listener, egress.serve(Trust(), "9") as proxy:
+    with listener, egress.serve(Trust(), FIELDS) as proxy:
         reply, sock = socks(proxy, domain("cdn.example.com", 443))
         with sock:
             assert reply[:2] == b"\x05\x00"
@@ -188,7 +191,7 @@ def test_behind_a_proxy_private_numbers_are_refused(monkeypatch: pytest.MonkeyPa
 
 def test_ytdlp_cannot_follow_a_redirect_to_a_private_address(sites: tuple[str, str]) -> None:
     named, _ = sites
-    with egress.serve(net.trust_of([named]), "9") as proxy:
+    with egress.serve(net.trust_of([named]), FIELDS) as proxy:
         direct = subprocess.run(
             ["yt-dlp", "--no-warnings", "--skip-download", "-J", "--proxy", proxy, f"{named}/live.m3u8"],
             capture_output=True,

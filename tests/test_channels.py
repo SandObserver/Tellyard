@@ -99,6 +99,7 @@ def test_allow_and_named_urls() -> None:
     hls = entry(live=None, hls="http://192.168.1.20:8080/a.m3u8", token="https://t.example/s?u={url}")
     channel = parse(hls | {"allow": ["192.168.1.20:8081", "[fd00::5]:9000"]}).channels[0]
     assert channel.allow == (("192.168.1.20", 8081), ("fd00::5", 9000))
+    assert parse(hls | {"allow": ["127.1:8081"]}).channels[0].allow == (("127.0.0.1", 8081),)
     assert channel.named_urls == ("http://192.168.1.20:8080/a.m3u8", "https://t.example/s?u=")
     assert parse(entry()).channels[0].named_urls == ("https://www.youtube.com/@n/live",)
 
@@ -150,6 +151,8 @@ def test_min_height_is_optional_per_channel() -> None:
         ({"channel": [entry(allow=["192.168.1.20"])]}, "must be host:port"),
         ({"channel": [entry(allow=["http://192.168.1.20:8081/x"])]}, "must be host:port"),
         ({"channel": [entry(allow=["192.168.1.20:99999"])]}, "must be host:port"),
+        ({"channel": [entry(allow=["192.168.1.300:8081"])]}, "must be host:port"),
+        ({"channel": [entry(allow=["0x7f.1.1.1.1:80"])]}, "must be host:port"),
         ({"channel": [entry(allow=[8081])]}, "must be host:port"),
     ],
 )

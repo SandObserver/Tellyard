@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from tellyard.net import Headers, canonical_host
+
 NUMBER = re.compile(r"[0-9]{1,5}(\.[0-9]{1,3})?")
 HEADER_NAME = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 SOURCE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
@@ -35,9 +37,6 @@ DEFAULT_BLOCK_HOURS = 2.0
 
 class ChannelError(Exception):
     pass
-
-
-type Headers = tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)
@@ -88,6 +87,10 @@ class Channel:
     xmltv: XmltvGuide | None
     min_height: int | None
     allow: tuple[tuple[str, int], ...] = ()
+
+    @property
+    def fields(self) -> dict[str, str]:
+        return {"channel": self.number, "title": self.name}
 
     @property
     def guide_id(self) -> str:
@@ -282,6 +285,7 @@ def _allow(value: Any, where: str) -> tuple[tuple[str, int], ...]:
         try:
             parts = urllib.parse.urlsplit(f"//{item}") if isinstance(item, str) else None
             host, port = (parts.hostname, parts.port) if parts else (None, None)
+            host = canonical_host(host) if host else None
         except ValueError:
             host, port = None, None
         if not host or not port or parts is None or parts.path or parts.query or parts.fragment or parts.username:
