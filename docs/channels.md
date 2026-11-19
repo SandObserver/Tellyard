@@ -72,4 +72,4 @@ Only add streams you are allowed to watch. Run `docker exec tellyard tellyard ch
 
 ## Changing the list
 
-Edit the file while Tellyard runs. It reloads within a minute and keeps the previous channels if the new file has a mistake. `docker exec tellyard tellyard validate` checks the file and lists the channels it found. After adding or removing channels, refresh the guide in Plex, see [Plex](plex.md#after-changing-channels).
+Edit the file while Tellyard runs. It reloads within a minute and keeps the previous channels if the new file has a mistake. A file with a mistake stops Tellyard from starting at the next restart. Run `docker exec tellyard tellyard validate` after each change: it checks the file and lists the channels it found. After adding or removing channels, refresh the guide in Plex, see [Plex](plex.md#after-changing-channels).

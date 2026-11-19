@@ -15,9 +15,28 @@ from tellyard.guide import Guide, parse_time
 from tellyard.server import App
 from tellyard.settings import Settings
 
+SETTINGS = (
+    "BASE_URL",
+    "DEVICE_ID",
+    "DEVICE_NAME",
+    "FFMPEG",
+    "GUIDE_DAYS",
+    "GUIDE_REFRESH_HOURS",
+    "HEARTBEAT_URL",
+    "LISTEN_PORT",
+    "LOG_LEVEL",
+    "MIN_HEIGHT",
+    "TUNERS",
+    "TZ",
+    "YTDLP",
+    "YTDLP_ARGS",
+)
+
 
 @pytest.fixture(autouse=True)
 def environment(monkeypatch: pytest.MonkeyPatch, channels_file: Path, tmp_path: Path) -> None:
+    for name in SETTINGS:
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("CHANNELS_FILE", str(channels_file))
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
 
@@ -67,7 +86,9 @@ def test_serve_refuses_a_bad_channel_file(
 ) -> None:
     channels_file.write_text("[[channel]]\nnumber = 1\n", encoding="utf-8")
     assert cli.main(["serve"]) == 2
-    assert "tellyard:" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert 'ERR msg="channel file has an error, not starting"' in err
+    assert f"file={channels_file}" in err
 
 
 def test_bad_settings(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

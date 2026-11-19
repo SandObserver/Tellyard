@@ -87,7 +87,9 @@ def _serve(settings: Settings) -> int:
     try:
         store = ChannelStore(settings.channels_file)
     except ChannelError as error:
-        print(f"tellyard: {error}", file=sys.stderr)
+        log.error(
+            "channel file has an error, not starting", extra={"file": settings.channels_file, "reason": str(error)}
+        )
         return 2
     if settings.unknown_time_zone:
         log.warning(

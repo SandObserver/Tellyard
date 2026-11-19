@@ -241,6 +241,7 @@ class Resolver:
         if not source.match:
             return source.url
         channel = source.url.rstrip("/").removesuffix("/live")
+        live_page = f"{channel}/live"
         args = [self._settings.ytdlp, *YTDLP_BASE, "--flat-playlist", "--playlist-end", str(STREAM_SCAN), "-J"]
         args += [*self._settings.ytdlp_args, "--proxy", proxy, f"{channel}/streams"]
         try:
@@ -252,7 +253,7 @@ class Resolver:
                 "live stream list failed, using the live page",
                 extra={**fields, "url": safe_url(channel), "reason": str(error)},
             )
-            return source.url
+            return live_page
         entries = listing.get("entries")
         wanted = source.match.casefold()
         for entry in entries if isinstance(entries, list) else []:
@@ -265,7 +266,7 @@ class Resolver:
             "no live stream matches, using the live page",
             extra={**fields, "url": safe_url(channel), "match": source.match},
         )
-        return source.url
+        return live_page
 
     def _from_ytdlp(self, url: str, cancel: threading.Event, proxy: str) -> str:
         args = [self._settings.ytdlp, *YTDLP_BASE, "--no-playlist", "--skip-download", "-J"]
