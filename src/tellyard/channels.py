@@ -11,6 +11,7 @@ from tellyard.net import Headers, canonical_host
 NUMBER = re.compile(r"[0-9]{1,5}(\.[0-9]{1,3})?")
 HEADER_NAME = re.compile(r"^[A-Za-z0-9-]{1,64}$")
 SOURCE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
+CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
 CHANNEL_KEYS = frozenset(
     {
         "number",
@@ -231,6 +232,8 @@ def _guide(
     category = guide.get("category", "")
     if not isinstance(category, str):
         raise ChannelError(f"{where} guide category must be text")
+    if CONTROL.search(category):
+        raise ChannelError(f"{where} guide category contains a control character, such as \\b or \\f")
     hours = guide.get("hours", DEFAULT_BLOCK_HOURS)
     if isinstance(hours, bool) or not isinstance(hours, int | float) or not 0.5 <= hours <= 24:
         raise ChannelError(f"{where} guide hours must be between 0.5 and 24")
@@ -267,6 +270,8 @@ def _table(value: Any, where: str) -> dict[str, Any]:
 def _text(value: Any, where: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ChannelError(f"{where} must be non-empty text")
+    if CONTROL.search(value):
+        raise ChannelError(f"{where} contains a control character, such as \\b or \\f")
     return value.strip()
 
 
@@ -274,6 +279,13 @@ def _url(value: Any, where: str) -> str:
     text = _text(value, where)
     if not re.match(r"^https?://[^\s/]+", text):
         raise ChannelError(f"{where} must be an http or https URL")
+    try:
+        parts = urllib.parse.urlsplit(text)
+        valid = bool(parts.hostname) and parts.port != 0
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ChannelError(f"{where} has an invalid host or port")
     return text
 
 

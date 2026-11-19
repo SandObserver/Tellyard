@@ -154,11 +154,24 @@ def test_min_height_is_optional_per_channel() -> None:
         ({"channel": [entry(allow=["192.168.1.300:8081"])]}, "must be host:port"),
         ({"channel": [entry(allow=["0x7f.1.1.1.1:80"])]}, "must be host:port"),
         ({"channel": [entry(allow=[8081])]}, "must be host:port"),
+        ({"channel": [entry(name="News\b")]}, "name contains a control character"),
+        ({"channel": [entry(guide={"description": "Rock\bottom"})]}, "description contains a control character"),
+        ({"channel": [entry(guide={"title": "A\x0cB"})]}, "title contains a control character"),
+        ({"channel": [entry(guide={"category": "News\x00"})]}, "category contains a control character"),
+        ({"channel": [entry(logo="https://example.com:99999/l.png")]}, "logo has an invalid host or port"),
+        ({"channel": [entry(live=None, hls="https://[::1/x.m3u8")]}, "hls has an invalid host or port"),
+        ({"channel": [entry(live=None, hls="https://:8080/x.m3u8")]}, "hls has an invalid host or port"),
+        ({"channel": [entry(live=None, hls="https://example.com:0/x.m3u8")]}, "hls has an invalid host or port"),
     ],
 )
 def test_rejects_mistakes(data: dict[str, Any], message: str) -> None:
     with pytest.raises(ChannelError, match=message.replace("[", r"\[").replace("]", r"\]")):
         channels.parse(data)
+
+
+def test_accepts_tabs_and_line_breaks_in_text() -> None:
+    lineup = parse(entry(guide={"description": "Line one.\nLine two.\tEnd."}))
+    assert lineup.channels[0].placeholder.description == "Line one.\nLine two.\tEnd."
 
 
 def test_error_names_the_channel() -> None:

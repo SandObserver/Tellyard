@@ -150,7 +150,8 @@ category = "News"
 
 [Channels](docs/channels.md) lists every option and how to find sources, logos and guides.
 Tellyard reloads the file within a minute of a change and keeps the previous channels if the new
-file has a mistake. After adding or removing channels, refresh the guide in Plex.
+file has a mistake. A file with a mistake stops Tellyard from starting at the next restart, so run
+`docker exec tellyard tellyard validate` after each change. After adding or removing channels, refresh the guide in Plex.
 
 Only add streams you are allowed to watch.
 
@@ -190,6 +191,8 @@ Set these as environment variables.
 | `LISTEN_PORT` | Port inside the container. If you change it, change the right side of `ports:` too. | `5004` |
 | `CHANNELS_FILE` | The channel list inside the container. Keep the default. | `/config/channels.toml` |
 | `DATA_DIR` | Folder inside the container for the guide and caches. Keep the default. | `/data` |
+| `YTDLP` | The yt-dlp program. Keep the default. | `yt-dlp` |
+| `FFMPEG` | The ffmpeg program. Keep the default. | `ffmpeg` |
 
 ## Documentation
 

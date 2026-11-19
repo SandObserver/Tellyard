@@ -20,7 +20,8 @@ CHANNELS_FILE=./channels.toml DATA_DIR=./data uv run tellyard serve
 To run the checks before each commit and the tests before each push:
 
 ```sh
-uvx pre-commit install --hook-type pre-commit --hook-type pre-push
+uv tool install pre-commit
+pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
 ## How it fits together
@@ -42,7 +43,7 @@ uvx pre-commit install --hook-type pre-commit --hook-type pre-push
 CI runs the same checks:
 
 ```sh
-uv run ruff format . && uv run ruff check . && uv run mypy && uv run pytest
+uv sync --locked && uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest
 ```
 
 The tests need no internet connection and no ffmpeg. `pytest` measures coverage and fails below 85% or on any warning. CI also lints the workflows with actionlint and zizmor, builds the image, checks that it becomes healthy, plays a test stream through it, and scans it with Grype; a fixable critical vulnerability fails the build. It also builds the arm64 image under emulation and runs its tools once.

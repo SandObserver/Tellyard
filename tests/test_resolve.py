@@ -292,8 +292,9 @@ def test_youtube_match_picks_the_stream_by_title(make_settings: Callable[..., Se
 
 
 @pytest.mark.parametrize("listing", [json.dumps({"entries": []}), None])
+@pytest.mark.parametrize("url", ["https://www.youtube.com/@LiveNOWFOX/live", "https://www.youtube.com/@LiveNOWFOX/"])
 def test_youtube_match_falls_back_to_the_live_page(
-    make_settings: Callable[..., Settings], listing: str | None, caplog: pytest.LogCaptureFixture
+    make_settings: Callable[..., Settings], listing: str | None, url: str, caplog: pytest.LogCaptureFixture
 ) -> None:
     caplog.set_level(logging.INFO)
     seen: list[Sequence[str]] = []
@@ -302,7 +303,7 @@ def test_youtube_match_falls_back_to_the_live_page(
         outputs["https://www.youtube.com/@LiveNOWFOX/streams"] = listing
     fetch = pages({"https://m.example.com/x.m3u8": MASTER})
     resolver = Resolver(make_settings(), runner=scripted(outputs, seen), fetcher=fetch)
-    resolver.resolve(channel(youtube="https://www.youtube.com/@LiveNOWFOX/live", match="24/7"))
+    resolver.resolve(channel(youtube=url, match="24/7"))
     assert seen[-1][-1] == "https://www.youtube.com/@LiveNOWFOX/live"
     fallback = [r for r in caplog.records if "using the live page" in r.getMessage()]
     assert [(r.channel, r.title) for r in fallback] == [("1", "Test")]  # type: ignore[attr-defined]

@@ -34,6 +34,13 @@ def root_logger() -> Iterator[None]:
     root.setLevel(level)
 
 
+@pytest.fixture(autouse=True)
+def no_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("http_proxy", "https_proxy", "all_proxy", "no_proxy"):
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(name.upper(), raising=False)
+
+
 @pytest.fixture
 def channels_file(tmp_path: Path) -> Path:
     path = tmp_path / "channels.toml"

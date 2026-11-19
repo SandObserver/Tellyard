@@ -56,7 +56,7 @@ Tellyard serves no images itself. Tools such as [Posteryard](https://github.com/
 
 ## The channel list
 
-Tellyard checks `channels.toml` for changes every time Plex asks for the line-up or a stream, and once a minute. A file with a mistake is ignored, with an error in the log, and the previous channels stay.
+Tellyard checks `channels.toml` for changes every time Plex asks for the line-up or a stream, and once a minute. A file with a mistake is ignored, with an error in the log, and the previous channels stay. At start there are no previous channels, so a file with a mistake stops Tellyard from starting.
 
 ## HTTP endpoints
 
