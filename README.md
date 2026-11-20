@@ -210,7 +210,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and releases. Changes a
 
 Tellyard is an independent project. It is not affiliated with or endorsed by Plex, Jellyfin, Emby,
 SiliconDust (HDHomeRun), YouTube, Twitch, Kick, Unraid, Docker or any broadcaster. Their names appear
-only to say what Tellyard works with.
+only to say what Tellyard works with. Plex is a trademark of Plex and used under a license.
 
 Tellyard ships no channels, stream addresses or logos. It plays only the sources you list, for your
 own viewing. Tellyard's own code does not decrypt DRM or get around logins, paywalls or region
