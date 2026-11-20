@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Keep the yt-dlp and Deno caches in `cache/` under `DATA_DIR`, so a different `DATA_DIR` moves them with the guide.
 - Log stream lookup, yt-dlp proxy and guide lines with the channel number in `channel` and its name in `title`.
+- Ship the license texts of the bundled programs and the exact FFmpeg source archive name in `/usr/share/doc/tellyard` in the image.
 
 ### Fixed
 
