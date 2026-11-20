@@ -66,6 +66,8 @@ class Settings:
             raise SettingsError(f"YTDLP_ARGS cannot be parsed: {error}") from error
         if any(_sets_proxy(arg) for arg in ytdlp_args):
             raise SettingsError("YTDLP_ARGS cannot set a proxy. Set http_proxy or https_proxy instead")
+        if "--" in ytdlp_args:
+            raise SettingsError("YTDLP_ARGS cannot contain --. yt-dlp would then skip the proxy Tellyard sets")
         zone_name = env.get("TZ", "").strip().removeprefix(":")
         zone = _time_zone(zone_name)
         return cls(
