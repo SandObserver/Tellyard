@@ -76,8 +76,7 @@
       .hero h1, .f-title, .band h2, .saa, .saq, .sentence, .sac p, .iname, .itext, .itext code, .fill-note, .fill-note code, .lede, .hero p, .foot-legal, .credit-note { overflow-wrap: anywhere; }
       .hero h1 { margin: 0; font-size: 64px; line-height: 1.05; letter-spacing: -0.025em; font-weight: 700; max-width: 22ch; text-wrap: balance; }
       .hero p { margin: 26px 0 0; font-size: 19px; line-height: 1.5; color: var(--dim); max-width: 58ch; text-wrap: pretty; }
-      .plex { color: #e5a00d; font-weight: 700; }
-      .jellyfin { font-weight: 700; background: linear-gradient(90deg, #aa5cc3, #00a4dc); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .server { color: var(--label); font-weight: 700; }
       .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
       .btn { height: 50px; padding: 0 26px; border-radius: 25px; display: inline-flex; align-items: center; font-size: 16px; font-weight: 600; }
       .btn-accent { background: var(--accent-fill); color: var(--on-accent); }
@@ -316,7 +315,7 @@
       <div class="wrap">
         <header class="hero">
           <h1>{{tagline}}</h1>
-          <p>Tellyard shows up in <span class="plex">Plex</span> and <span class="jellyfin">Jellyfin</span> as a network TV tuner. Add the live streams broadcasters publish for free, and they play in the Live TV guide like any other channel, on every TV, phone and browser your server reaches.</p>
+          <p>Tellyard shows up in <span class="server">Plex</span> and <span class="server">Jellyfin</span> as a network TV tuner. Add the live streams broadcasters publish for free, and they play in the Live TV guide like any other channel, on every TV, phone and browser your server reaches.</p>
           <div class="cta-row">
             <a class="btn btn-accent" href="#getting-started">Install with Docker</a>
             <a class="btn btn-quiet" href="#features">Why Tellyard</a>
@@ -327,7 +326,7 @@
       <div class="tv-band">
         <div class="tv">
           <div class="bezel">
-            <div class="screen" id="guide" role="img" aria-label="A Plex Live TV guide with fictional channels, the first one playing live">
+            <div class="screen" id="guide" role="img" aria-label="A Live TV guide with fictional channels, the first one playing live">
               <div class="guide" aria-hidden="true">
                 <span class="g-title">Live TV</span>
                 <div class="ruler">{{guide_ruler}}</div>
@@ -390,7 +389,7 @@
             <dd><p class="credit-note">A calm dashboard for the services you self-host.</p></dd>
           </div>
         </dl>
-        <p class="foot-legal">© {{year}} <a href="https://backyard.sandobserver.com">SandObserver</a> · Apache License 2.0 · <a href="{{repo}}/blob/main/CHANGELOG.md" aria-label="Release v{{version}}, changelog">v{{version}}</a><br />Plex and Jellyfin are trademarks of their owners; Tellyard is not affiliated with them. Channels shown are fictional.</p>
+        <p class="foot-legal">© {{year}} <a href="https://backyard.sandobserver.com">SandObserver</a> · Apache License 2.0 · <a href="{{repo}}/blob/main/CHANGELOG.md" aria-label="Release v{{version}}, changelog">v{{version}}</a><br />Plex is a trademark of Plex and used under a license. Jellyfin is a trademark of its owner. Tellyard is not affiliated with them. Channels shown are fictional.</p>
       </div>
     </footer>
     <p class="sr-only" id="live" aria-live="polite"></p>
