@@ -359,9 +359,10 @@ def test_run_command_stops_when_cancelled() -> None:
 
 def helper_program(pid_file: Path) -> list[str]:
     helper = (
-        "import subprocess, sys, time\n"
+        "import os, subprocess, sys, time\n"
         "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
-        f"open({str(pid_file)!r}, 'w').write(str(p.pid))\n"
+        f"open({str(pid_file)!r} + '.tmp', 'w').write(str(p.pid))\n"
+        f"os.replace({str(pid_file)!r} + '.tmp', {str(pid_file)!r})\n"
         "time.sleep(30)\n"
     )
     return [sys.executable, "-c", helper]
@@ -378,10 +379,11 @@ def assert_stopped(pid_file: Path) -> None:
     pytest.fail("the helper process kept running")
 
 
-def test_run_command_stops_the_programs_it_started(tmp_path: Path) -> None:
+def test_run_command_stops_the_programs_it_started(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     pid_file = tmp_path / "helper.pid"
+    monkeypatch.setattr(resolve, "monotonic", lambda: time.monotonic() + (100 if pid_file.exists() else 0))
     with pytest.raises(ResolveError, match="took longer"):
-        run_command(helper_program(pid_file), 1)
+        run_command(helper_program(pid_file), 30)
     assert_stopped(pid_file)
 
 

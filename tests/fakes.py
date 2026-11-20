@@ -43,4 +43,4 @@ class FakeResolver(Resolver):
         self.calls += 1
         if self.calls <= self._failures:
             raise ResolveError("the YouTube channel is not live right now")
-        return Resolved(f"https://cdn.example.com/{channel.number}.m3u8", None, self._height, ())
+        return Resolved(f"https://cdn.example.com/{channel.number}.m3u8?attempt={self.calls}", None, self._height, ())

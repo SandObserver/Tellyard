@@ -344,6 +344,7 @@ def read_feed(path: Path) -> list[str]:
     return [slot.element.findtext("title") or "" for slot in found["201"] if slot.element is not None]
 
 
+@pytest.mark.usefixtures("untraced")
 def test_feed_with_many_small_entries_stays_small(tmp_path: Path) -> None:
     path = tmp_path / "feed.xml.gz"
     keep = ENTRY
