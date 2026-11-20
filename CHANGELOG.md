@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Refuse a source, logo or guide address with an invalid host or port when `channels.toml` loads, instead of failing at tune time.
 - Fall back to the channel's `/live` page for a YouTube `live` source with `match` written without `/live`, as documented.
 - Log a channel file mistake at start as a normal log line, and document that it stops Tellyard from starting.
+- Refuse `--` in `YTDLP_ARGS`. yt-dlp then skipped Tellyard's proxy and its address checks.
 
 ## [0.2.1] - 2026-11-14
 

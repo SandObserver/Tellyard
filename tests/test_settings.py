@@ -77,6 +77,7 @@ def test_empty_values_mean_the_defaults() -> None:
         ({"YTDLP_ARGS": "--proxy http://p:1"}, "cannot set a proxy"),
         ({"YTDLP_ARGS": "--prox=http://p:1"}, "cannot set a proxy"),
         ({"YTDLP_ARGS": "--geo-verification-proxy http://p:1"}, "cannot set a proxy"),
+        ({"YTDLP_ARGS": "--no-mtime --"}, "cannot contain --"),
         ({"HEARTBEAT_URL": "example.com/ping"}, "HEARTBEAT_URL"),
     ],
 )
