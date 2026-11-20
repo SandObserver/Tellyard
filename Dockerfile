@@ -27,7 +27,10 @@ RUN apk add --no-cache build-base clang lld llvm nasm \
       --enable-muxer=mpegts --enable-parsers --enable-bsfs \
       --enable-decoder=h264,hevc,aac,aac_latm,ac3,eac3,mp3,mp2,mpeg2video \
     && make -j"$(nproc)" ffmpeg \
-    && llvm-strip ffmpeg && xx-verify --static ffmpeg && mv ffmpeg /ffmpeg
+    && llvm-strip ffmpeg && xx-verify --static ffmpeg && mv ffmpeg /ffmpeg \
+    && mkdir /licenses && cp LICENSE.md COPYING.LGPLv2.1 /licenses/ \
+    && printf 'https://ffmpeg.org/releases/ffmpeg-%s.tar.xz\nSHA-256: %s\n' "$FFMPEG_VERSION" "$FFMPEG_SHA256" \
+      > /licenses/SOURCE
 
 FROM python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb AS build
 COPY --from=uv /uv /usr/local/bin/uv
@@ -51,6 +54,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends tini=0.19.0-3+b
       "$(python -c 'import sysconfig; print(sysconfig.get_path("stdlib"))')" \
     && mkdir /config /data && chown 1000:1000 /data
 COPY channels.example.toml /config/channels.example.toml
+COPY LICENSE NOTICE licenses /usr/share/doc/tellyard/
+COPY --from=ffmpeg /licenses /usr/share/doc/tellyard/ffmpeg/
 USER 1000:1000
 VOLUME /data
 EXPOSE 5004

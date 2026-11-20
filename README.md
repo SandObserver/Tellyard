@@ -208,12 +208,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and releases. Changes a
 
 ## Legal
 
-Tellyard is an independent project. It is not affiliated with or endorsed by Plex, SiliconDust
-(HDHomeRun), YouTube, Twitch, Kick or any broadcaster. Their names appear only to say what Tellyard works with.
+Tellyard is an independent project. It is not affiliated with or endorsed by Plex, Jellyfin, Emby,
+SiliconDust (HDHomeRun), YouTube, Twitch, Kick, Unraid, Docker or any broadcaster. Their names appear
+only to say what Tellyard works with.
 
-Tellyard ships no channels, stream addresses or logos. It plays only the sources you list. It
-contains no code to decrypt DRM or to get around logins, paywalls or region limits. You are
-responsible for making sure you may watch each source you add and that your use follows its
+Tellyard ships no channels, stream addresses or logos. It plays only the sources you list, for your
+own viewing. Tellyard's own code does not decrypt DRM or get around logins, paywalls or region
+limits. The container image bundles yt-dlp, which runs a site's player code to find the stream
+address. If your server shares Live TV with other people, it retransmits these streams to them. You
+are responsible for making sure you may watch each source you add and that your use follows its
 terms.
 
 ## License
