@@ -12,7 +12,7 @@ from time import monotonic
 import pytest
 
 from tellyard import channels, stream
-from tellyard.relay import Relay
+from tellyard.relay import Feed, Relay
 from tellyard.resolve import Resolved, ResolveError
 from tellyard.settings import Settings
 from tellyard.stream import Process, Session, StreamError, ffmpeg_args
@@ -119,6 +119,28 @@ def test_reconnects_when_the_source_ends(
     # Each attempt yields 3 chunks; quick drops are retried until MAX_ATTEMPTS.
     assert resolver.calls == stream.MAX_ATTEMPTS + 1
     assert len(chunks) == 3 * (stream.MAX_ATTEMPTS + 1)
+
+
+def test_reconnect_uses_a_fresh_address(
+    relay: Relay,
+    make_settings: Callable[..., Settings],
+    channel: channels.Channel,
+    ffmpeg: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FAKE_FFMPEG", "short")
+    opened: list[str] = []
+    real_open = relay.open
+
+    def spy(resolved: Resolved, fields: Mapping[str, str]) -> Feed:
+        opened.append(resolved.video)
+        return real_open(resolved, fields)
+
+    monkeypatch.setattr(relay, "open", spy)
+    with Session(channel, FakeResolver(make_settings()), ffmpeg, relay) as session:
+        session.open()
+        list(islice(session.chunks(), 4))
+    assert opened[:2] == ["https://cdn.example.com/7.m3u8?attempt=1", "https://cdn.example.com/7.m3u8?attempt=2"]
 
 
 def test_long_running_source_resets_the_attempt_count(

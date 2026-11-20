@@ -7,6 +7,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -14,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from tellyard import server
+from tellyard import __version__, server
 from tellyard.channels import Channel, Lineup
 from tellyard.guide import Guide
 from tellyard.relay import Relay
@@ -67,6 +68,34 @@ def test_discover_uses_the_request_host(base: str, app: App) -> None:
     assert data["TunerCount"] == 1
     assert data["DeviceID"] == app.settings.device_id
     assert "TC" not in data["ModelNumber"]
+
+
+def test_discover_and_device_replies_are_complete(base: str, app: App) -> None:
+    data = json.loads(get(f"{base}/discover.json")[2])
+    assert data == {
+        "FriendlyName": app.settings.device_name,
+        "Manufacturer": "Tellyard",
+        "ModelNumber": "HDHR5-4US",
+        "FirmwareName": "hdhomerun5_atsc",
+        "FirmwareVersion": __version__,
+        "DeviceID": app.settings.device_id,
+        "DeviceAuth": "tellyard",
+        "BaseURL": base,
+        "LineupURL": f"{base}/lineup.json",
+        "TunerCount": 1,
+    }
+    assert json.loads(get(f"{base}/lineup.json")[2])[0] == {
+        "GuideNumber": "101",
+        "GuideName": "News One",
+        "URL": f"{base}/stream/101",
+        "HD": 1,
+    }
+    device = ET.fromstring(get(f"{base}/device.xml")[2])
+    upnp = {"u": "urn:schemas-upnp-org:device-1-0"}
+    assert device.findtext("u:URLBase", namespaces=upnp) == base
+    assert device.findtext("u:device/u:friendlyName", namespaces=upnp) == app.settings.device_name
+    assert device.findtext("u:device/u:serialNumber", namespaces=upnp) == app.settings.device_id
+    assert device.findtext("u:device/u:UDN", namespaces=upnp) == f"uuid:{app.settings.device_id}"
 
 
 def test_lineup_lists_every_channel(base: str) -> None:
@@ -235,6 +264,56 @@ def test_streams_a_channel_and_frees_the_tuner(base: str, app: App) -> None:
             break
         threading.Event().wait(0.05)
     assert app.streams == 0
+
+
+def test_each_tuner_serves_one_viewer_at_a_time(
+    relay: Relay, make_settings: Callable[..., Settings], channels_file: Path, tmp_path: Path
+) -> None:
+    settings = make_settings(TUNERS="2")
+    resolver = FakeResolver(settings)
+    ffmpeg = str(fake_ffmpeg(tmp_path))
+    guide = Guide(tmp_path / "data" / "guide.xml", 1, downloader=lambda url, path: None)
+    app = App(settings, ChannelStore(channels_file), guide, lambda channel: Session(channel, resolver, ffmpeg, relay))
+    server = Server(("127.0.0.1", 0), app)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    gate = threading.Barrier(2)
+    leave = threading.Event()
+    statuses: list[int] = []
+
+    def watch(number: str) -> None:
+        gate.wait(5)
+        try:
+            with urllib.request.urlopen(f"{base}/stream/{number}", timeout=10) as response:
+                statuses.append(response.status)
+                assert response.read(188 * 10)
+                leave.wait(10)
+        except urllib.error.HTTPError as error:
+            statuses.append(error.code)
+
+    try:
+        with urllib.request.urlopen(f"{base}/stream/101", timeout=10) as first:
+            assert first.read(188 * 10)
+            racers = [threading.Thread(target=watch, args=(number,)) for number in ("101", "201")]
+            for racer in racers:
+                racer.start()
+            assert wait_for(lambda: len(statuses) == 2, 10)
+            assert sorted(statuses) == [200, 503]
+            assert app.streams == 2
+            leave.set()
+            for racer in racers:
+                racer.join(10)
+        assert wait_for(lambda: app.streams == 0, 5)
+        with (
+            urllib.request.urlopen(f"{base}/stream/101", timeout=10) as one,
+            urllib.request.urlopen(f"{base}/stream/201", timeout=10) as two,
+        ):
+            assert one.read(188 * 10) and two.read(188 * 10)
+            assert app.streams == 2
+    finally:
+        leave.set()
+        server.shutdown()
+        server.server_close()
 
 
 def test_unknown_channel(base: str) -> None:

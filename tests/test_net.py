@@ -80,10 +80,11 @@ def test_fetch_text_follows_redirects(base: str) -> None:
     assert text == "<html>hello</html>"
 
 
+@pytest.mark.usefixtures("untraced")
 def test_fetch_text_keeps_memory_low_for_tiny_chunks(base: str) -> None:
     tracemalloc.start()
     try:
-        _, text = net.fetch_text(f"{base}/pieces", trust=net.trust_of([base]))
+        _, text = net.fetch_text(f"{base}/pieces", trust=net.trust_of([base]), deadline=600)
         peak = tracemalloc.get_traced_memory()[1]
     finally:
         tracemalloc.stop()

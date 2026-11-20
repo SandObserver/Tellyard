@@ -2,6 +2,7 @@ import logging
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
+import coverage
 import pytest
 
 from tellyard.relay import Relay
@@ -62,3 +63,16 @@ def relay() -> Iterator[Relay]:
     instance = Relay()
     yield instance
     instance.close()
+
+
+@pytest.fixture
+def untraced() -> Iterator[None]:
+    measuring = coverage.Coverage.current()
+    if measuring is None:
+        yield
+        return
+    measuring.stop()
+    try:
+        yield
+    finally:
+        measuring.start()
