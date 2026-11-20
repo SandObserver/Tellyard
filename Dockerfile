@@ -42,10 +42,10 @@ COPY src ./src
 RUN uv sync --locked --no-dev --no-editable
 
 FROM python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb
-# yt-dlp needs deno for YouTube.
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 MALLOC_ARENA_MAX=2 \
     CHANNELS_FILE=/config/channels.toml DATA_DIR=/data
 COPY --from=ffmpeg /ffmpeg /usr/local/bin/
+# yt-dlp needs deno for YouTube.
 COPY --from=deno /deno /usr/local/bin/deno
 COPY --from=build /app/.venv /app/.venv
 RUN apt-get update && apt-get install -y --no-install-recommends tini=0.19.0-3+b8 \
