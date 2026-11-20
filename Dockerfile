@@ -7,8 +7,8 @@ FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.10.0@sha256:40fe21f44bb8cddf1eb12
 FROM --platform=$BUILDPLATFORM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS ffmpeg
 COPY --from=xx / /
 ARG TARGETPLATFORM
-ARG FFMPEG_VERSION=9.0.2
-ARG FFMPEG_SHA256=8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
+ARG FFMPEG_VERSION=9.1
+ARG FFMPEG_SHA256=1a4d394ae63d190a526cd052eb4415c156b5c5e2df37efab41a7de0b8fde2433
 WORKDIR /src
 # ffmpeg only copies HLS into MPEG-TS and reads the stream size for tellyard check. The relay does all HTTPS.
 # musl gives threads a small stack. ffmpeg crashes with it.
