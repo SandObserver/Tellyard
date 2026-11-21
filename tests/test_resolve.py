@@ -181,7 +181,7 @@ def test_youtube_uses_the_live_manifest(make_settings: Callable[..., Settings]) 
     resolved = resolver.resolve(channel(live="https://www.youtube.com/@news/live"))
     assert resolved.height == 1080
     assert seen[0][0] == "/opt/yt-dlp"
-    assert seen[0][-5:] == ["--extractor-args", "youtube:x", "--proxy", PROXY, "https://www.youtube.com/@news/live"]
+    assert seen[0][-5:] == ["--proxy", PROXY, "--extractor-args", "youtube:x", "https://www.youtube.com/@news/live"]
     assert seen[0][1:6] == ["--ignore-config", "--no-plugin-dirs", "--no-warnings", "--xff", "never"]
 
 

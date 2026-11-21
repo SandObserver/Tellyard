@@ -243,7 +243,7 @@ class Resolver:
         channel = source.url.rstrip("/").removesuffix("/live")
         live_page = f"{channel}/live"
         args = [self._settings.ytdlp, *YTDLP_BASE, "--flat-playlist", "--playlist-end", str(STREAM_SCAN), "-J"]
-        args += [*self._settings.ytdlp_args, "--proxy", proxy, f"{channel}/streams"]
+        args += ["--proxy", proxy, *self._settings.ytdlp_args, f"{channel}/streams"]
         try:
             listing = _json(self._run(args, YTDLP_TIMEOUT, cancel))
         except LookupCancelledError:
@@ -270,7 +270,8 @@ class Resolver:
 
     def _from_ytdlp(self, url: str, cancel: threading.Event, proxy: str) -> str:
         args = [self._settings.ytdlp, *YTDLP_BASE, "--no-playlist", "--skip-download", "-J"]
-        args += [*self._settings.ytdlp_args, "--proxy", proxy, url]
+        # An option at the end of YTDLP_ARGS takes the next word as its value. Keep --proxy before them.
+        args += ["--proxy", proxy, *self._settings.ytdlp_args, url]
         info = _json(self._run(args, YTDLP_TIMEOUT, cancel))
         if info.get("live_status") != "is_live":
             raise ResolveError(f"the channel is not live right now ({info.get('live_status') or 'unknown'})")
