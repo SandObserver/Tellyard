@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Report an `allow` entry that is not a valid address when `channels.toml` loads, instead of ignoring it.
 - Refuse control characters, such as `\b`, in channel names and guide text. They made the guide unreadable for every channel.
-- Refuse a source, logo or guide address with an invalid host or port when `channels.toml` loads, instead of failing at tune time.
+- Refuse a source, logo or guide address with an invalid host or port, or with a space, when `channels.toml` loads, instead of failing at tune time.
 - Fall back to the channel's `/live` page for a YouTube `live` source with `match` written without `/live`, as documented.
 - Log a channel file mistake at start as a normal log line, and document that it stops Tellyard from starting.
 - Refuse `--` in `YTDLP_ARGS`. yt-dlp then skipped Tellyard's proxy and its address checks.
