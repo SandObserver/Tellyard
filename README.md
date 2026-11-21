@@ -208,7 +208,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks and releases. Changes a
 
 ## Legal
 
-Tellyard is an independent project. It is not affiliated with or endorsed by Plex, Jellyfin, Emby,
+Tellyard is an independent project. It is not affiliated with or endorsed by Plex, Jellyfin,
 SiliconDust (HDHomeRun), YouTube, Twitch, Kick, Unraid, Docker or any broadcaster. Their names appear
 only to say what Tellyard works with. Plex is a trademark of Plex and used under a license.
 
