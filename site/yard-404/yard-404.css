@@ -1,0 +1,57 @@
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;color-scheme:dark;background:#000}
+html[data-y4="stackyard"]{--y4-acc:#00D2E0}
+html[data-y4="posteryard"]{--y4-acc:#FFD60A}
+html[data-y4="tellyard"]{--y4-acc:#FF4245}
+html[data-y4="backyard"]{--y4-acc:#B78A66}
+body{margin:0;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid #fff;outline-offset:4px;border-radius:6px}
+.y4-wrap{width:100%;max-width:1200px;margin:0 auto;padding-left:max(40px,env(safe-area-inset-left,0px));padding-right:max(40px,env(safe-area-inset-right,0px))}
+.y4-skip{position:absolute;left:12px;top:-60px;z-index:10;padding:10px 16px;border-radius:12px;background:#fff;color:#000;font-weight:600}
+.y4-skip:focus{top:12px}
+.y4-page{min-height:100vh;min-height:100svh;display:flex;flex-direction:column}
+.y4-nav{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:26px;padding-bottom:26px}
+.y4-brand{display:flex;align-items:center;gap:12px;min-height:44px;font-size:24px;font-weight:700;letter-spacing:-.025em}
+.y4-mk{width:26px;height:30px;display:flex;flex:none}
+.y4-mk svg{width:100%;height:100%}
+.y4-pills{display:flex;gap:8px}
+.y4-pill{position:relative;height:40px;padding:0 20px;border-radius:20px;display:inline-flex;align-items:center;font-size:14px;font-weight:600;white-space:nowrap;transition:transform 160ms cubic-bezier(.23,1,.32,1),background-color 150ms ease}
+.y4-pill::after{content:"";position:absolute;left:0;right:0;top:-2px;bottom:-2px}
+.y4-pill:active{transform:scale(.97)}
+.y4-solid{background:#fff;color:#101012}
+.y4-ghost{background:rgba(120,120,128,.32);color:#fff}
+.y4-main{flex:1;display:flex}
+.y4-main:focus{outline:none}
+.y4-nf{flex:1;display:flex;flex-direction:column;justify-content:center;padding-top:32px;padding-bottom:96px}
+.y4-eyebrow{margin:0;font-size:15px;font-weight:600;color:var(--y4-acc)}
+.y4-h{margin:16px 0 0;font-size:64px;line-height:1.08;letter-spacing:-.03em;font-weight:700;text-wrap:balance}
+.y4-path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8em;letter-spacing:-.045em;font-weight:500;color:#a3a3a8;overflow-wrap:anywhere}
+.y4-path.y4-none{font-family:inherit;font-size:1em;letter-spacing:inherit;font-weight:inherit;color:inherit}
+.y4-go{margin:36px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:4px 36px;font-size:20px;font-weight:600}
+.y4-go a,.y4-go button{display:inline-flex;align-items:center;min-height:44px;padding:0;border:0;background:none;color:#a3a3a8;font:inherit;cursor:pointer;transition:color 150ms ease}
+.y4-go .y4-best{color:#fff;text-decoration:underline;text-decoration-color:var(--y4-acc);text-decoration-thickness:2px;text-underline-offset:7px}
+@media (hover:hover) and (pointer:fine){.y4-go a:hover,.y4-go button:hover{color:#fff}.y4-ghost:hover{background:rgba(120,120,128,.42)}}
+.y4-foot{border-top:1px solid #1c1c1e;font-size:13px;color:#8e8e93}
+.y4-foot .y4-wrap{display:flex;justify-content:space-between;align-items:center;gap:16px;padding-top:22px;padding-bottom:max(22px,env(safe-area-inset-bottom,0px))}
+.y4-foot a{display:inline-flex;align-items:center;min-height:24px}
+@media (hover:hover) and (pointer:fine){.y4-foot a:hover{color:#fff}}
+@media (max-width:960px){.y4-h{font-size:52px}}
+@media (max-width:760px){
+  .y4-wrap{padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+  .y4-nav{padding-top:16px;padding-bottom:16px}
+  .y4-brand{font-size:21px;gap:10px}
+  .y4-mk{width:22px;height:27px}
+  .y4-pill{height:36px;padding:0 14px;font-size:13px}
+  .y4-pill::after{top:-4px;bottom:-4px}
+  .y4-ghost{display:none}
+  .y4-pills .y4-ghost:only-child{display:inline-flex}
+  .y4-nf{padding-top:24px;padding-bottom:64px}
+  .y4-h{font-size:34px;line-height:1.12;letter-spacing:-.02em}
+  .y4-path{display:block;margin-top:6px;font-size:.74em}
+  .y4-path.y4-none{display:inline;margin:0}
+  .y4-go{margin-top:28px;font-size:17px;gap:0 28px}
+  .y4-foot{font-size:12px}
+  .y4-foot .y4-wrap{padding-top:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px))}
+}
+@media (prefers-reduced-motion:reduce){.y4-pill,.y4-go a,.y4-go button{transition:none}}

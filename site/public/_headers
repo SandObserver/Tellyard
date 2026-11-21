@@ -8,5 +8,8 @@
 /img/*
   Cache-Control: public, max-age=86400
 
+/yard-404-*
+  Cache-Control: public, max-age=31536000, immutable
+
 https://:project.pages.dev/*
   X-Robots-Tag: noindex

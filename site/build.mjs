@@ -4,6 +4,7 @@ import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marked } from 'marked';
+import { writeYard404 } from './yard-404/build.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
@@ -285,12 +286,12 @@ const scripts = [...index.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
   ([, code]) => `'sha256-${createHash('sha256').update(code).digest('base64')}'`,
 );
 const csp =
-  `default-src 'none'; script-src ${scripts.join(' ') || "'none'"}; style-src 'unsafe-inline'; img-src 'self'; ` +
+  `default-src 'none'; script-src ${["'self'", ...scripts].join(' ')}; style-src 'self' 'unsafe-inline'; img-src 'self'; ` +
   "manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 const headers = join(dist, '_headers');
 writeFileSync(headers, readFileSync(headers, 'utf8').replace(/^\/\*\n/m, `/*\n  Content-Security-Policy: ${csp}\n`));
 writeFileSync(join(dist, 'index.html'), index);
-writeFileSync(join(dist, '404.html'), fill('404.html'));
+writeYard404('tellyard', dist);
 writeFileSync(join(dist, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${site}/sitemap.xml\n`);
 writeFileSync(
   join(dist, 'sitemap.xml'),
