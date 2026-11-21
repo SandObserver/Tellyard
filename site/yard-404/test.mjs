@@ -2,12 +2,17 @@ import { readFileSync, globSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { render } from './render.mjs';
 import { SITES } from './sites.mjs';
-import { CASES, SHARED } from './cases.mjs';
+import { CASES, DISPLAY, SHARED } from './cases.mjs';
 
 new Function(readFileSync(new URL('./yard-404.js', import.meta.url), 'utf8'))();
-const { suggest } = globalThis.Yard404;
+const { suggest, displayPath } = globalThis.Yard404;
 const stackyardDist = process.argv[2];
 let failed = 0;
+for (const [input, want] of DISPLAY) {
+  const got = displayPath(input);
+  if (got !== want) { failed++; console.log(`FAIL display ${JSON.stringify(input.slice(0, 40))} got ${JSON.stringify(got)} want ${JSON.stringify(want)}`); }
+}
+console.log(`display: ${DISPLAY.length} cases`);
 for (const id of Object.keys(SITES)) {
   let pages = SITES[id].pages;
   if (id === 'stackyard') {

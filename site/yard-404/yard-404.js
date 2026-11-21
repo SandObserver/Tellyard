@@ -8,9 +8,10 @@
   }
 
   function displayPath(raw) {
-    var p = decode(String(raw || '').split(/[?#]/)[0]);
+    var p = decode(String(raw || '').split(/[?#]/)[0]).replace(/\p{Cf}/gu, '');
     if (p.charAt(0) !== '/') p = '/' + p;
-    return p.length > 120 ? p.slice(0, 80) + '…' + p.slice(-30) : p;
+    var c = Array.from(p);
+    return c.length > 120 ? c.slice(0, 80).join('') + '…' + c.slice(-30).join('') : p;
   }
 
   function normalize(raw) {

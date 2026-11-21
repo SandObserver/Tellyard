@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { render, assets } from './render.mjs';
-import { CASES, SHARED } from './cases.mjs';
+import { CASES, DISPLAY, SHARED } from './cases.mjs';
 
 export function checkYard404(id, dist) {
   const problems = [];
@@ -42,7 +42,11 @@ export function checkYard404(id, dist) {
   }
 
   new Function(readFileSync(new URL('./yard-404.js', import.meta.url), 'utf8'))();
-  const { suggest } = globalThis.Yard404;
+  const { suggest, displayPath } = globalThis.Yard404;
+  for (const [input, want] of DISPLAY) {
+    const got = displayPath(input);
+    if (got !== want) fail(`display case ${JSON.stringify(input.slice(0, 40))}: got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  }
   for (const [input, want] of [...SHARED, ...(CASES[id] || [])]) {
     let got;
     try { const r = suggest(input, pages); got = r ? r.page[1] : null; } catch (e) { fail(`case ${input.slice(0, 40)} threw ${e.message}`); continue; }
