@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 DEVICE_ID = re.compile(r"^[0-9A-F]{8}$")
 BASE_URL = re.compile(r"^https?://[^\s/]+$")
 YTDLP_PROXY_OPTIONS = ("--proxy", "--geo-verification-proxy", "--cn-verification-proxy")
+YTDLP_REWRITE_OPTIONS = ("--alias", "--config-locations")
 
 
 class SettingsError(Exception):
@@ -64,8 +65,10 @@ class Settings:
             ytdlp_args = tuple(shlex.split(env.get("YTDLP_ARGS", "")))
         except ValueError as error:
             raise SettingsError(f"YTDLP_ARGS cannot be parsed: {error}") from error
-        if any(_sets_proxy(arg) for arg in ytdlp_args):
+        if any(_is_option(arg, YTDLP_PROXY_OPTIONS) for arg in ytdlp_args):
             raise SettingsError("YTDLP_ARGS cannot set a proxy. Set http_proxy or https_proxy instead")
+        if any(_is_option(arg, YTDLP_REWRITE_OPTIONS) for arg in ytdlp_args):
+            raise SettingsError("YTDLP_ARGS cannot contain --alias or --config-locations. They can replace the proxy")
         if "--" in ytdlp_args:
             raise SettingsError("YTDLP_ARGS cannot contain --. yt-dlp would then skip the proxy Tellyard sets")
         zone_name = env.get("TZ", "").strip().removeprefix(":")
@@ -91,10 +94,10 @@ class Settings:
         )
 
 
-def _sets_proxy(arg: str) -> bool:
+def _is_option(arg: str, options: tuple[str, ...]) -> bool:
     # yt-dlp accepts any unique start of a long option, such as --prox.
     name = arg.partition("=")[0]
-    return len(name) > 2 and name.startswith("--") and any(option.startswith(name) for option in YTDLP_PROXY_OPTIONS)
+    return len(name) > 2 and name.startswith("--") and any(option.startswith(name) for option in options)
 
 
 def _device_id(name: str) -> str:

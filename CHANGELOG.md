@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Fall back to the channel's `/live` page for a YouTube `live` source with `match` written without `/live`, as documented.
 - Log a channel file mistake at start as a normal log line, and document that it stops Tellyard from starting.
 - Refuse `--` in `YTDLP_ARGS`. yt-dlp then skipped Tellyard's proxy and its address checks.
+- Keep Tellyard's proxy when `YTDLP_ARGS` ends with an option that takes a value, and refuse `--alias` and `--config-locations` in it. yt-dlp then skipped the proxy and its address checks.
 
 ## [0.2.1] - 2026-11-14
 
