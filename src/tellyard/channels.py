@@ -279,9 +279,11 @@ def _url(value: Any, where: str) -> str:
     text = _text(value, where)
     if not re.match(r"^https?://[^\s/]+", text):
         raise ChannelError(f"{where} must be an http or https URL")
+    if re.search(r"\s", text):
+        raise ChannelError(f"{where} must not contain spaces")
     try:
         parts = urllib.parse.urlsplit(text)
-        valid = bool(parts.hostname) and parts.port != 0
+        valid = bool(parts.hostname and canonical_host(parts.hostname)) and parts.port != 0
     except ValueError:
         valid = False
     if not valid:
@@ -295,7 +297,7 @@ def _allow(value: Any, where: str) -> tuple[tuple[str, int], ...]:
     addresses: list[tuple[str, int]] = []
     for item in value:
         try:
-            parts = urllib.parse.urlsplit(f"//{item}") if isinstance(item, str) else None
+            parts = urllib.parse.urlsplit(f"//{item}") if isinstance(item, str) and not re.search(r"\s", item) else None
             host, port = (parts.hostname, parts.port) if parts else (None, None)
             host = canonical_host(host) if host else None
         except ValueError:

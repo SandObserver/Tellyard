@@ -154,6 +154,7 @@ def test_min_height_is_optional_per_channel() -> None:
         ({"channel": [entry(allow=["192.168.1.300:8081"])]}, "must be host:port"),
         ({"channel": [entry(allow=["0x7f.1.1.1.1:80"])]}, "must be host:port"),
         ({"channel": [entry(allow=[8081])]}, "must be host:port"),
+        ({"channel": [entry(allow=["192.168.1.20 :8081"])]}, "must be host:port"),
         ({"channel": [entry(name="News\b")]}, "name contains a control character"),
         ({"channel": [entry(guide={"description": "Rock\bottom"})]}, "description contains a control character"),
         ({"channel": [entry(guide={"title": "A\x0cB"})]}, "title contains a control character"),
@@ -162,6 +163,9 @@ def test_min_height_is_optional_per_channel() -> None:
         ({"channel": [entry(live=None, hls="https://[::1/x.m3u8")]}, "hls has an invalid host or port"),
         ({"channel": [entry(live=None, hls="https://:8080/x.m3u8")]}, "hls has an invalid host or port"),
         ({"channel": [entry(live=None, hls="https://example.com:0/x.m3u8")]}, "hls has an invalid host or port"),
+        ({"channel": [entry(live=None, hls="http://192.168.1.300:8080/x.m3u8")]}, "hls has an invalid host or port"),
+        ({"channel": [entry(live=None, hls="https://cdn.example.com /x.m3u8")]}, "hls must not contain spaces"),
+        ({"channel": [entry(logo="https://exa mple.com/l.png")]}, "logo must not contain spaces"),
     ],
 )
 def test_rejects_mistakes(data: dict[str, Any], message: str) -> None:
