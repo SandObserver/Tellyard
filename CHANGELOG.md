@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-21
+
 ### Changed
 
 - Keep the yt-dlp and Deno caches in `cache/` under `DATA_DIR`, so a different `DATA_DIR` moves them with the guide.
