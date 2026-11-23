@@ -36,7 +36,11 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 | `stream.py` | Runs ffmpeg for one viewer, watches for stalls and reconnects. |
 | `guide.py` | Builds the XMLTV guide from XMLTV sources and placeholder blocks. |
 | `check.py` | The `check` command: measures each channel's real resolution with ffmpeg. |
-| `net.py` | Every HTTP request, with size limits. |
+| `net.py` | Every HTTP request, with size limits, and the private address rules. |
+| `relay.py` | The loopback relay ffmpeg reads every stream through. It checks each playlist and segment address first. |
+| `egress.py` | The proxy that yt-dlp lookups for `live` channels go through. It applies the same address rules. |
+| `logfmt.py` | Log lines in logfmt and the settings summary at start. |
+| `health.py` | The container health check: asks `/healthz` and exits 0 when healthy. |
 
 ## Before opening a PR
 
@@ -72,11 +76,11 @@ The channels on the page are fictional. The page names no video platform, and th
 
 - Branch: `type/short-description`, where type is `feat`, `fix`, `perf`, `security`, `refactor`, `docs`, `chore` or `release`.
 - PR title: `Type: short description`, where Type is `Fix`, `Feature`, `Add`, `Improve`, `Refactor`, `Security` or `Docs`.
-- User-visible changes go under `Unreleased` in [CHANGELOG.md](CHANGELOG.md), one line each.
+- User-visible changes go under `Unreleased` in [CHANGELOG.md](CHANGELOG.md), one line each. A new version of a program in the image (yt-dlp, FFmpeg, Deno, Python) counts. Landing page changes do not: the site goes live on every push to `main`.
 
 ## Releases
 
-Semantic versioning. Move the `Unreleased` entries in [CHANGELOG.md](CHANGELOG.md) under the new version with its date, set `version` in `pyproject.toml`, merge, and push a `vX.Y.Z` tag. The tag runs the CI checks, then pushes `ghcr.io/sandobserver/tellyard:X.Y.Z`, `:X.Y` and `:latest` for amd64 and arm64, and publishes a GitHub release with the version's CHANGELOG section. The release stops if the tag, `pyproject.toml` and a dated CHANGELOG section do not agree. The image carries an SBOM and build provenance. Every tag is also pushed to `docker.io/sandobserver/tellyard`, and a stable release rewrites the Docker Hub page from `README.md` with `tools/dockerhub_description.py`. Docker Hub needs the repository secret `DOCKERHUB_TOKEN`, an access token with Read, Write and Delete. Docker Hub refuses to move an `X.Y.Z` tag, so a version cannot be published twice. The `Docker Hub page` workflow updates the page by hand.
+Semantic versioning. Move the `Unreleased` entries in [CHANGELOG.md](CHANGELOG.md) under the new version with its date, set `version` in `pyproject.toml` and merge. `release-tag.yml` then pushes the `vX.Y.Z` tag. The tag runs the CI checks, then pushes `ghcr.io/sandobserver/tellyard:X.Y.Z`, `:X.Y` and `:latest` for amd64 and arm64, and publishes a GitHub release with the version's CHANGELOG section. The release stops if the tag, `pyproject.toml` and a dated CHANGELOG section do not agree. The image carries an SBOM and build provenance. Every tag is also pushed to `docker.io/sandobserver/tellyard`, and a stable release rewrites the Docker Hub page from `README.md` with `tools/dockerhub_description.py`. Docker Hub needs the repository secret `DOCKERHUB_TOKEN`, an access token with Read, Write and Delete. Docker Hub refuses to move an `X.Y.Z` tag, so a version cannot be published twice. The `Docker Hub page` workflow updates the page by hand.
 
 ### Unraid template
 
