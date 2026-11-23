@@ -11,3 +11,6 @@ channels.toml
 .coverage
 .DS_Store
 node_modules/
+htmlcov/
+.coverage.*
+coverage.xml
