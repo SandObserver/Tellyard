@@ -13,23 +13,11 @@
   <Overview>A live TV tuner for Plex and Jellyfin that you'll forget is running.[br][br]Tellyard shows up in Plex and Jellyfin as a network tuner. You list your channels in one file. When someone tunes in, Tellyard finds the channel's live stream on YouTube, Twitch, a broadcaster's page or an HLS address and passes it on without re-encoding. When they stop watching, it stops. The guide merges XMLTV schedules with placeholder blocks, so it is never empty.[br][br]Tellyard ships no channels. It starts with an empty line-up: put your channels.toml in /mnt/user/appdata/tellyard/config and it is loaded within a minute. Then add the tuner in Plex at UNRAID-IP:5004 and the guide at http://UNRAID-IP:5004/guide.xml.</Overview>
   <Requires>Plex or Jellyfin, and a channels.toml listing the live streams you may watch. Tellyard ships no channels.</Requires>
   <Changes>
-### 0.2.2 - 2026-11-21
-
-#### Changed
-
-- Keep the yt-dlp and Deno caches in `cache/` under `DATA_DIR`, so a different `DATA_DIR` moves them with the guide.
-- Log stream lookup, yt-dlp proxy and guide lines with the channel number in `channel` and its name in `title`.
-- Ship the license texts of the bundled programs and the exact FFmpeg source archive name in `/usr/share/doc/tellyard` in the image.
+### 0.2.3 - 2026-11-23
 
 #### Fixed
 
-- Report an `allow` entry that is not a valid address when `channels.toml` loads, instead of ignoring it.
-- Refuse control characters, such as `\b`, in channel names and guide text. They made the guide unreadable for every channel.
-- Refuse a source, logo or guide address with an invalid host or port, or with a space, when `channels.toml` loads, instead of failing at tune time.
-- Fall back to the channel's `/live` page for a YouTube `live` source with `match` written without `/live`, as documented.
-- Log a channel file mistake at start as a normal log line, and document that it stops Tellyard from starting.
-- Refuse `--` in `YTDLP_ARGS`. yt-dlp then skipped Tellyard's proxy and its address checks.
-- Keep Tellyard's proxy when `YTDLP_ARGS` ends with an option that takes a value, and refuse `--alias` and `--config-locations` in it. yt-dlp then skipped the proxy and its address checks.
+- Remove the partial guide file from `DATA_DIR` when the guide cannot be saved.
   </Changes>
   <Category>MediaApp:Video MediaServer:Video</Category>
   <TemplateURL>https://raw.githubusercontent.com/SandObserver/Tellyard/main/templates/tellyard.xml</TemplateURL>
