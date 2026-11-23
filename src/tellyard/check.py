@@ -73,7 +73,7 @@ def check(
     results: list[Result] = []
     for channel in channels:
         try:
-            resolved = resolver.resolve(channel)
+            resolved = resolver.resolve(channel, fresh=True)
             height = measure(channel, resolved)
         except (ResolveError, ValueError) as error:
             results.append(Result(channel, None, str(error)))

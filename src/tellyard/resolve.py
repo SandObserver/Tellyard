@@ -14,11 +14,11 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from pathlib import Path
-from time import monotonic
+from time import monotonic, time
 from typing import Any, Protocol
 
 from tellyard import egress, hls
-from tellyard.channels import Channel, HlsSource, LiveSource, PageSource
+from tellyard.channels import Channel, HlsSource, LiveSource, PageSource, Source
 from tellyard.net import (
     NOBODY,
     Cancel,
@@ -45,6 +45,9 @@ FETCH_ATTEMPTS = 3
 PASSING_STATUSES = frozenset({408, 429})
 CANCEL_POLL = 0.5
 TWITCH_HOSTS = ("twitch.tv", ".twitch.tv")
+REMEMBER_SECONDS = 600.0
+EXPIRY_MARGIN = 300.0
+EXPIRY = re.compile(r"(?:^|[/?&;~=])(?:expire|expires|exp)[=/](\d{10})(?=$|[/?&;~])", re.IGNORECASE)
 # --xff never: without it, yt-dlp sends a made-up address from the allowed country to region-limited sites.
 # No config files or plugins: YTDLP_ARGS is the only way to add options.
 YTDLP_BASE = ("--ignore-config", "--no-plugin-dirs", "--no-warnings", "--xff", "never")
@@ -76,6 +79,13 @@ class Resolved:
     headers: Headers
     trust: Trust = NOBODY
     repair_timestamps: bool = False
+    remembered: bool = False
+
+
+@dataclass(frozen=True)
+class _Found:
+    address: str
+    until: float
 
 
 def is_twitch(url: str) -> bool:
@@ -183,29 +193,77 @@ class Resolver:
         self._run = runner or (lambda args, timeout, cancel: run_command(args, timeout, cancel, env))
         self._fetch = fetcher
         self._proxy = proxy
+        self._found: dict[tuple[str, Source], _Found] = {}
+        self._found_lock = threading.Lock()
 
-    def resolve(self, channel: Channel, cancel: Cancel | None = None) -> Resolved:
+    def resolve(self, channel: Channel, cancel: Cancel | None = None, *, fresh: bool = False) -> Resolved:
         try:
-            return self._resolve(channel, cancel or Cancel())
+            return self._resolve(channel, cancel or Cancel(), fresh)
         except ResolveError:
             raise
         except Exception as error:
             log.exception("stream lookup failed unexpectedly", extra=channel.fields)
             raise ResolveError(f"the stream lookup failed unexpectedly ({type(error).__name__})") from error
 
-    def _resolve(self, channel: Channel, cancel: Cancel) -> Resolved:
+    def _resolve(self, channel: Channel, cancel: Cancel, fresh: bool) -> Resolved:
         source, trust, fields = channel.source, trust_of(channel.named_urls, channel.allow), channel.fields
         match source:
             case HlsSource(token=token) if token:
                 return self._pick(self._signed(source, trust, cancel), source.headers, trust, cancel, fields)
             case HlsSource(url=url, headers=headers):
                 return self._pick(url, headers, trust, cancel, fields)
-            case PageSource():
-                return self._pick(self._from_page(source, trust, cancel), source.headers, trust, cancel, fields)
-            case LiveSource():
-                with self._proxy(trust, fields) as proxy:
-                    manifest = self._from_ytdlp(self._youtube_target(source, cancel, proxy, fields), cancel, proxy)
-                return replace(self._pick(manifest, (), trust, cancel, fields), repair_timestamps=is_twitch(source.url))
+            case PageSource() | LiveSource():
+                key = (channel.number, source)
+                if not fresh and (address := self._recall(key)):
+                    try:
+                        return replace(self._open(source, address, trust, cancel, fields), remembered=True)
+                    except LookupCancelledError:
+                        raise
+                    except ResolveError as error:
+                        self._forget(key)
+                        log.info(
+                            "remembered stream address failed, looking it up again",
+                            extra={**fields, "reason": str(error)},
+                        )
+                address = self._find(source, trust, cancel, fields)
+                resolved = self._open(source, address, trust, cancel, fields)
+                self._remember(key, address)
+                return resolved
+
+    def _find(self, source: PageSource | LiveSource, trust: Trust, cancel: Cancel, fields: Mapping[str, str]) -> str:
+        if isinstance(source, PageSource):
+            return self._from_page(source, trust, cancel)
+        with self._proxy(trust, fields) as proxy:
+            return self._from_ytdlp(self._youtube_target(source, cancel, proxy, fields), cancel, proxy)
+
+    def _open(
+        self, source: PageSource | LiveSource, address: str, trust: Trust, cancel: Cancel, fields: Mapping[str, str]
+    ) -> Resolved:
+        if isinstance(source, PageSource):
+            return self._pick(address, source.headers, trust, cancel, fields)
+        return replace(self._pick(address, (), trust, cancel, fields), repair_timestamps=is_twitch(source.url))
+
+    def forget(self, channel: Channel) -> None:
+        self._forget((channel.number, channel.source))
+
+    def _recall(self, key: tuple[str, Source]) -> str | None:
+        with self._found_lock:
+            found = self._found.get(key)
+            return found.address if found and found.until > monotonic() else None
+
+    def _remember(self, key: tuple[str, Source], address: str) -> None:
+        seconds = REMEMBER_SECONDS
+        if expiry := EXPIRY.search(urllib.parse.unquote(address)):
+            seconds = min(seconds, int(expiry.group(1)) - time() - EXPIRY_MARGIN)
+        now = monotonic()
+        with self._found_lock:
+            self._found = {k: v for k, v in self._found.items() if v.until > now}
+            if seconds > 0:
+                self._found[key] = _Found(address, now + seconds)
+
+    def _forget(self, key: tuple[str, Source]) -> None:
+        with self._found_lock:
+            self._found.pop(key, None)
 
     def _signed(self, source: HlsSource, trust: Trust, cancel: Cancel) -> str:
         address = source.token.replace("{url}", urllib.parse.quote(source.url, safe=""))

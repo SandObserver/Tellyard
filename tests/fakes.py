@@ -33,14 +33,25 @@ def fake_ffmpeg(directory: Path) -> Path:
 
 
 class FakeResolver(Resolver):
-    def __init__(self, settings: Settings, failures: int = 0, height: int | None = 1080) -> None:
+    def __init__(
+        self, settings: Settings, failures: int = 0, height: int | None = 1080, *, remembered: bool = False
+    ) -> None:
         super().__init__(settings)
         self.calls = 0
+        self.fresh: list[bool] = []
+        self.forgotten = 0
         self._failures = failures
         self._height = height
+        self._remembered = remembered
 
-    def resolve(self, channel: Channel, cancel: threading.Event | None = None) -> Resolved:
+    def forget(self, channel: Channel) -> None:
+        self.forgotten += 1
+        self._remembered = False
+
+    def resolve(self, channel: Channel, cancel: threading.Event | None = None, *, fresh: bool = False) -> Resolved:
         self.calls += 1
+        self.fresh.append(fresh)
         if self.calls <= self._failures:
             raise ResolveError("the YouTube channel is not live right now")
-        return Resolved(f"https://cdn.example.com/{channel.number}.m3u8?attempt={self.calls}", None, self._height, ())
+        url = f"https://cdn.example.com/{channel.number}.m3u8?attempt={self.calls}"
+        return Resolved(url, None, self._height, (), remembered=self._remembered and not fresh)

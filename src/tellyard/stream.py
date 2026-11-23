@@ -165,6 +165,7 @@ class Session:
         self._fed = 0.0
         self._attempts = 0
         self.height: int | None = None
+        self.remembered = False
         self.cancel = Cancel()
 
     @property
@@ -172,7 +173,7 @@ class Session:
         return self.channel.fields
 
     def open(self) -> None:
-        self._start()
+        self._start(fresh=False)
 
     def chunks(self) -> Iterator[bytes]:
         while not self.cancel.is_set():
@@ -209,14 +210,15 @@ class Session:
     ) -> None:
         self.close()
 
-    def _start(self) -> None:
+    def _start(self, fresh: bool) -> None:
         try:
-            resolved = self._resolver.resolve(self.channel, self.cancel)
+            resolved = self._resolver.resolve(self.channel, self.cancel, fresh=fresh)
         except LookupCancelledError as error:
             raise ViewerLeftError(str(error)) from error
         except ResolveError as error:
             raise StreamError(str(error)) from error
         self.height = resolved.height
+        self.remembered = resolved.remembered
         feed = self._relay.open(resolved, self.fields)
         try:
             process = self._starter(ffmpeg_args(self._ffmpeg, local(resolved, feed)), self.fields)
@@ -232,6 +234,11 @@ class Session:
             feed.close()
             if self.cancel.is_set():
                 raise ViewerLeftError("the viewer left")
+            self._resolver.forget(self.channel)
+            if resolved.remembered:
+                log.info("no video from the remembered stream address, looking it up again", extra=self.fields)
+                self._start(fresh=True)
+                return
             raise StreamError(f"no video arrived within {FIRST_DATA_TIMEOUT:.0f} s")
         self._process = process
         self._feed = feed
@@ -264,7 +271,7 @@ class Session:
                 "source ended, reconnecting", extra={**self.fields, "after_s": round(ran), "attempt": self._attempts}
             )
             try:
-                self._start()
+                self._start(fresh=True)
             except ViewerLeftError:
                 return False
             except StreamError as error:

@@ -426,7 +426,11 @@ class Handler(BaseHTTPRequestHandler):
             log.warning("stream failed to start", extra={**session.fields, "reason": str(error)})
             self._send(HTTPStatus.SERVICE_UNAVAILABLE, "text/plain; charset=utf-8", f"{error}\n".encode())
             return
-        log.info("stream started", extra={**session.fields, "client": self.client_address[0], "height": session.height})
+        start = {"start_s": round(time.monotonic() - began, 1), "remembered": "yes" if session.remembered else "no"}
+        log.info(
+            "stream started",
+            extra={**session.fields, "client": self.client_address[0], "height": session.height, **start},
+        )
         try:
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "video/mp2t")

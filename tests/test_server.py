@@ -497,7 +497,7 @@ class SlowResolver(FakeResolver):
         self.slow_from = slow_from
         self.cancelled = threading.Event()
 
-    def resolve(self, channel: Channel, cancel: threading.Event | None = None) -> Resolved:
+    def resolve(self, channel: Channel, cancel: threading.Event | None = None, *, fresh: bool = False) -> Resolved:
         assert cancel is not None
         if self.calls + 1 >= self.slow_from and cancel.wait(30):
             self.calls += 1
@@ -706,6 +706,9 @@ def test_stream_stop_is_logged_when_the_viewer_left_before_the_headers(
         client.sendall(b"GET /stream/101 HTTP/1.0\r\n\r\n")
         assert wait_for(lambda: "stream stopped" in caplog.text, 10)
     assert wait_for(lambda: app.streams == 0, 5)
+    started = next(r for r in caplog.records if r.getMessage() == "stream started")
+    assert isinstance(getattr(started, "start_s", None), float)
+    assert getattr(started, "remembered", None) == "no"
 
 
 def test_health_reports_a_guide_that_cannot_be_saved(app: App, tmp_path: Path) -> None:
@@ -733,3 +736,29 @@ def test_health_reports_a_guide_that_cannot_be_saved(app: App, tmp_path: Path) -
 def test_stream_paths_take_the_channel_number_format(path: str, number: str | None) -> None:
     found = server.STREAM_PATH.match(path)
     assert (found.group(1) if found else None) == number
+
+
+def test_stream_start_logs_a_remembered_address(
+    relay: Relay,
+    make_settings: Callable[..., Settings],
+    channels_file: Path,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level("INFO", logger="tellyard.server")
+    settings = make_settings()
+    resolver = FakeResolver(settings, remembered=True)
+    ffmpeg = str(fake_ffmpeg(tmp_path))
+    guide = Guide(tmp_path / "data" / "guide.xml", 1, downloader=lambda url, path: None)
+    app = App(settings, ChannelStore(channels_file), guide, lambda channel: Session(channel, resolver, ffmpeg, relay))
+    server = Server(("127.0.0.1", 0), app)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{server.server_address[1]}/stream/101", timeout=10) as response:
+            assert response.read(188 * 10)
+        assert wait_for(lambda: any(r.getMessage() == "stream started" for r in caplog.records), 5)
+    finally:
+        server.shutdown()
+        server.server_close()
+    started = next(r for r in caplog.records if r.getMessage() == "stream started")
+    assert getattr(started, "remembered", None) == "yes"
