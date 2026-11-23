@@ -190,7 +190,7 @@ const checkNote = note(
     'The image is also on <a href="https://hub.docker.com/r/sandobserver/tellyard">Docker Hub</a> as <code>sandobserver/tellyard</code>.',
 );
 const channelNote = note(
-  `Put it in a <code>config</code> folder. Each channel needs a number, a name, a logo and one source. ${everyOption}. Only add streams you are allowed to watch.`,
+  `Put it in a <code>config</code> folder. Each channel needs a number, a name and one source. ${everyOption}. Only add streams you are allowed to watch.`,
 );
 
 const icons = {
