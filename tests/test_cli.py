@@ -91,6 +91,19 @@ def test_serve_refuses_a_bad_channel_file(
     assert f"file={channels_file}" in err
 
 
+def test_serve_starts_with_the_last_good_copy_of_a_bad_channel_file(
+    monkeypatch: pytest.MonkeyPatch, channels_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli, "Server", QuietServer)
+    monkeypatch.setattr(App, "start", lambda self, stop: None)
+    assert cli.main(["serve"]) == 0
+    channels_file.write_text("[[channel]]\nnumber = 1\n", encoding="utf-8")
+    assert cli.main(["serve"]) == 0
+    err = capsys.readouterr().err
+    assert 'ERR msg="channel file has an error, starting with the last good copy"' in err
+    assert "2 from" in err
+
+
 def test_bad_settings(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setenv("LISTEN_PORT", "x")
     assert cli.main(["validate"]) == 2
