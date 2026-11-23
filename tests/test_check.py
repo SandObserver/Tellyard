@@ -101,3 +101,9 @@ def test_check_failures(make_settings: Callable[..., Settings], channels_file: P
         raise ResolveError("ffmpeg took longer than 45 s")
 
     assert check.check(lineup.channels[:1], FakeResolver(make_settings()), raising)[0].height is None
+
+
+def test_check_always_looks_up_fresh(make_settings: Callable[..., Settings], channels_file: Path) -> None:
+    resolver = FakeResolver(make_settings())
+    check.check(channels.load(channels_file).channels, resolver, lambda channel, resolved: 1080)
+    assert resolver.fresh == [True, True]

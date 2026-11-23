@@ -234,9 +234,9 @@ class Session:
             feed.close()
             if self.cancel.is_set():
                 raise ViewerLeftError("the viewer left")
+            self._resolver.forget(self.channel)
             if resolved.remembered:
                 log.info("no video from the remembered stream address, looking it up again", extra=self.fields)
-                self._resolver.forget(self.channel)
                 self._start(fresh=True)
                 return
             raise StreamError(f"no video arrived within {FIRST_DATA_TIMEOUT:.0f} s")

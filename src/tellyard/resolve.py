@@ -47,7 +47,7 @@ CANCEL_POLL = 0.5
 TWITCH_HOSTS = ("twitch.tv", ".twitch.tv")
 REMEMBER_SECONDS = 600.0
 EXPIRY_MARGIN = 300.0
-EXPIRY = re.compile(r"(?:^|[/?&;~])(?:expire|expires|exp)[=/](\d{10})(?=$|[/?&;~])", re.IGNORECASE)
+EXPIRY = re.compile(r"(?:^|[/?&;~=])(?:expire|expires|exp)[=/](\d{10})(?=$|[/?&;~])", re.IGNORECASE)
 # --xff never: without it, yt-dlp sends a made-up address from the allowed country to region-limited sites.
 # No config files or plugins: YTDLP_ARGS is the only way to add options.
 YTDLP_BASE = ("--ignore-config", "--no-plugin-dirs", "--no-warnings", "--xff", "never")

@@ -560,6 +560,8 @@ def test_remembered_address_expires(make_settings: Callable[..., Settings], monk
         ("https://m.example.com/api/expire/{at}/ip/1/x.m3u8", 200, False),
         ("https://m.example.com/x.m3u8?Expires={at}&sig=a", 200, False),
         ("https://m.example.com/x.m3u8?hdnts=st%3D1~exp%3D{at}~acl%3D*", 200, False),
+        ("https://m.example.com/x.m3u8?hdnts=exp%3D{at}~acl%3D%2F*~hmac%3Dab", 200, False),
+        ("https://m.example.com/x.m3u8?hdnea=exp={at}~acl=/*~hmac=ab", 200, False),
         ("https://m.example.com/api/expire/{at}/x.m3u8", 6 * 3600, True),
     ],
 )
