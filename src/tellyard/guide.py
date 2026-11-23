@@ -594,6 +594,8 @@ class Guide:
             partial.write_bytes(data)
             partial.replace(self._path)
         except OSError as error:
+            with contextlib.suppress(OSError):
+                partial.unlink(missing_ok=True)
             self.write_error = f"cannot write the guide to {self._path.parent}: {error.strerror or error}"
             log.error("guide not saved", extra={"reason": self.write_error})
         else:

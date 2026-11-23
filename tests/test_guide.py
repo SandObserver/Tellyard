@@ -415,6 +415,16 @@ def test_guide_kept_in_memory_when_it_cannot_be_saved(tmp_path: Path) -> None:
         folder.chmod(0o755)
 
 
+def test_failed_guide_save_leaves_no_partial_file(tmp_path: Path) -> None:
+    target = tmp_path / "guide.xml"
+    target.mkdir()
+    (target / "blocker").touch()
+    cache = guide.Guide(target, 1)
+    cache.rebuild(lineup(), NOW)
+    assert cache.write_error is not None
+    assert not (tmp_path / "guide.xml.part").exists()
+
+
 def test_huge_entry_is_stopped_while_reading(tmp_path: Path) -> None:
     path = tmp_path / "feed.xml.gz"
     bulk(path, [b"<tv><programme><desc>", b"x" * 50_000_000, b"</desc></programme></tv>"])
