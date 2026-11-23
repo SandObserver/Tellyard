@@ -177,7 +177,7 @@ def _channel(value: Any, index: int, sources: Mapping[str, str]) -> Channel:
     number_text = str(number) if isinstance(number, int | str) and not isinstance(number, bool) else ""
     if not NUMBER.fullmatch(number_text):
         raise ChannelError(f'{where}: number must look like 101 or "101.1"')
-    logo = _url(entry.get("logo"), f"{where} logo")
+    logo = _url(entry["logo"], f"{where} logo") if "logo" in entry else ""
     source = _source(entry, where)
     guide = _table(entry.get("guide", {}), f"{where} guide")
     placeholder, xmltv = _guide(guide, name, where, sources)

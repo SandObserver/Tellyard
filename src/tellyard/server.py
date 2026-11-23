@@ -120,9 +120,8 @@ class App:
         lines = [f'#EXTM3U url-tvg="{base}/guide.xml"']
         for channel in self.store.current().channels:
             name = channel.name.replace(",", " ")
-            lines.append(
-                f'#EXTINF:-1 tvg-id="{channel.guide_id}" tvg-chno="{channel.number}" tvg-logo="{channel.logo}",{name}'
-            )
+            logo = f' tvg-logo="{channel.logo}"' if channel.logo else ""
+            lines.append(f'#EXTINF:-1 tvg-id="{channel.guide_id}" tvg-chno="{channel.number}"{logo},{name}')
             lines.append(f"{base}/stream/{channel.number}")
         return "\n".join(lines) + "\n"
 

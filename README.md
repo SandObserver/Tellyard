@@ -136,7 +136,7 @@ same lockdown as the compose file, and restarts the container after a crash.
 
 ## Channels
 
-Each channel in `channels.toml` needs a number, a name, a logo and one source:
+Each channel in `channels.toml` needs a number, a name and one source. A logo is optional:
 
 ```toml
 [[channel]]

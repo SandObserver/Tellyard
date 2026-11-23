@@ -120,7 +120,8 @@ def build(
         element = ET.SubElement(root, "channel", {"id": channel.guide_id})
         ET.SubElement(element, "display-name").text = channel.name
         ET.SubElement(element, "display-name").text = channel.number
-        ET.SubElement(element, "icon", {"src": channel.logo})
+        if channel.logo:
+            ET.SubElement(element, "icon", {"src": channel.logo})
     for channel in lineup.channels:
         try:
             block = timedelta(minutes=channel.placeholder.block_minutes)

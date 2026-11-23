@@ -1011,3 +1011,12 @@ def test_text_after_the_end_tag_saves_the_download_alone(tmp_path: Path) -> None
     assert shows(built.data, "tellyard.201", "atv") == ["Kisa", "Gece"]
     [kept] = saved.iterdir()
     assert kept.read_text() == short
+
+
+def test_channel_without_a_logo_has_no_icon() -> None:
+    plain = channels.parse({"channel": [{"number": 5, "name": "Plain", "hls": "https://cdn.example.com/p.m3u8"}]})
+    root = ET.fromstring(guide.build(plain, NOW, 1).data)
+    channel = root.find("channel")
+    assert channel is not None
+    assert channel.find("icon") is None
+    assert [name.text for name in channel.findall("display-name")] == ["Plain", "5"]
