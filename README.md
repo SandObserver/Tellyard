@@ -17,7 +17,7 @@ Tellyard presents itself to Plex and Jellyfin as an HDHomeRun network tuner. You
 ## What you get
 
 - **On demand.** A stream runs only while someone watches, and up to `TUNERS` at once.
-- **YouTube, Twitch, web players and HLS.** Live channels on YouTube, Twitch, Kick and other sites through yt-dlp, broadcaster pages that embed an HLS playlist, and direct HLS playlists. A found stream address is reused for up to 10 minutes, so switching back to a channel is quick, and an address that stops working is looked up again.
+- **Broadcaster streams, web players, YouTube and Twitch.** Direct HLS playlists, broadcaster pages that embed one, and live channels on YouTube, Twitch, Kick and other sites through yt-dlp. Direct playlists are the most reliable. Sites such as YouTube sometimes refuse requests from servers, see [Troubleshooting](docs/troubleshooting.md). A found stream address is reused for up to 10 minutes, so switching back to a channel is quick, and an address that stops working is looked up again.
 - **A guide that is never empty.** Real schedules from any XMLTV source, with placeholder blocks in every gap. Shows are filed as TV episodes, with a category.
 - **Tries to reconnect.** A stalled or dropped source is restarted on its own, up to three tries in a row.
 - **Quality check.** `tellyard check` tunes each channel and reports the resolution it really sends, so a channel below your minimum never slips in.
@@ -115,8 +115,8 @@ address with port 5004, for example `192.168.1.10:5004`. Its guide is
 - **Plex:** **Settings > Live TV & DVR > Set up Plex DVR**. Enter the address, then choose
   **Have an XMLTV guide on your server? Click here to use it** and enter the guide address. On an
   iPhone, iPad or Apple TV, turn on **Force Direct Play** in the Plex app. See [Plex](docs/plex.md).
-- **Jellyfin:** **Dashboard > Live TV**. Add a tuner device of type HDHomeRun with the address,
-  then add an XMLTV guide provider with the guide address.
+- **Jellyfin:** In the admin dashboard, open **Live TV**. Add a tuner device of type **HD Homerun** with
+  the address, then add an **XMLTV** guide provider with the guide address. See [Jellyfin](docs/jellyfin.md).
 
 ## Unraid
 
@@ -178,7 +178,7 @@ Set these as environment variables.
 
 | Setting | What it does | Default |
 | --- | --- | --- |
-| `TUNERS` | Streams that may play at the same time. | `4` |
+| `TUNERS` | Streams that may play at the same time. See [Tuners](docs/how-it-works.md#tuners). | `4` |
 | `MIN_HEIGHT` | Lowest resolution `tellyard check` accepts, such as `1080`. `off` accepts any. A channel's own `min_height` in `channels.toml` overrides it. | `off` |
 | `DEVICE_NAME` | Name shown in Plex. | `Tellyard` |
 | `DEVICE_ID` | 8 hexadecimal characters. Plex remembers the tuner by this. | derived from the name |
@@ -190,15 +190,14 @@ Set these as environment variables.
 | `LOG_LEVEL` | `debug`, `info`, `warning` or `error`. | `info` |
 | `HEARTBEAT_URL` | Address Tellyard calls once a minute while it is healthy, for a monitor such as Uptime Kuma or Healthchecks. | |
 | `LISTEN_PORT` | Port inside the container. If you change it, change the right side of `ports:` too. | `5004` |
-| `CHANNELS_FILE` | The channel list inside the container. Keep the default. | `/config/channels.toml` |
-| `DATA_DIR` | Folder inside the container for the guide and caches. Keep the default. | `/data` |
-| `YTDLP` | The yt-dlp program. Keep the default. | `yt-dlp` |
-| `FFMPEG` | The ffmpeg program. Keep the default. | `ffmpeg` |
+
+Settings for paths and programs inside the container are in [How it works](docs/how-it-works.md#paths-and-programs).
 
 ## Documentation
 
 - [Channels](docs/channels.md): every option, finding sources, guides and logos.
 - [Plex](docs/plex.md): adding Tellyard, refreshing the guide, and settings for the Plex apps.
+- [Jellyfin](docs/jellyfin.md): adding Tellyard and refreshing the guide.
 - [How it works](docs/how-it-works.md): tuning, reconnects, the guide and the HTTP endpoints.
 - [Troubleshooting](docs/troubleshooting.md): log messages and what to do.
 - [Upgrade, back up, uninstall](docs/maintenance.md)

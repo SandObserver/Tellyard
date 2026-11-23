@@ -16,6 +16,14 @@ Plex sees Tellyard as an HDHomeRun network tuner with `TUNERS` tuners. When a vi
 
 For `live` and `page` channels, Tellyard remembers the stream address it found for 10 minutes, or until 5 minutes before the expiry time written in the address, whichever is sooner. Tuning back to the channel in that time skips the lookup. If a remembered address fails or sends no video, Tellyard looks the stream up again. A reconnect and `tellyard check` always look it up again. `hls` addresses are used as written, and a `token` service is asked before every tune. When the viewer leaves, ffmpeg stops and the tuner is free, also while Tellyard is still finding the stream or reconnecting. Nothing runs while nobody watches.
 
+## Tuners
+
+Each stream Tellyard sends uses one of its `TUNERS` tuners, also when two viewers watch the same channel and the media server asks for it twice. A stream over the limit is refused, and the log says `all tuners are busy`. Tellyard copies streams without converting them, so a tuner needs little processing power. The limits are elsewhere:
+
+- Your internet connection carries every stream at the source's full quality.
+- Your media server converts a stream when a player cannot play it as it is.
+- Sites such as YouTube can refuse requests when one address asks for many streams.
+
 ## When a source drops
 
 - If no data arrives for 20 seconds, Tellyard restarts the stream.
@@ -75,3 +83,14 @@ Tellyard does not answer HDHomeRun network discovery, so Plex never finds it on 
 ## What it stores
 
 `/data` holds the last guide, `guide.xml`, the last good channel list, `channels.last-good.toml`, the last good copy of each guide source under `feeds/` (up to 256 MB each), and the caches of yt-dlp and Deno under `cache/`. All of it is rebuilt when missing. `/config/channels.toml` is only read.
+
+## Paths and programs
+
+Keep the defaults of these settings. They exist for custom images.
+
+| Setting | What it does | Default |
+| --- | --- | --- |
+| `CHANNELS_FILE` | The channel list inside the container. | `/config/channels.toml` |
+| `DATA_DIR` | Folder inside the container for the guide and caches. | `/data` |
+| `YTDLP` | The yt-dlp program. | `yt-dlp` |
+| `FFMPEG` | The ffmpeg program. | `ffmpeg` |
