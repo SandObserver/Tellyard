@@ -56,7 +56,7 @@ Tellyard serves no images itself. Tools such as [Posteryard](https://github.com/
 
 ## The channel list
 
-Tellyard checks `channels.toml` for changes every time Plex asks for the line-up or a stream, and once a minute. A file with a mistake is ignored, with an error in the log, and the previous channels stay. At start there are no previous channels, so a file with a mistake stops Tellyard from starting.
+Tellyard checks `channels.toml` for changes every time Plex asks for the line-up or a stream, and once a minute. A file with a mistake is ignored, with an error in the log, and the previous channels stay. Each good file is saved as `/data/channels.last-good.toml`. At start, a file with a mistake makes Tellyard use that copy. Without a copy, Tellyard does not start. Until the file is fixed, `/healthz` answers 503 with the mistake as `reason`.
 
 ## HTTP endpoints
 
@@ -66,7 +66,7 @@ Tellyard checks `channels.toml` for changes every time Plex asks for the line-up
 | `/stream/<number>` | One channel as MPEG-TS. Also at `/auto/v<number>`. |
 | `/guide.xml` | The XMLTV guide. Also at `/epg.xml`. |
 | `/playlist.m3u` | An M3U playlist for players such as VLC. |
-| `/healthz` | Status as JSON. Answers 503 with a `reason` when there are no channels, the guide has stopped updating, the clock is earlier than the last guide build, or the guide cannot be saved to `/data`. Also at `/health`. |
+| `/healthz` | Status as JSON. Answers 503 with a `reason` when there are no channels, `channels.toml` has a mistake, the guide has stopped updating, the clock is earlier than the last guide build, or the guide cannot be saved to `/data`. Also at `/health`. |
 
 Tellyard handles up to 64 connections at once and closes any more. A request must arrive complete within 10 seconds and be smaller than 128 KB.
 
@@ -74,4 +74,4 @@ Tellyard does not answer HDHomeRun network discovery, so Plex never finds it on 
 
 ## What it stores
 
-`/data` holds the last guide, `guide.xml`, the last good copy of each guide source under `feeds/` (up to 256 MB each), and the caches of yt-dlp and Deno under `cache/`. All of it is rebuilt when missing. `/config/channels.toml` is only read.
+`/data` holds the last guide, `guide.xml`, the last good channel list, `channels.last-good.toml`, the last good copy of each guide source under `feeds/` (up to 256 MB each), and the caches of yt-dlp and Deno under `cache/`. All of it is rebuilt when missing. `/config/channels.toml` is only read.

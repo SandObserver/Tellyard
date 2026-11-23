@@ -150,7 +150,8 @@ category = "News"
 
 [Channels](docs/channels.md) lists every option and how to find sources, logos and guides.
 Tellyard reloads the file within a minute of a change and keeps the previous channels if the new
-file has a mistake. A file with a mistake stops Tellyard from starting at the next restart, so run
+file has a mistake. It also saves the last good file in `./data` and starts from that copy if the
+file has a mistake at a restart. Until you fix the mistake, Tellyard reports itself unhealthy. Run
 `docker exec tellyard tellyard validate` after each change. After adding or removing channels, refresh the guide in Plex.
 
 Only add streams you are allowed to watch.

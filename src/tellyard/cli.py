@@ -85,7 +85,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _serve(settings: Settings) -> int:
     try:
-        store = ChannelStore(settings.channels_file)
+        store = ChannelStore(settings.channels_file, settings.data_dir / "channels.last-good.toml")
     except ChannelError as error:
         log.error(
             "channel file has an error, not starting", extra={"file": settings.channels_file, "reason": str(error)}

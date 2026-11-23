@@ -147,6 +147,8 @@ class App:
             return self.guide.write_error
         if not self.store.current().channels:
             return f"no channels yet: add them to {self.settings.channels_file}"
+        if self.store.error:
+            return f"the channel file has an error: {self.store.error}"
         age = (now or datetime.now(UTC)) - (self.guide.built_at or self._started_at)
         limit = timedelta(hours=2 * self.settings.guide_refresh_hours)
         if age > limit:

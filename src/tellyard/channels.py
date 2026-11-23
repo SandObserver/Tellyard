@@ -113,15 +113,20 @@ class Lineup:
 
 
 def load(path: Path) -> Lineup:
+    return load_text(path)[0]
+
+
+def load_text(path: Path) -> tuple[Lineup, str]:
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        data = tomllib.loads(text)
     except OSError as error:
         raise ChannelError(f"cannot read {path}: {error.strerror}") from error
     except UnicodeDecodeError as error:
         raise ChannelError(f"{path} is not UTF-8 text: byte {error.start} cannot be read") from error
     except tomllib.TOMLDecodeError as error:
         raise ChannelError(f"{path} is not valid TOML: {error}") from error
-    return parse(data)
+    return parse(data), text
 
 
 def parse(data: Mapping[str, Any]) -> Lineup:

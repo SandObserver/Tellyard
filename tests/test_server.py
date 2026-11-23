@@ -183,6 +183,17 @@ def test_health_fails_without_channels(make_settings: Callable[..., Settings], t
     assert app.problem() == f"no channels yet: add them to {missing}"
 
 
+def test_health_fails_while_the_channel_file_has_an_error(app: App, channels_file: Path) -> None:
+    app.refresh_guide()
+    assert app.problem() is None
+    stat = channels_file.stat()
+    channels_file.write_text("[[channel]]\nnumber = 1\n", encoding="utf-8")
+    os.utime(channels_file, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+    problem = app.problem()
+    assert problem is not None and problem.startswith("the channel file has an error: ")
+    assert len(app.lineup("http://tellyard")) == 2
+
+
 @pytest.fixture
 def pings() -> Iterator[tuple[str, list[str]]]:
     seen: list[str] = []

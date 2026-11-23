@@ -29,10 +29,12 @@ Set `LOG_LEVEL=debug` to see every request Plex makes. `docker exec tellyard tel
 | `stream given up` | The source failed 3 times in a row. Plex shows an error. Tune in again later. |
 | `all tuners are busy` | More streams were asked for than `TUNERS` allows. Raise `TUNERS`, or stop a stream. |
 | `no channel file yet, add your channels to it` | Tellyard found no `channels.toml` at `file`. Put your channel list there. Tellyard loads it within a minute. |
-| `channel file has an error, keeping the previous channels` | Fix the mistake named in `reason`. `tellyard validate` checks the file. |
-| `channel file has an error, not starting` | Tellyard does not start until the file is fixed, and the container restarts until then. Fix the mistake named in `reason`. `tellyard validate` checks the file. |
+| `channel file has an error, keeping the previous channels` | Fix the mistake named in `reason`. `tellyard validate` checks the file. Until then, Tellyard reports itself unhealthy. |
+| `channel file has an error, starting with the last good copy` | Tellyard started with the channels from `copy`. Fix the mistake named in `reason`. Until then, Tellyard reports itself unhealthy. |
+| `channel file has an error, not starting` | There is no good copy to start from yet. Tellyard does not start until the file is fixed, and the container restarts until then. Fix the mistake named in `reason`. `tellyard validate` checks the file. |
 | `guide source failed, using placeholders` | The XMLTV address could not be downloaded or read, or is too large. See `reason`, and open the address in a browser. `copy` says why the last good copy was not used: `none`, `no current listings`, or the error reading it. |
 | `guide source failed, using the last good copy` | As above, or the source has no current shows (`reason="no current listings"`). Tellyard uses its copy from `saved_at`. A failed download is tried again in 15 minutes. |
+| `channel file copy not saved` | Tellyard cannot write to `/data`. Give the user Tellyard runs as write access to the data folder. |
 | `guide source copy not saved` | Tellyard cannot write to `/data/feeds`. Give the user Tellyard runs as write access to the data folder. |
 | `guide not saved` | Tellyard cannot write to `/data`. `/healthz` reports it. Give the user Tellyard runs as write access to the data folder, such as `sudo chown 1000:1000 ./data` for the default user 1000. |
 | `too many connections, refusing new ones` | More than 64 connections are open. Something on your network keeps connections open. |
