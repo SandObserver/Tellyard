@@ -773,3 +773,11 @@ def test_stream_start_logs_a_remembered_address(
         server.server_close()
     started = next(r for r in caplog.records if r.getMessage() == "stream started")
     assert getattr(started, "remembered", None) == "yes"
+
+
+def test_playlist_leaves_out_a_missing_logo(make_settings: Callable[..., Settings], tmp_path: Path) -> None:
+    listing = tmp_path / "channels.toml"
+    listing.write_text('[[channel]]\nnumber = 5\nname = "Plain"\nhls = "https://cdn.example.com/p.m3u8"\n')
+    guide = Guide(tmp_path / "guide.xml", 1, downloader=lambda url, path: None)
+    app = App(make_settings(), ChannelStore(listing), guide, lambda channel: None)  # type: ignore[arg-type,return-value]
+    assert '#EXTINF:-1 tvg-id="tellyard.5" tvg-chno="5",Plain' in app.playlist("http://127.0.0.1:5004")

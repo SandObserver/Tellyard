@@ -197,3 +197,7 @@ def test_load_reports_a_file_that_is_not_utf8(tmp_path: Path) -> None:
     latin.write_bytes('[[channel]]\nname = "T\xe9l\xe9"\n'.encode("latin-1"))
     with pytest.raises(ChannelError, match="not UTF-8 text"):
         channels.load(latin)
+
+
+def test_logo_is_optional() -> None:
+    assert parse(entry(logo=None)).channels[0].logo == ""

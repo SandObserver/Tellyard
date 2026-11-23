@@ -20,7 +20,7 @@ category = "News"
 | --- | --- |
 | `number` | Channel number, such as `101`, or `"101.1"` in quotes for a subchannel. Each number once. |
 | `name` | Name shown in Plex and the guide. |
-| `logo` | Public https link to the channel logo. Plex loads it as given. |
+| `logo` | Optional. Public https link to the channel logo. Plex loads it as given. Without it, Plex and Jellyfin show the channel name. |
 | `live` | A live channel on YouTube, Twitch, Kick or another site yt-dlp supports, such as `https://www.youtube.com/@example/live` or `https://www.twitch.tv/example`. `youtube` is the older name for this key and still works. |
 | `page` | A web page that contains the stream's `.m3u8` address. |
 | `hls` | The stream's `.m3u8` playlist address. |

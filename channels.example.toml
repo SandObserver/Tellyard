@@ -1,6 +1,6 @@
 # Tellyard channel list. Copy this file to channels.toml and replace the examples with your channels.
 #
-# Each [[channel]] needs a number, a name, a logo and exactly one source:
+# Each [[channel]] needs a number, a name and exactly one source. logo is optional but recommended.
 #   live = "https://www.youtube.com/@handle/live"   a live channel on YouTube, Twitch, Kick or another site yt-dlp supports
 #   page = "https://example.com/live"               a web page that embeds an .m3u8 URL
 #   hls  = "https://example.com/master.m3u8"        a direct HLS playlist

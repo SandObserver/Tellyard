@@ -44,7 +44,7 @@ Tellyard publishes an XMLTV guide at `/guide.xml` for `GUIDE_DAYS` days, startin
 - If two shows in a source overlap, the earlier one ends when the next one starts. A show without an end time also ends when the next one starts, or after one placeholder block when it is the last.
 - Every gap, and every channel without a guide, gets placeholder blocks of `hours` length, aligned to the clock in `TZ`, or UTC when it is not set or not a known time zone name. On a daylight saving change, the blocks around the change can be longer or shorter than the rest. Their title is the channel name unless `title` says otherwise.
 - An entry without a category gets the channel's `category`, when it is set. Every entry that is not a movie gets an episode number with its air date, so Plex files it as a TV episode.
-- The channel logo is the `logo` URL as written. Shows keep the pictures their source guide gives them; placeholder blocks have none.
+- The channel logo is the `logo` URL as written. A channel without `logo` has no logo in the guide. Shows keep the pictures their source guide gives them; placeholder blocks have none.
 
 The guide is rebuilt every `GUIDE_REFRESH_HOURS` hours and within a minute of a change to `channels.toml`. If a rebuild fails, Tellyard keeps the last guide and tries again 15 minutes later.
 

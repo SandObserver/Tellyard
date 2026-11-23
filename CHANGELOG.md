@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Remember the stream address of a `live` or `page` channel for up to 10 minutes, so tuning back to it starts faster.
 - Log how long each stream took to start, as `start_s` on `stream started`.
 - Start from the last good channel list when `channels.toml` has a mistake at start, and report the mistake in `/healthz`.
+- Make `logo` optional. A channel without it has no logo in the guide or the M3U playlist.
 
 ## [0.2.3] - 2026-11-23
 
