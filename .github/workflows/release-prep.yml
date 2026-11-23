@@ -61,7 +61,7 @@ jobs:
           git config user.email '260779319+SandObserver@users.noreply.github.com'
           git checkout -b "$branch"
           git add pyproject.toml uv.lock CHANGELOG.md templates/tellyard.xml
-          git commit -m "Release $version"
+          git commit -m "Release: $version"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:$branch"
           gh pr create --base main --head "$branch" --title "Release: $version" \
             --body "$(printf '%s\n' '## Summary' "- Date the Unreleased changes as $version and bump the version." '' '## Testing' 'CI runs on this pull request. Merging it tags v'"$version"' and publishes the image.')"

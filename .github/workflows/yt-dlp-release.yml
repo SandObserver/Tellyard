@@ -84,7 +84,7 @@ jobs:
           git config user.email '260779319+SandObserver@users.noreply.github.com'
           git switch -c "record/$published"
           git add pyproject.toml uv.lock CHANGELOG.md templates/tellyard.xml
-          git commit -m "Release ${published#v}"
+          git commit -m "Release: ${published#v}"
           git show --stat HEAD
           echo "pending=true" >> "$GITHUB_OUTPUT"
           echo "open=true" >> "$GITHUB_OUTPUT"
@@ -142,7 +142,7 @@ jobs:
           git config user.name 'SandObserver'
           git config user.email '260779319+SandObserver@users.noreply.github.com'
           git add pyproject.toml uv.lock CHANGELOG.md templates/tellyard.xml
-          git commit -m "Release $version"
+          git commit -m "Release: $version"
           git tag -a "v$version" -m "Release $version"
           git show --stat HEAD
           echo "version=$version" >> "$GITHUB_OUTPUT"
