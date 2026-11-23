@@ -21,9 +21,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Read the uv version from the Dockerfile
+        id: uv
+        run: |
+          version=$(sed -n 's|^FROM ghcr.io/astral-sh/uv:\([0-9.]*\)@.*|\1|p' Dockerfile)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          version: "0.13.7"
+          version: ${{ steps.uv.outputs.version }}
       - id: sync
         run: uv sync --locked
       - run: uv run ruff format --check .
@@ -41,9 +47,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Read the uv version from the Dockerfile
+        id: uv
+        run: |
+          version=$(sed -n 's|^FROM ghcr.io/astral-sh/uv:\([0-9.]*\)@.*|\1|p' Dockerfile)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          version: "0.13.7"
+          version: ${{ steps.uv.outputs.version }}
       - run: uvx --from actionlint-py==1.7.12.25 actionlint
       - run: uvx zizmor==1.30.1 --offline .github
 
@@ -64,6 +76,7 @@ jobs:
           cache-dependency-path: site/package-lock.json
       - run: npm ci
       - run: npm run build
+      - run: npm test
 
   image:
     runs-on: ubuntu-24.04
