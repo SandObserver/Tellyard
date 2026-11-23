@@ -477,3 +477,172 @@ def test_run_command_passes_the_environment() -> None:
     script = "import os; print(os.environ['DENO_DIR'])"
     output = run_command([sys.executable, "-c", script], 10.0, None, {"DENO_DIR": "/data/cache/deno"})
     assert output.strip() == "/data/cache/deno"
+
+
+def counting_runner(output: str, seen: list[Sequence[str]]) -> Runner:
+    def run(args: Sequence[str], timeout: float, cancel: threading.Event | None) -> str:
+        seen.append(args)
+        return output
+
+    return run
+
+
+def live_info(manifest: str) -> str:
+    return json.dumps({"live_status": "is_live", "manifest_url": manifest})
+
+
+def test_live_address_is_remembered_between_tunes(make_settings: Callable[..., Settings]) -> None:
+    seen: list[Sequence[str]] = []
+    fetch = pages({"https://m.example.com/x.m3u8": MASTER})
+    resolver = Resolver(
+        make_settings(), runner=counting_runner(live_info("https://m.example.com/x.m3u8"), seen), fetcher=fetch
+    )
+    live = channel(live="https://www.youtube.com/@news/live")
+    first, second = resolver.resolve(live), resolver.resolve(live)
+    assert len(seen) == 1
+    assert (first.remembered, second.remembered) == (False, True)
+    assert second.height == 1080
+
+
+def test_fresh_lookup_skips_the_remembered_address(make_settings: Callable[..., Settings]) -> None:
+    seen: list[Sequence[str]] = []
+    fetch = pages({"https://m.example.com/x.m3u8": MASTER})
+    resolver = Resolver(
+        make_settings(), runner=counting_runner(live_info("https://m.example.com/x.m3u8"), seen), fetcher=fetch
+    )
+    live = channel(live="https://www.youtube.com/@news/live")
+    resolver.resolve(live)
+    assert resolver.resolve(live, fresh=True).remembered is False
+    assert len(seen) == 2
+
+
+def test_failed_remembered_address_is_looked_up_again(
+    make_settings: Callable[..., Settings], caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO)
+    manifests = iter(["https://m.example.com/old.m3u8", "https://m.example.com/new.m3u8"])
+    live_pages = {"https://m.example.com/old.m3u8": MASTER, "https://m.example.com/new.m3u8": MASTER}
+
+    def run(args: Sequence[str], timeout: float, cancel: threading.Event | None) -> str:
+        return live_info(next(manifests))
+
+    resolver = Resolver(make_settings(), runner=run, fetcher=pages(live_pages))
+    live = channel(live="https://www.youtube.com/@news/live")
+    resolver.resolve(live)
+    del live_pages["https://m.example.com/old.m3u8"]
+    resolved = resolver.resolve(live)
+    assert resolved.remembered is False
+    assert resolved.video == "https://m.example.com/1080.m3u8"
+    assert "remembered stream address failed, looking it up again" in caplog.text
+    assert resolver.resolve(live).remembered is True
+
+
+def test_remembered_address_expires(make_settings: Callable[..., Settings], monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[Sequence[str]] = []
+    clock = [1000.0]
+    monkeypatch.setattr(resolve, "monotonic", lambda: clock[0])
+    fetch = pages({"https://m.example.com/x.m3u8": MASTER})
+    resolver = Resolver(
+        make_settings(), runner=counting_runner(live_info("https://m.example.com/x.m3u8"), seen), fetcher=fetch
+    )
+    live = channel(live="https://www.youtube.com/@news/live")
+    resolver.resolve(live)
+    clock[0] += resolve.REMEMBER_SECONDS - 1
+    assert resolver.resolve(live).remembered is True
+    clock[0] += 2
+    assert resolver.resolve(live).remembered is False
+    assert len(seen) == 2
+
+
+@pytest.mark.parametrize(
+    ("template", "seconds", "remembered"),
+    [
+        ("https://m.example.com/api/expire/{at}/ip/1/x.m3u8", 200, False),
+        ("https://m.example.com/x.m3u8?Expires={at}&sig=a", 200, False),
+        ("https://m.example.com/x.m3u8?hdnts=st%3D1~exp%3D{at}~acl%3D*", 200, False),
+        ("https://m.example.com/api/expire/{at}/x.m3u8", 6 * 3600, True),
+    ],
+)
+def test_address_close_to_its_expiry_is_not_remembered(
+    make_settings: Callable[..., Settings], template: str, seconds: int, remembered: bool
+) -> None:
+    manifest = template.format(at=int(time.time()) + seconds)
+    fetch = pages({manifest: MASTER})
+    resolver = Resolver(make_settings(), runner=runner_returning(live_info(manifest)), fetcher=fetch)
+    live = channel(live="https://www.youtube.com/@news/live")
+    resolver.resolve(live)
+    assert resolver.resolve(live).remembered is remembered
+
+
+def test_page_address_is_remembered(make_settings: Callable[..., Settings]) -> None:
+    loads: list[str] = []
+    found = pages(
+        {
+            "https://tv.example.com/live": 'src="https://cdn.example.com/m.m3u8"',
+            "https://cdn.example.com/m.m3u8": MASTER,
+        }
+    )
+
+    def fetch(url: str, headers: Headers, trust: Trust, *, cancel: Cancel | None = None) -> tuple[str, str]:
+        loads.append(url)
+        return found(url, headers, trust, cancel=cancel)
+
+    resolver = Resolver(make_settings(), fetcher=fetch)
+    page = channel(page="https://tv.example.com/live")
+    resolver.resolve(page)
+    assert resolver.resolve(page).remembered is True
+    assert loads.count("https://tv.example.com/live") == 1
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        {"hls": "https://cdn.example.com/m.m3u8"},
+        {"hls": "https://cdn.example.com/m.m3u8", "token": "https://sign.example.com/?u={url}"},
+    ],
+)
+def test_hls_addresses_are_never_remembered(make_settings: Callable[..., Settings], source: dict[str, str]) -> None:
+    loads: list[str] = []
+    signed = json.dumps({"url": "https://cdn.example.com/m.m3u8"})
+    found = pages(
+        {
+            "https://cdn.example.com/m.m3u8": MASTER,
+            "https://sign.example.com/?u=https%3A%2F%2Fcdn.example.com%2Fm.m3u8": signed,
+        }
+    )
+
+    def fetch(url: str, headers: Headers, trust: Trust, *, cancel: Cancel | None = None) -> tuple[str, str]:
+        loads.append(url)
+        return found(url, headers, trust, cancel=cancel)
+
+    resolver = Resolver(make_settings(), fetcher=fetch)
+    hls_channel = channel(**source)
+    resolver.resolve(hls_channel)
+    assert resolver.resolve(hls_channel).remembered is False
+    assert len(loads) == 2 * (2 if "token" in source else 1)
+
+
+def test_cancel_during_a_remembered_lookup_is_not_retried(make_settings: Callable[..., Settings]) -> None:
+    seen: list[Sequence[str]] = []
+    fetch = pages({"https://m.example.com/x.m3u8": MASTER})
+    resolver = Resolver(
+        make_settings(), runner=counting_runner(live_info("https://m.example.com/x.m3u8"), seen), fetcher=fetch
+    )
+    live = channel(live="https://www.youtube.com/@news/live")
+    resolver.resolve(live)
+    cancel = Cancel()
+    cancel.set()
+    with pytest.raises(LookupCancelledError):
+        resolver.resolve(live, cancel)
+    assert len(seen) == 1
+
+
+def test_forget_drops_the_remembered_address(make_settings: Callable[..., Settings]) -> None:
+    fetch = pages({"https://m.example.com/x.m3u8": MASTER})
+    resolver = Resolver(
+        make_settings(), runner=runner_returning(live_info("https://m.example.com/x.m3u8")), fetcher=fetch
+    )
+    live = channel(live="https://www.youtube.com/@news/live")
+    resolver.resolve(live)
+    resolver.forget(live)
+    assert resolver.resolve(live).remembered is False

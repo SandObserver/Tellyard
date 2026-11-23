@@ -17,7 +17,7 @@ Tellyard presents itself to Plex and Jellyfin as an HDHomeRun network tuner. You
 ## What you get
 
 - **On demand.** A stream runs only while someone watches, and up to `TUNERS` at once.
-- **YouTube, Twitch, web players and HLS.** Live channels on YouTube, Twitch, Kick and other sites through yt-dlp, broadcaster pages that embed an HLS playlist, and direct HLS playlists. The stream is found again on every tune, so expiring links never break playback.
+- **YouTube, Twitch, web players and HLS.** Live channels on YouTube, Twitch, Kick and other sites through yt-dlp, broadcaster pages that embed an HLS playlist, and direct HLS playlists. A found stream address is reused for up to 10 minutes, so switching back to a channel is quick, and an address that stops working is looked up again.
 - **A guide that is never empty.** Real schedules from any XMLTV source, with placeholder blocks in every gap. Shows are filed as TV episodes, with a category.
 - **Tries to reconnect.** A stalled or dropped source is restarted on its own, up to three tries in a row.
 - **Quality check.** `tellyard check` tunes each channel and reports the resolution it really sends, so a channel below your minimum never slips in.

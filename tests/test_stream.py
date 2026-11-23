@@ -143,6 +143,37 @@ def test_reconnect_uses_a_fresh_address(
     assert opened[:2] == ["https://cdn.example.com/7.m3u8?attempt=1", "https://cdn.example.com/7.m3u8?attempt=2"]
 
 
+def test_open_uses_a_remembered_address_and_reconnects_fresh(
+    relay: Relay,
+    make_settings: Callable[..., Settings],
+    channel: channels.Channel,
+    ffmpeg: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FAKE_FFMPEG", "short")
+    resolver = FakeResolver(make_settings())
+    with Session(channel, resolver, ffmpeg, relay) as session:
+        session.open()
+        list(islice(session.chunks(), 4))
+    assert resolver.fresh[:2] == [False, True]
+
+
+def test_remembered_address_without_video_is_looked_up_again(
+    relay: Relay,
+    make_settings: Callable[..., Settings],
+    channel: channels.Channel,
+    ffmpeg: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FAKE_FFMPEG", "fail")
+    resolver = FakeResolver(make_settings(), remembered=True)
+    session = Session(channel, resolver, ffmpeg, relay)
+    with pytest.raises(StreamError, match="no video arrived"):
+        session.open()
+    assert resolver.fresh == [False, True]
+    assert resolver.forgotten == 1
+
+
 def test_long_running_source_resets_the_attempt_count(
     relay: Relay,
     make_settings: Callable[..., Settings],
@@ -273,7 +304,9 @@ def test_gives_up_when_reconnects_fail(
     monkeypatch.setattr(stream, "pause", pause)
 
     class Once(FakeResolver):
-        def resolve(self, channel: channels.Channel, cancel: threading.Event | None = None) -> Resolved:
+        def resolve(
+            self, channel: channels.Channel, cancel: threading.Event | None = None, *, fresh: bool = False
+        ) -> Resolved:
             if self.calls:
                 self.calls += 1
                 raise ResolveError("the YouTube channel is not live right now")
@@ -433,7 +466,9 @@ def test_leaving_during_the_backoff_skips_the_reconnect(
     monkeypatch.setattr(stream, "pause", pause)
 
     class Once(FakeResolver):
-        def resolve(self, channel: channels.Channel, cancel: threading.Event | None = None) -> Resolved:
+        def resolve(
+            self, channel: channels.Channel, cancel: threading.Event | None = None, *, fresh: bool = False
+        ) -> Resolved:
             if self.calls:
                 self.calls += 1
                 raise ResolveError("the YouTube channel is not live right now")

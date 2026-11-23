@@ -497,7 +497,7 @@ class SlowResolver(FakeResolver):
         self.slow_from = slow_from
         self.cancelled = threading.Event()
 
-    def resolve(self, channel: Channel, cancel: threading.Event | None = None) -> Resolved:
+    def resolve(self, channel: Channel, cancel: threading.Event | None = None, *, fresh: bool = False) -> Resolved:
         assert cancel is not None
         if self.calls + 1 >= self.slow_from and cancel.wait(30):
             self.calls += 1
@@ -706,6 +706,9 @@ def test_stream_stop_is_logged_when_the_viewer_left_before_the_headers(
         client.sendall(b"GET /stream/101 HTTP/1.0\r\n\r\n")
         assert wait_for(lambda: "stream stopped" in caplog.text, 10)
     assert wait_for(lambda: app.streams == 0, 5)
+    started = next(r for r in caplog.records if r.getMessage() == "stream started")
+    assert isinstance(getattr(started, "start_s", None), float)
+    assert getattr(started, "remembered", None) == "no"
 
 
 def test_health_reports_a_guide_that_cannot_be_saved(app: App, tmp_path: Path) -> None:
