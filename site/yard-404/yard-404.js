@@ -8,7 +8,7 @@
   }
 
   function displayPath(raw) {
-    var p = decode(String(raw || '').split(/[?#]/)[0]).replace(/\p{Cf}/gu, '');
+    var p = decode(String(raw || '').split(/[?#]/)[0]).replace(/[\p{Cf}\p{Cc}]/gu, '');
     if (p.charAt(0) !== '/') p = '/' + p;
     var c = Array.from(p);
     return c.length > 120 ? c.slice(0, 80).join('') + '…' + c.slice(-30).join('') : p;
