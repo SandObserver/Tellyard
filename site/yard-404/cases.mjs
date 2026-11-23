@@ -53,5 +53,6 @@ export const CASES = {
 export const DISPLAY = [
   ['/%E2%80%AEexe.tsetal-dracyretsop', '/exe.tsetal-dracyretsop'],
   ['/a%E2%80%8Eb%E2%80%8Fc%E2%80%AAd%E2%80%ABe%E2%80%ACf%E2%80%ADg%E2%81%A6h%E2%81%A7i%E2%81%A8j%E2%81%A9k%D8%9Cl', '/abcdefghijkl'],
+  ['/a%00b%07c%1Bd%0Ae%7Ff%C2%85g', '/abcdefg'],
   ['/' + 'a'.repeat(78) + '%F0%9F%99%82'.repeat(60), '/' + 'a'.repeat(78) + '🙂' + '…' + '🙂'.repeat(30)],
 ];
