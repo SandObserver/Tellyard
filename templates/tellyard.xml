@@ -13,11 +13,11 @@
   <Overview>A live TV tuner for Plex and Jellyfin that you'll forget is running.[br][br]Tellyard shows up in Plex and Jellyfin as a network tuner. You list your channels in one file. When someone tunes in, Tellyard finds the channel's live stream on YouTube, Twitch, a broadcaster's page or an HLS address and passes it on without re-encoding. When they stop watching, it stops. The guide merges XMLTV schedules with placeholder blocks, so it is never empty.[br][br]Tellyard ships no channels. It starts with an empty line-up: put your channels.toml in /mnt/user/appdata/tellyard/config and it is loaded within a minute. Then add the tuner in Plex at UNRAID-IP:5004 and the guide at http://UNRAID-IP:5004/guide.xml.</Overview>
   <Requires>Plex or Jellyfin, and a channels.toml listing the live streams you may watch. Tellyard ships no channels.</Requires>
   <Changes>
-### 0.2.3 - 2026-11-23
+### 0.2.4 - 2026-11-25
 
-#### Fixed
+#### Changed
 
-- Remove the partial guide file from `DATA_DIR` when the guide cannot be saved.
+- Update yt-dlp to 2026.11.23.
   </Changes>
   <Category>MediaApp:Video MediaServer:Video</Category>
   <TemplateURL>https://raw.githubusercontent.com/SandObserver/Tellyard/main/templates/tellyard.xml</TemplateURL>
