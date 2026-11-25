@@ -14,6 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Report Tellyard unhealthy while `channels.toml` has a mistake, also when it is edited while running. The previous channels keep playing, and `HEARTBEAT_URL` is not called until the file is fixed.
 - Make `logo` optional. A channel without it has no logo in the guide or the M3U playlist.
 
+## [0.2.4] - 2026-11-25
+
+### Changed
+
+- Update yt-dlp to 2026.11.23.
+
 ## [0.2.3] - 2026-11-23
 
 ### Fixed
