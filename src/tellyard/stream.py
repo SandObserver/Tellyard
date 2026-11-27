@@ -64,7 +64,7 @@ def ffmpeg_args(ffmpeg: str, resolved: Resolved) -> list[str]:
 
 
 def input_options() -> list[str]:
-    # Relay names keep the source's file name, which can lack a media extension. The relay checks every address.
+    # Relay names keep the source's file name, which can lack a media extension.
     return ["-rw_timeout", READ_TIMEOUT_US, "-extension_picky", "0"]
 
 
@@ -141,7 +141,6 @@ class Process:
             for line in stderr:
                 text = redact(line.decode("utf-8", errors="replace").strip())
                 if text:
-                    # After close, ffmpeg reports the closed pipe. These errors are expected.
                     level = logging.DEBUG if self._closed.is_set() else logging.WARNING
                     log.log(level, "ffmpeg", extra={**self._fields, "output": text})
 
