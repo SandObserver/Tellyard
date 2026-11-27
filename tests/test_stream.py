@@ -175,6 +175,56 @@ def test_remembered_address_without_video_is_looked_up_again(
     assert resolver.forgotten == 2
 
 
+def test_remembered_address_without_video_plays_after_a_fresh_lookup(
+    relay: Relay, make_settings: Callable[..., Settings], channel: channels.Channel, ffmpeg: str
+) -> None:
+    class Ends(Process):
+        def __init__(self, args: Sequence[str], fields: Mapping[str, str]) -> None:
+            pass
+
+        def read(self, timeout: float) -> bytes | None:
+            return None
+
+        def close(self) -> None:
+            pass
+
+    started: list[Process] = []
+
+    def starter(args: Sequence[str], fields: Mapping[str, str]) -> Process:
+        started.append(Ends(args, fields) if not started else Process(args, fields))
+        return started[-1]
+
+    resolver = FakeResolver(make_settings(), remembered=True)
+    with Session(channel, resolver, ffmpeg, relay, starter=starter) as session:
+        session.open()
+        assert next(session.chunks())
+        assert session.remembered is False
+    assert resolver.fresh == [False, True]
+    assert len(started) == 2
+
+
+def test_open_fails_when_ffmpeg_runs_but_sends_nothing(
+    relay: Relay,
+    make_settings: Callable[..., Settings],
+    channel: channels.Channel,
+    ffmpeg: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FAKE_FFMPEG", "silent")
+    monkeypatch.setattr(stream, "FIRST_DATA_TIMEOUT", 1.0)
+    started: list[Process] = []
+
+    def starter(args: Sequence[str], fields: Mapping[str, str]) -> Process:
+        started.append(Process(args, fields))
+        return started[-1]
+
+    resolver = FakeResolver(make_settings())
+    with pytest.raises(StreamError, match="no video arrived within 1 s"):
+        Session(channel, resolver, ffmpeg, relay, starter=starter).open()
+    assert started[0]._process.poll() is not None
+    assert resolver.forgotten == 1
+
+
 def test_long_running_source_resets_the_attempt_count(
     relay: Relay,
     make_settings: Callable[..., Settings],
@@ -394,6 +444,50 @@ def test_close_signals_twice_when_ffmpeg_finishes_its_read_first(monkeypatch: py
     monkeypatch.setattr(process, "_process", fake)
     process.close()
     assert fake.waits == [stream.SECOND_SIGNAL, stream.STOP_GRACE]
+
+
+class IgnoresSignals:
+    def __init__(self) -> None:
+        self.waits: list[float | None] = []
+        self.killed = False
+
+    def poll(self) -> int | None:
+        return None
+
+    def terminate(self) -> None:
+        pass
+
+    def wait(self, timeout: float | None = None) -> int:
+        self.waits.append(timeout)
+        if not self.killed:
+            raise subprocess.TimeoutExpired("ffmpeg", timeout or 0)
+        return -9
+
+    def kill(self) -> None:
+        self.killed = True
+
+
+def test_close_kills_ffmpeg_that_ignores_both_signals(monkeypatch: pytest.MonkeyPatch) -> None:
+    process = Process(["true"], SEVEN)
+    process._process.wait()
+    fake = IgnoresSignals()
+    monkeypatch.setattr(process, "_process", fake)
+    process.close()
+    assert fake.killed
+    assert fake.waits == [stream.SECOND_SIGNAL, stream.STOP_GRACE, None]
+
+
+def test_pump_stops_when_closed_with_a_full_queue() -> None:
+    before = set(threading.enumerate())
+    process = Process(["yes"], SEVEN)
+    pump = next(thread for thread in set(threading.enumerate()) - before if thread.name == "pump 7")
+    deadline = monotonic() + 5
+    while not process._queue.full() and monotonic() < deadline:
+        threading.Event().wait(0.01)
+    assert process._queue.full()
+    process.close()
+    pump.join(3)
+    assert not pump.is_alive()
 
 
 def test_leaving_during_the_first_data_wait_stops_ffmpeg(
