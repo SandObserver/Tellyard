@@ -181,6 +181,10 @@ def test_health_fails_without_channels(make_settings: Callable[..., Settings], t
     app.refresh_guide()
     assert app.lineup("http://tellyard") == []
     assert app.problem() == f"no channels yet: add them to {missing}"
+    missing.parent.mkdir()
+    missing.write_text("[[channel]]\nnumber = 1\n", encoding="utf-8")
+    problem = app.problem()
+    assert problem is not None and problem.startswith("the channel file has an error: ")
 
 
 def test_health_fails_while_the_channel_file_has_an_error(app: App, channels_file: Path) -> None:
