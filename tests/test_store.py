@@ -113,3 +113,14 @@ def test_a_copy_that_cannot_be_saved_is_logged(
     store = ChannelStore(channels_file, blocked / "copy.toml")
     assert len(store.current().channels) == 2
     assert "channel file copy not saved" in caplog.text
+
+
+def test_a_copy_that_cannot_be_saved_leaves_no_partial_file(
+    channels_file: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(self: Path, target: Path) -> Path:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(Path, "replace", refuse)
+    ChannelStore(channels_file, tmp_path / "copy.toml")
+    assert not (tmp_path / ".copy.toml.partial").exists()
