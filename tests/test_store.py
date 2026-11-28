@@ -95,6 +95,17 @@ def test_fixing_the_file_clears_the_error(channels_file: Path, tmp_path: Path) -
     assert store.error is None
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads any file")
+def test_fixing_the_permissions_clears_the_error(channels_file: Path, tmp_path: Path) -> None:
+    ChannelStore(channels_file, tmp_path / "copy.toml")
+    channels_file.chmod(0)
+    store = ChannelStore(channels_file, tmp_path / "copy.toml")
+    assert store.error
+    channels_file.chmod(0o644)
+    assert len(store.current().channels) == 2
+    assert store.error is None
+
+
 def test_a_bad_file_without_a_good_copy_is_an_error(channels_file: Path, tmp_path: Path) -> None:
     channels_file.write_text(BAD, encoding="utf-8")
     with pytest.raises(ChannelError, match="name"):

@@ -82,9 +82,9 @@ class ChannelStore:
         except (OSError, UnicodeDecodeError) as error:
             log.warning("channel file copy not saved", extra={"copy": self._saved, "reason": str(error)})
 
-    def _read_stamp(self) -> tuple[int, int] | None:
+    def _read_stamp(self) -> tuple[int, ...] | None:
         try:
             info = self._path.stat()
         except OSError:
             return None
-        return info.st_mtime_ns, info.st_size
+        return info.st_mtime_ns, info.st_size, info.st_ino, info.st_mode, info.st_uid, info.st_gid
