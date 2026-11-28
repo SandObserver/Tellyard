@@ -14,7 +14,7 @@ Plex sees Tellyard as an HDHomeRun network tuner with `TUNERS` tuners. When a vi
 3. Starts ffmpeg, which copies the video and audio into one MPEG-TS stream without re-encoding. ffmpeg reads the stream only through Tellyard, so every address it uses passes the checks in [Addresses Tellyard reaches](#addresses-tellyard-reaches).
 4. Waits up to 30 seconds for the first video, then hands the stream to Plex.
 
-For `live` and `page` channels, Tellyard remembers the stream address it found for 10 minutes, or until 5 minutes before the expiry time written in the address, whichever is sooner. Tuning back to the channel in that time skips the lookup. If a remembered address fails or sends no video, Tellyard looks the stream up again. A reconnect and `tellyard check` always look it up again. `hls` addresses are used as written, and a `token` service is asked before every tune. When the viewer leaves, ffmpeg stops and the tuner is free, also while Tellyard is still finding the stream or reconnecting. Nothing runs while nobody watches.
+For `live` and `page` channels, Tellyard remembers the stream address it found for 10 minutes, or until 5 minutes before the expiry time written in the address, whichever is sooner. Tuning back to the channel in that time skips the lookup. If a remembered address fails or sends no video, Tellyard looks the stream up again. A reconnect and `tellyard check` always look it up again. A `match` channel that falls back to its live page is not remembered. `hls` addresses are used as written, and a `token` service is asked before every tune. When the viewer leaves, ffmpeg stops and the tuner is free, also while Tellyard is still finding the stream or reconnecting. Nothing runs while nobody watches.
 
 ## Tuners
 
