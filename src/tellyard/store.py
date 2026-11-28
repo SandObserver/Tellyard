@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 import threading
@@ -70,16 +71,18 @@ class ChannelStore:
     def _save(self, text: str) -> None:
         if self._saved is None:
             return
+        partial = self._saved.with_name(f".{self._saved.name}.partial")
         try:
             if self._saved.exists() and self._saved.read_text(encoding="utf-8") == text:
                 return
             self._saved.parent.mkdir(parents=True, exist_ok=True)
-            partial = self._saved.with_name(f".{self._saved.name}.partial")
             descriptor = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(descriptor, "w", encoding="utf-8") as file:
                 file.write(text)
             partial.replace(self._saved)
         except (OSError, UnicodeDecodeError) as error:
+            with contextlib.suppress(OSError):
+                partial.unlink(missing_ok=True)
             log.warning("channel file copy not saved", extra={"copy": self._saved, "reason": str(error)})
 
     def _read_stamp(self) -> tuple[int, int] | None:
