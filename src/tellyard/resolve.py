@@ -225,16 +225,20 @@ class Resolver:
                             "remembered stream address failed, looking it up again",
                             extra={**fields, "reason": str(error)},
                         )
-                address = self._find(source, trust, cancel, fields)
+                address, keep = self._find(source, trust, cancel, fields)
                 resolved = self._open(source, address, trust, cancel, fields)
-                self._remember(key, address)
+                if keep:
+                    self._remember(key, address)
                 return resolved
 
-    def _find(self, source: PageSource | LiveSource, trust: Trust, cancel: Cancel, fields: Mapping[str, str]) -> str:
+    def _find(
+        self, source: PageSource | LiveSource, trust: Trust, cancel: Cancel, fields: Mapping[str, str]
+    ) -> tuple[str, bool]:
         if isinstance(source, PageSource):
-            return self._from_page(source, trust, cancel)
+            return self._from_page(source, trust, cancel), True
         with self._proxy(trust, fields) as proxy:
-            return self._from_ytdlp(self._youtube_target(source, cancel, proxy, fields), cancel, proxy)
+            target, matched = self._youtube_target(source, cancel, proxy, fields)
+            return self._from_ytdlp(target, cancel, proxy), matched
 
     def _open(
         self, source: PageSource | LiveSource, address: str, trust: Trust, cancel: Cancel, fields: Mapping[str, str]
@@ -295,9 +299,9 @@ class Resolver:
 
     def _youtube_target(
         self, source: LiveSource, cancel: threading.Event, proxy: str, fields: Mapping[str, str]
-    ) -> str:
+    ) -> tuple[str, bool]:
         if not source.match:
-            return source.url
+            return source.url, True
         channel = source.url.rstrip("/").removesuffix("/live")
         live_page = f"{channel}/live"
         args = [self._settings.ytdlp, *YTDLP_BASE, "--flat-playlist", "--playlist-end", str(STREAM_SCAN), "-J"]
@@ -311,7 +315,7 @@ class Resolver:
                 "live stream list failed, using the live page",
                 extra={**fields, "url": safe_url(channel), "reason": str(error)},
             )
-            return live_page
+            return live_page, False
         entries = listing.get("entries")
         wanted = source.match.casefold()
         for entry in entries if isinstance(entries, list) else []:
@@ -319,12 +323,12 @@ class Resolver:
                 continue
             title, video = entry.get("title"), entry.get("id")
             if isinstance(title, str) and isinstance(video, str) and wanted in title.casefold():
-                return f"https://www.youtube.com/watch?v={video}"
+                return f"https://www.youtube.com/watch?v={video}", True
         log.info(
             "no live stream matches, using the live page",
             extra={**fields, "url": safe_url(channel), "match": source.match},
         )
-        return live_page
+        return live_page, False
 
     def _from_ytdlp(self, url: str, cancel: threading.Event, proxy: str) -> str:
         args = [self._settings.ytdlp, *YTDLP_BASE, "--no-playlist", "--skip-download", "-J"]

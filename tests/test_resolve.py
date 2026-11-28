@@ -309,6 +309,19 @@ def test_youtube_match_falls_back_to_the_live_page(
     assert [(r.channel, r.title) for r in fallback] == [("1", "Test")]  # type: ignore[attr-defined]
 
 
+def test_live_page_fallback_is_not_remembered(make_settings: Callable[..., Settings]) -> None:
+    seen: list[Sequence[str]] = []
+    outputs = {"https://www.youtube.com/@LiveNOWFOX/live": LIVE, "https://www.youtube.com/watch?v=main": LIVE}
+    fetch = pages({"https://m.example.com/x.m3u8": MASTER})
+    resolver = Resolver(make_settings(), runner=scripted(outputs, seen), fetcher=fetch)
+    live = channel(youtube="https://www.youtube.com/@LiveNOWFOX/live", match="24/7")
+    resolver.resolve(live)
+    outputs["https://www.youtube.com/@LiveNOWFOX/streams"] = STREAMS
+    second, third = resolver.resolve(live), resolver.resolve(live)
+    assert seen[-1][-1] == "https://www.youtube.com/watch?v=main"
+    assert (second.remembered, third.remembered) == (False, True)
+
+
 TOKEN = "https://t.example.com/secure?url={url}"
 SIGNED_REQUEST = "https://t.example.com/secure?url=https%3A%2F%2Fcdn.example.com%2Fatv%2Fatv.m3u8"
 
